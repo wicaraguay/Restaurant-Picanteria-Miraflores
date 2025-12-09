@@ -1,0 +1,7 @@
+{
+  "name": "Restaurant PM",
+  "description": "A comprehensive application to manage all aspects of a restaurant, from customer relations and order processing to inventory and financial tracking, based on a detailed capability map.",
+  "requestFramePermissions": [
+    "bluetooth"
+  ]
+}

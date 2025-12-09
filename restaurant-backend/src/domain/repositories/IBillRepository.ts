@@ -1,0 +1,23 @@
+/**
+ * @file IBillRepository.ts
+ * @description Interfaz del repositorio de facturas (Domain Layer)
+ * 
+ * @purpose
+ * Define el contrato para operaciones de facturación (crear, consultar).
+ * 
+ * @connections
+ * - Implementado por: MongoBillRepository (infrastructure/repositories)
+ * - Usa: Bill entity (domain/entities)
+ * - Usado por: CreateBill, GetBills use cases (application/use-cases)
+ * - Inyectado por: DIContainer (infrastructure/di)
+ * 
+ * @layer Domain - Define contratos sin implementación
+ */
+
+import { Bill } from '../entities/Bill';
+
+export interface IBillRepository {
+    create(bill: Bill): Promise<Bill>;
+    findAll(): Promise<Bill[]>;
+    findById(id: string): Promise<Bill | null>;
+}
