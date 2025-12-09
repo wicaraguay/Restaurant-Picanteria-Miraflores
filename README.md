@@ -124,6 +124,15 @@ NODE_ENV=development
 # Secreto para JWT (cambiar en producción por una clave segura)
 JWT_SECRET=tu-clave-secreta-super-segura-aqui
 
+# Credenciales para el seed (datos iniciales)
+# IMPORTANTE: Cambia estos valores por seguridad
+SEED_ADMIN_USERNAME=admin
+SEED_ADMIN_PASSWORD=admin123
+SEED_WAITER_USERNAME=cmesero
+SEED_WAITER_PASSWORD=mesero123
+SEED_CHEF_USERNAME=acocinera
+SEED_CHEF_PASSWORD=cocina123
+
 # Configuración CORS (opcional)
 # CORS_ORIGIN=http://localhost:5173
 ```
@@ -144,12 +153,16 @@ VITE_API_URL=http://localhost:3001
 
 ### Panel Administrativo
 
-Para acceder al panel de administración en `http://localhost:3001/admin`:
+Para acceder al panel de administración en `http://localhost:5173/admin`:
 
-- **Usuario:** `admin`
-- **Contraseña:** `admin123`
+- **Usuario:** Por defecto `admin` (configurable en `.env` con `SEED_ADMIN_USERNAME`)
+- **Contraseña:** Por defecto `admin123` (configurable en `.env` con `SEED_ADMIN_PASSWORD`)
 
-> ⚠️ **IMPORTANTE**: Cambia estas credenciales en producción por seguridad.
+> ⚠️ **IMPORTANTE**: 
+> - Las credenciales se configuran mediante variables de entorno en el archivo `.env`
+> - **NUNCA** subas el archivo `.env` a GitHub (ya está protegido por `.gitignore`)
+> - Cambia las credenciales por defecto antes de usar en producción
+> - Ver [CREDENTIALS.md](restaurant-backend/CREDENTIALS.md) para más detalles sobre configuración segura
 
 ---
 
@@ -351,8 +364,12 @@ npm run lint
 
 ## 📝 Notas Importantes
 
-- ⚠️ **Seguridad**: Nunca subas archivos `.env` a repositorios públicos
-- 🔒 **Credenciales**: Cambia las credenciales por defecto en producción
+- ⚠️ **Seguridad**: Nunca subas archivos `.env` a repositorios públicos (ya protegido por `.gitignore`)
+- 🔒 **Credenciales**: 
+  - Las credenciales se gestionan mediante variables de entorno
+  - Usa `.env.example` como plantilla (seguro para subir a GitHub)
+  - Cambia las credenciales por defecto en producción
+  - Consulta [CREDENTIALS.md](restaurant-backend/CREDENTIALS.md) para configuración detallada
 - 💾 **Backups**: Realiza backups regulares de tu base de datos MongoDB
 - 🔄 **Actualizaciones**: Mantén las dependencias actualizadas regularmente
 - 📊 **Monitoreo**: Implementa logging y monitoreo en producción
@@ -363,7 +380,7 @@ npm run lint
 
 Este proyecto es privado y todos los derechos están reservados.
 
-**© 2024 - Sistema de Gestión para Restaurantes**
+**© 2025 - Sistema de Gestión para Restaurantes**
 
 ---
 

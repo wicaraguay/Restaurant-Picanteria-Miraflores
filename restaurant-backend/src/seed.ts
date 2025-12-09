@@ -8,8 +8,16 @@
  * 
  * @connections
  * - Usa: MenuItemModel, CustomerModel, OrderModel, EmployeeModel (infrastructure/database/schemas)
- * - Crea: Usuario admin (username: admin, password: admin123)
+ * - Crea: Usuario admin con credenciales desde variables de entorno (SEED_ADMIN_USERNAME, SEED_ADMIN_PASSWORD)
  * - Crea: Datos de ejemplo para desarrollo y testing
+ * 
+ * @environment_variables
+ * - SEED_ADMIN_USERNAME: Username para el usuario administrador (default: 'admin')
+ * - SEED_ADMIN_PASSWORD: Password para el usuario administrador (default: 'admin123')
+ * - SEED_WAITER_USERNAME: Username para el mesero (default: 'cmesero')
+ * - SEED_WAITER_PASSWORD: Password para el mesero (default: 'mesero123')
+ * - SEED_CHEF_USERNAME: Username para el cocinero (default: 'acocinera')
+ * - SEED_CHEF_PASSWORD: Password para el cocinero (default: 'cocina123')
  * 
  * @layer Infrastructure - Script de utilidad
  */
@@ -152,8 +160,8 @@ const seedData = async () => {
         const employees = [
             {
                 name: 'Administrador',
-                username: 'admin',
-                password: 'admin123', // TODO: Hash in production
+                username: process.env.SEED_ADMIN_USERNAME || 'admin',
+                password: process.env.SEED_ADMIN_PASSWORD || 'admin123',
                 roleId: 'admin',
                 phone: '+1234567890',
                 salary: 5000,
@@ -171,8 +179,8 @@ const seedData = async () => {
             },
             {
                 name: 'Carlos Mesero',
-                username: 'cmesero',
-                password: 'mesero123',
+                username: process.env.SEED_WAITER_USERNAME || 'cmesero',
+                password: process.env.SEED_WAITER_PASSWORD || 'mesero123',
                 roleId: 'waiter',
                 phone: '+1234567893',
                 salary: 1500,
@@ -190,8 +198,8 @@ const seedData = async () => {
             },
             {
                 name: 'Ana Cocinera',
-                username: 'acocinera',
-                password: 'cocina123',
+                username: process.env.SEED_CHEF_USERNAME || 'acocinera',
+                password: process.env.SEED_CHEF_PASSWORD || 'cocina123',
                 roleId: 'chef',
                 phone: '+1234567894',
                 salary: 2500,
@@ -257,8 +265,8 @@ const seedData = async () => {
         console.log(`   - Employees: ${createdEmployees.length}`);
         console.log(`   - Orders: ${createdOrders.length}`);
         console.log('\n🔐 Admin Credentials:');
-        console.log('   Username: admin');
-        console.log('   Password: admin123');
+        console.log(`   Username: ${process.env.SEED_ADMIN_USERNAME || 'admin'}`);
+        console.log(`   Password: ${process.env.SEED_ADMIN_PASSWORD || 'admin123'}`);
         console.log('\n💡 You can now connect MongoDB Compass to:');
         console.log(`   ${uri}`);
 
