@@ -43,6 +43,13 @@ const BillSchema = new Schema({
     timestamps: true
 });
 
+// ==================== INDEXES FOR PERFORMANCE ====================
+BillSchema.index({ documentNumber: 1 }, { unique: true }); // Unique document numbers
+BillSchema.index({ orderId: 1 }); // For finding bills by order
+BillSchema.index({ date: -1 }); // For sorting by date
+BillSchema.index({ customerIdentification: 1 }); // For customer bill lookup
+BillSchema.index({ createdAt: -1 }); // For sorting by creation date
+
 // Configure toObject to map _id to id
 BillSchema.set('toObject', {
     transform: (doc, ret: any) => {

@@ -10,6 +10,8 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { dbConnection } from './infrastructure/database/DatabaseConnection';
 import { logger } from './infrastructure/utils/Logger';
@@ -21,6 +23,7 @@ import menuRoutes from './infrastructure/web/routes/menuRoutes';
 import authRoutes from './infrastructure/web/routes/authRoutes';
 import configRoutes from './infrastructure/web/routes/configRoutes';
 import billRoutes from './infrastructure/web/routes/billRoutes';
+import { cacheService } from './infrastructure/utils/CacheService';
 
 dotenv.config();
 
@@ -30,7 +33,18 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(helmet());
+app.use(compression()); // Enable gzip compression for responses
 app.use(express.json());
+
+// Rate limiting to prevent abuse
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // Limit each IP to 1000 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use(limiter);
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -50,10 +64,22 @@ app.use('/api/config', configRoutes);
 app.use('/api/bills', billRoutes);
 
 app.get('/health', (req, res) => {
+    const cacheStats = cacheService.getStats();
     res.json({
         status: 'ok',
         timestamp: new Date(),
-        database: dbConnection.isHealthy() ? 'connected' : 'disconnected'
+        database: dbConnection.isHealthy() ? 'connected' : 'disconnected',
+        cache: {
+            enabled: true,
+            entries: cacheStats.size,
+            keys: cacheStats.keys
+        },
+        uptime: process.uptime(),
+        memory: {
+            used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+            total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+            unit: 'MB'
+        }
     });
 });
 

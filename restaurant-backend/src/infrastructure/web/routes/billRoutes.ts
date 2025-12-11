@@ -26,13 +26,29 @@ const router = Router();
 
 // GET /api/bills - Obtener todas las facturas
 router.get('/', ErrorHandler.asyncHandler(async (req, res) => {
-    logger.info('Fetching bills');
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+
+    // Build filter from query params
+    const filter: any = {};
+    if (req.query.documentNumber) filter.documentNumber = req.query.documentNumber;
+    if (req.query.customerIdentification) filter.customerIdentification = req.query.customerIdentification;
+    if (req.query.documentType) filter.documentType = req.query.documentType;
+
+    // Build sort from query params (default: newest first)
+    const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { createdAt: -1 };
+
+    logger.info('Fetching bills with pagination', { page, limit, filter });
 
     const getBills = container.getGetBillsUseCase();
-    const bills = await getBills.execute();
+    const result = await getBills.executePaginated(page, limit, filter, sort);
 
-    logger.info('Bills fetched successfully', { count: bills.length });
-    res.json(ResponseFormatter.success(bills));
+    logger.info('Bills fetched successfully', {
+        count: result.data.length,
+        page: result.pagination.page,
+        total: result.pagination.total
+    });
+    res.json(ResponseFormatter.success(result));
 }));
 
 // POST /api/bills - Crear una nueva factura

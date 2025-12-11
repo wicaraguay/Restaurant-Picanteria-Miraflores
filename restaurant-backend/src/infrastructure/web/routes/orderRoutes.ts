@@ -25,13 +25,29 @@ router.post('/', ErrorHandler.asyncHandler(async (req, res) => {
 }));
 
 router.get('/', ErrorHandler.asyncHandler(async (req, res) => {
-    logger.debug('Fetching all orders');
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+
+    // Build filter from query params
+    const filter: any = {};
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.billed !== undefined) filter.billed = req.query.billed === 'true';
+    if (req.query.customerName) filter.customerName = { $regex: req.query.customerName, $options: 'i' };
+
+    // Build sort from query params (default: newest first)
+    const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { createdAt: -1 };
+
+    logger.debug('Fetching orders with pagination', { page, limit, filter });
 
     const getOrders = container.getGetOrdersUseCase();
-    const orders = await getOrders.execute();
+    const result = await getOrders.executePaginated(page, limit, filter, sort);
 
-    logger.info('Orders fetched successfully', { count: orders.length });
-    res.json(ResponseFormatter.success(orders));
+    logger.info('Orders fetched successfully', {
+        count: result.data.length,
+        page: result.pagination.page,
+        total: result.pagination.total
+    });
+    res.json(ResponseFormatter.success(result));
 }));
 
 router.put('/:id', ErrorHandler.asyncHandler(async (req, res) => {

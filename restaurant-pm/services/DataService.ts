@@ -94,7 +94,9 @@ export class DataService {
 
         try {
             logger.debug('Fetching customers from API');
-            const data = await api.customers.getAll();
+            const response = await api.customers.getAll();
+            // Handle paginated response
+            const data = Array.isArray(response) ? response : response.data || [];
             this.saveToCache(cacheKey, data);
             return data;
         } catch (error) {
@@ -128,7 +130,9 @@ export class DataService {
 
         try {
             logger.debug('Fetching orders from API');
-            const data = await api.orders.getAll();
+            const response = await api.orders.getAll();
+            // Handle paginated response
+            const data = Array.isArray(response) ? response : response.data || [];
             this.saveToCache(cacheKey, data);
             return data;
         } catch (error) {
@@ -210,7 +214,9 @@ export class DataService {
 
         try {
             logger.debug('Fetching bills from API');
-            const data = await api.bills.getAll();
+            const response = await api.bills.getAll();
+            // Handle paginated response
+            const data = Array.isArray(response) ? response : response.data || [];
             this.saveToCache(cacheKey, data);
             return data;
         } catch (error) {

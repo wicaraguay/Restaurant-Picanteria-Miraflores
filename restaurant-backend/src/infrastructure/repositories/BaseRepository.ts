@@ -14,6 +14,21 @@ import { logger } from '../utils/Logger';
 import { DatabaseError, NotFoundError } from '../../domain/errors/CustomErrors';
 
 /**
+ * Interfaz para resultados paginados
+ */
+export interface PaginatedResult<T> {
+    data: T[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+        hasNext: boolean;
+        hasPrev: boolean;
+    };
+}
+
+/**
  * Clase abstracta BaseRepository
  * @template T - Tipo de entidad del dominio que maneja este repositorio
  */
@@ -69,7 +84,8 @@ export abstract class BaseRepository<T> {
     }
 
     /**
-     * Find all entities
+     * Find all entities (deprecated - use findPaginated for better performance)
+     * @deprecated Use findPaginated instead for better performance with large datasets
      */
     async findAll(): Promise<T[]> {
         try {
@@ -79,6 +95,55 @@ export abstract class BaseRepository<T> {
             return all.map(doc => this.mapToEntity(doc));
         } catch (error) {
             logger.error(`Failed to find all ${this.entityName}s`, error);
+            throw new DatabaseError(`Failed to find ${this.entityName}s`, error as Error);
+        }
+    }
+
+    /**
+     * Find entities with pagination
+     * @param page - Page number (1-indexed)
+     * @param limit - Number of items per page (default: 50, max: 100)
+     * @param filter - Optional MongoDB filter object
+     * @param sort - Optional sort object (e.g., { createdAt: -1 })
+     */
+    async findPaginated(
+        page: number = 1,
+        limit: number = 50,
+        filter: any = {},
+        sort: any = { createdAt: -1 }
+    ): Promise<PaginatedResult<T>> {
+        try {
+            // Validate and sanitize inputs
+            page = Math.max(1, Math.floor(page));
+            limit = Math.min(100, Math.max(1, Math.floor(limit)));
+
+            const skip = (page - 1) * limit;
+
+            logger.debug(`Finding paginated ${this.entityName}s`, { page, limit, filter });
+
+            // Execute count and find in parallel for better performance
+            const [data, total] = await Promise.all([
+                this.model.find(filter).sort(sort).skip(skip).limit(limit).exec(),
+                this.model.countDocuments(filter)
+            ]);
+
+            const totalPages = Math.ceil(total / limit);
+
+            logger.info(`Found ${data.length} ${this.entityName}s (page ${page}/${totalPages})`);
+
+            return {
+                data: data.map(doc => this.mapToEntity(doc)),
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    totalPages,
+                    hasNext: page < totalPages,
+                    hasPrev: page > 1
+                }
+            };
+        } catch (error) {
+            logger.error(`Failed to find paginated ${this.entityName}s`, error);
             throw new DatabaseError(`Failed to find ${this.entityName}s`, error as Error);
         }
     }

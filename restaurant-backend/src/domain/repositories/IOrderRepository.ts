@@ -15,11 +15,13 @@
  */
 
 import { Order } from '../entities/Order';
+import { PaginatedResult } from '../../infrastructure/repositories/BaseRepository';
 
 export interface IOrderRepository {
     create(order: Order): Promise<Order>;
     findById(id: string): Promise<Order | null>;
     findAll(): Promise<Order[]>;
+    findPaginated(page: number, limit: number, filter?: any, sort?: any): Promise<PaginatedResult<Order>>;
     update(id: string, order: Partial<Order>): Promise<Order | null>;
     delete(id: string): Promise<boolean>;
     // Add specialized methods if needed, e.g. findByCustomer

@@ -38,4 +38,12 @@ const CustomerSchema: Schema = new Schema({
     address: { type: String },
 }, { timestamps: true });
 
+// ==================== INDEXES FOR PERFORMANCE ====================
+// Unique index for email (if provided, must be unique)
+CustomerSchema.index({ email: 1 }, { unique: true, sparse: true }); // sparse: true allows null values
+CustomerSchema.index({ phone: 1 }); // For searching by phone
+CustomerSchema.index({ name: 1 }); // For searching by name
+CustomerSchema.index({ lastVisit: -1 }); // For sorting by last visit
+CustomerSchema.index({ loyaltyPoints: -1 }); // For sorting by loyalty points
+
 export const CustomerModel = mongoose.model<CustomerDocument>('Customer', CustomerSchema);

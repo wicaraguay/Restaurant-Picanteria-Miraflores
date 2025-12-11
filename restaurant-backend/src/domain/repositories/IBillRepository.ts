@@ -15,9 +15,11 @@
  */
 
 import { Bill } from '../entities/Bill';
+import { PaginatedResult } from '../../infrastructure/repositories/BaseRepository';
 
 export interface IBillRepository {
     create(bill: Bill): Promise<Bill>;
     findAll(): Promise<Bill[]>;
+    findPaginated(page: number, limit: number, filter?: any, sort?: any): Promise<PaginatedResult<Bill>>;
     findById(id: string): Promise<Bill | null>;
 }

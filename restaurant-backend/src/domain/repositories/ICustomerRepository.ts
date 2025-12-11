@@ -16,11 +16,13 @@
  */
 
 import { Customer } from '../entities/Customer';
+import { PaginatedResult } from '../../infrastructure/repositories/BaseRepository';
 
 export interface ICustomerRepository {
     create(customer: Customer): Promise<Customer>;
     findById(id: string): Promise<Customer | null>;
     findAll(): Promise<Customer[]>;
+    findPaginated(page: number, limit: number, filter?: any, sort?: any): Promise<PaginatedResult<Customer>>;
     update(id: string, customer: Partial<Customer>): Promise<Customer | null>;
     delete(id: string): Promise<boolean>;
 }

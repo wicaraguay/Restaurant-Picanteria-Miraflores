@@ -270,8 +270,26 @@ export class ApiService {
      * Clientes
      */
     public customers = {
-        getAll: async (): Promise<any[]> => {
-            return this.get(API_ENDPOINTS.CUSTOMERS.BASE);
+        getAll: async (params?: {
+            page?: number;
+            limit?: number;
+            name?: string;
+            email?: string;
+            phone?: string;
+            sort?: any;
+        }): Promise<any> => {
+            const queryParams = new URLSearchParams();
+            if (params?.page) queryParams.append('page', params.page.toString());
+            if (params?.limit) queryParams.append('limit', params.limit.toString());
+            if (params?.name) queryParams.append('name', params.name);
+            if (params?.email) queryParams.append('email', params.email);
+            if (params?.phone) queryParams.append('phone', params.phone);
+            if (params?.sort) queryParams.append('sort', JSON.stringify(params.sort));
+
+            const url = queryParams.toString()
+                ? `${API_ENDPOINTS.CUSTOMERS.BASE}?${queryParams}`
+                : API_ENDPOINTS.CUSTOMERS.BASE;
+            return this.get(url);
         },
         getById: async (id: string): Promise<any> => {
             return this.get(API_ENDPOINTS.CUSTOMERS.BY_ID(id));
@@ -285,8 +303,26 @@ export class ApiService {
      * Órdenes
      */
     public orders = {
-        getAll: async (): Promise<any[]> => {
-            return this.get(API_ENDPOINTS.ORDERS.BASE);
+        getAll: async (params?: {
+            page?: number;
+            limit?: number;
+            status?: string;
+            billed?: boolean;
+            customerName?: string;
+            sort?: any;
+        }): Promise<any> => {
+            const queryParams = new URLSearchParams();
+            if (params?.page) queryParams.append('page', params.page.toString());
+            if (params?.limit) queryParams.append('limit', params.limit.toString());
+            if (params?.status) queryParams.append('status', params.status);
+            if (params?.billed !== undefined) queryParams.append('billed', params.billed.toString());
+            if (params?.customerName) queryParams.append('customerName', params.customerName);
+            if (params?.sort) queryParams.append('sort', JSON.stringify(params.sort));
+
+            const url = queryParams.toString()
+                ? `${API_ENDPOINTS.ORDERS.BASE}?${queryParams}`
+                : API_ENDPOINTS.ORDERS.BASE;
+            return this.get(url);
         },
         getById: async (id: string): Promise<any> => {
             return this.get(API_ENDPOINTS.ORDERS.BY_ID(id));
@@ -336,8 +372,26 @@ export class ApiService {
      * Facturación
      */
     public bills = {
-        getAll: async (): Promise<any[]> => {
-            return this.get(API_ENDPOINTS.BILLS.BASE);
+        getAll: async (params?: {
+            page?: number;
+            limit?: number;
+            documentNumber?: string;
+            customerIdentification?: string;
+            documentType?: string;
+            sort?: any;
+        }): Promise<any> => {
+            const queryParams = new URLSearchParams();
+            if (params?.page) queryParams.append('page', params.page.toString());
+            if (params?.limit) queryParams.append('limit', params.limit.toString());
+            if (params?.documentNumber) queryParams.append('documentNumber', params.documentNumber);
+            if (params?.customerIdentification) queryParams.append('customerIdentification', params.customerIdentification);
+            if (params?.documentType) queryParams.append('documentType', params.documentType);
+            if (params?.sort) queryParams.append('sort', JSON.stringify(params.sort));
+
+            const url = queryParams.toString()
+                ? `${API_ENDPOINTS.BILLS.BASE}?${queryParams}`
+                : API_ENDPOINTS.BILLS.BASE;
+            return this.get(url);
         },
         create: async (data: any): Promise<any> => {
             return this.post(API_ENDPOINTS.BILLS.BASE, data);

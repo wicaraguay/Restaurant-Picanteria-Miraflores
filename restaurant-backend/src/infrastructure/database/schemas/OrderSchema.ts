@@ -40,4 +40,16 @@ const OrderSchema: Schema = new Schema({
     timestamps: { createdAt: true, updatedAt: false } // We use createdAt from timestamps
 });
 
+// ==================== INDEXES FOR PERFORMANCE ====================
+// Single field indexes
+OrderSchema.index({ customerName: 1 }); // For searching orders by customer
+OrderSchema.index({ status: 1 }); // For filtering by status (New, InProgress, etc.)
+OrderSchema.index({ createdAt: -1 }); // For sorting by date (most recent first)
+OrderSchema.index({ billed: 1 }); // For filtering billed/unbilled orders
+
+// Compound indexes for common query patterns
+OrderSchema.index({ status: 1, createdAt: -1 }); // Filter by status + sort by date
+OrderSchema.index({ customerName: 1, createdAt: -1 }); // Customer orders sorted by date
+OrderSchema.index({ billed: 1, createdAt: -1 }); // Unbilled orders sorted by date
+
 export const OrderModel = mongoose.model<OrderDocument>('Order', OrderSchema);

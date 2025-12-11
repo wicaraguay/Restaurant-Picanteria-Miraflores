@@ -70,6 +70,8 @@ export class DatabaseConnection {
             await mongoose.connect(uri, {
                 serverSelectionTimeoutMS: 5000,
                 socketTimeoutMS: 45000,
+                maxPoolSize: 50,        // Maximum number of connections in the pool
+                minPoolSize: 10,        // Minimum number of connections to maintain
             });
 
             logger.info('✅ MongoDB connected successfully!');

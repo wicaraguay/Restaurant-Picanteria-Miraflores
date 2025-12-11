@@ -25,13 +25,29 @@ router.post('/', ErrorHandler.asyncHandler(async (req, res) => {
 }));
 
 router.get('/', ErrorHandler.asyncHandler(async (req, res) => {
-    logger.debug('Fetching all customers');
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+
+    // Build filter from query params
+    const filter: any = {};
+    if (req.query.name) filter.name = { $regex: req.query.name, $options: 'i' };
+    if (req.query.email) filter.email = { $regex: req.query.email, $options: 'i' };
+    if (req.query.phone) filter.phone = { $regex: req.query.phone, $options: 'i' };
+
+    // Build sort from query params (default: alphabetical by name)
+    const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { name: 1 };
+
+    logger.debug('Fetching customers with pagination', { page, limit, filter });
 
     const getCustomers = container.getGetCustomersUseCase();
-    const customers = await getCustomers.execute();
+    const result = await getCustomers.executePaginated(page, limit, filter, sort);
 
-    logger.info('Customers fetched successfully', { count: customers.length });
-    res.json(ResponseFormatter.success(customers));
+    logger.info('Customers fetched successfully', {
+        count: result.data.length,
+        page: result.pagination.page,
+        total: result.pagination.total
+    });
+    res.json(ResponseFormatter.success(result));
 }));
 
 export default router;
