@@ -397,6 +397,48 @@ export class ApiService {
             return this.post(API_ENDPOINTS.BILLS.BASE, data);
         },
     };
+
+    /**
+     * Empleados
+     */
+    public employees = {
+        getAll: async (): Promise<any[]> => {
+            return this.get(API_ENDPOINTS.EMPLOYEES.BASE);
+        },
+        getById: async (id: string): Promise<any> => {
+            return this.get(API_ENDPOINTS.EMPLOYEES.BY_ID(id));
+        },
+        create: async (data: any): Promise<any> => {
+            return this.post(API_ENDPOINTS.EMPLOYEES.BASE, data);
+        },
+        update: async (id: string, data: any): Promise<any> => {
+            return this.put(API_ENDPOINTS.EMPLOYEES.BY_ID(id), data);
+        },
+        delete: async (id: string): Promise<any> => {
+            return this.delete(API_ENDPOINTS.EMPLOYEES.BY_ID(id));
+        },
+    };
+
+    /**
+     * Roles
+     */
+    public roles = {
+        getAll: async (): Promise<any[]> => {
+            return this.get(API_ENDPOINTS.ROLES.BASE);
+        },
+        getById: async (id: string): Promise<any> => {
+            return this.get(API_ENDPOINTS.ROLES.BY_ID(id));
+        },
+        create: async (data: any): Promise<any> => {
+            return this.post(API_ENDPOINTS.ROLES.BASE, data);
+        },
+        update: async (id: string, data: any): Promise<any> => {
+            return this.put(API_ENDPOINTS.ROLES.BY_ID(id), data);
+        },
+        delete: async (id: string): Promise<any> => {
+            return this.delete(API_ENDPOINTS.ROLES.BY_ID(id));
+        },
+    };
 }
 
 // Exportar instancia singleton
@@ -410,6 +452,8 @@ export const api = {
     menu: apiService.menu,
     config: apiService.config,
     bills: apiService.bills,
+    employees: apiService.employees,
+    roles: apiService.roles,
     getToken: () => apiService.getToken(),
     setToken: (token: string | null) => apiService.setToken(token),
 };

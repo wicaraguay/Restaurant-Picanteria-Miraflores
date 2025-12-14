@@ -23,6 +23,8 @@ import menuRoutes from './infrastructure/web/routes/menuRoutes';
 import authRoutes from './infrastructure/web/routes/authRoutes';
 import configRoutes from './infrastructure/web/routes/configRoutes';
 import billRoutes from './infrastructure/web/routes/billRoutes';
+import employeeRoutes from './infrastructure/web/routes/employeeRoutes';
+import roleRoutes from './infrastructure/web/routes/roleRoutes';
 import { cacheService } from './infrastructure/utils/CacheService';
 
 dotenv.config();
@@ -62,6 +64,8 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/bills', billRoutes);
+app.use('/api/employees', employeeRoutes);
+app.use('/api/roles', roleRoutes);
 
 app.get('/health', (req, res) => {
     const cacheStats = cacheService.getStats();

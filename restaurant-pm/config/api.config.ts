@@ -48,4 +48,12 @@ export const API_ENDPOINTS = {
     BILLS: {
         BASE: '/bills',
     },
+    EMPLOYEES: {
+        BASE: '/employees',
+        BY_ID: (id: string) => `/employees/${id}`,
+    },
+    ROLES: {
+        BASE: '/roles',
+        BY_ID: (id: string) => `/roles/${id}`,
+    },
 } as const;

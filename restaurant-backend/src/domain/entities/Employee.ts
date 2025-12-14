@@ -17,12 +17,15 @@
  * @layer Domain - Entidad pura sin dependencias externas
  */
 
+import { Role } from './Role';
+
 export interface Employee {
     id: string;
     name: string;
     username: string;
     password?: string;
     roleId: string;
+    role?: Role; // Propiedad populada
     phone: string;
     salary: number;
     shifts: { [key: string]: string };

@@ -11,6 +11,9 @@ import { EmployeeModel } from '../database/schemas/EmployeeSchema';
 import { BaseRepository } from './BaseRepository';
 import { logger } from '../utils/Logger';
 
+import { RoleModel } from '../database/schemas/RoleSchema';
+import { Role } from '../../domain/entities/Role';
+
 export class MongoEmployeeRepository extends BaseRepository<Employee> implements IEmployeeRepository {
     constructor() {
         super(EmployeeModel, 'Employee');
@@ -20,7 +23,44 @@ export class MongoEmployeeRepository extends BaseRepository<Employee> implements
         try {
             logger.debug('Finding employee by username', { username });
             const found = await EmployeeModel.findOne({ username });
-            return found ? this.mapToEntity(found) : null;
+
+            if (!found) return null;
+
+            const entity = this.mapToEntity(found);
+
+            // Poplar el rol manualmente ya que está en otra colección
+            if (entity.roleId) {
+                let roleDoc;
+
+                // Intentar buscar por ID
+                if (entity.roleId.match(/^[0-9a-fA-F]{24}$/)) {
+                    roleDoc = await RoleModel.findById(entity.roleId);
+                }
+
+                // Si no se encuentra por ID o no es ID válido, intentar por nombre (fallback legacy)
+                if (!roleDoc) {
+                    // Mapeo de legacy "slugs" a nombres reales
+                    const legacyRoleMap: Record<string, string> = {
+                        'admin': 'Administrador',
+                        'waiter': 'Mesero',
+                        'chef': 'Chef',
+                        'cashier': 'Cajero'
+                    };
+                    const roleName = legacyRoleMap[entity.roleId] || entity.roleId;
+                    roleDoc = await RoleModel.findOne({ name: roleName });
+                }
+
+                if (roleDoc) {
+                    entity.role = {
+                        id: roleDoc._id.toString(),
+                        name: roleDoc.name,
+                        permissions: Object.fromEntries(roleDoc.permissions || new Map()),
+                        isSystem: roleDoc.isSystem
+                    } as Role;
+                }
+            }
+
+            return entity;
         } catch (error) {
             logger.error('Failed to find employee by username', error);
             throw error;

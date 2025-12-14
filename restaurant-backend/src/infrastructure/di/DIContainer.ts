@@ -15,6 +15,7 @@ import { MongoOrderRepository } from '../repositories/MongoOrderRepository';
 import { MongoMenuRepository } from '../repositories/MongoMenuRepository';
 import { MongoRestaurantConfigRepository } from '../repositories/MongoRestaurantConfigRepository';
 import { MongoBillRepository } from '../repositories/MongoBillRepository';
+import { MongoRoleRepository } from '../repositories/MongoRoleRepository';
 
 import { CreateCustomer } from '../../application/use-cases/CreateCustomer';
 import { GetCustomers } from '../../application/use-cases/GetCustomers';
@@ -30,6 +31,15 @@ import { GetRestaurantConfig } from '../../application/use-cases/GetRestaurantCo
 import { UpdateRestaurantConfig } from '../../application/use-cases/UpdateRestaurantConfig';
 import { CreateBill } from '../../application/use-cases/CreateBill';
 import { GetBills } from '../../application/use-cases/GetBills';
+import { GetRoles } from '../../application/use-cases/GetRoles';
+import { CreateRole } from '../../application/use-cases/CreateRole';
+import { UpdateRole } from '../../application/use-cases/UpdateRole';
+import { DeleteRole } from '../../application/use-cases/DeleteRole';
+import { GetEmployees } from '../../application/use-cases/GetEmployees';
+import { GetEmployee } from '../../application/use-cases/GetEmployee';
+import { CreateEmployee } from '../../application/use-cases/CreateEmployee';
+import { UpdateEmployee } from '../../application/use-cases/UpdateEmployee';
+import { DeleteEmployee } from '../../application/use-cases/DeleteEmployee';
 
 import { ICustomerRepository } from '../../domain/repositories/ICustomerRepository';
 import { IEmployeeRepository } from '../../domain/repositories/IEmployeeRepository';
@@ -37,6 +47,7 @@ import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 import { IMenuRepository } from '../../domain/repositories/IMenuRepository';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
+import { IRoleRepository } from '../../domain/repositories/IRoleRepository';
 
 import { logger } from '../utils/Logger';
 
@@ -54,6 +65,7 @@ export class DIContainer {
     private menuRepository?: IMenuRepository;
     private configRepository?: IRestaurantConfigRepository;
     private billRepository?: IBillRepository;
+    private roleRepository?: IRoleRepository;
 
     // Use Cases
     private createCustomerUseCase?: CreateCustomer;
@@ -70,6 +82,15 @@ export class DIContainer {
     private updateRestaurantConfigUseCase?: UpdateRestaurantConfig;
     private createBillUseCase?: CreateBill;
     private getBillsUseCase?: GetBills;
+    private getRolesUseCase?: GetRoles;
+    private createRoleUseCase?: CreateRole;
+    private updateRoleUseCase?: UpdateRole;
+    private deleteRoleUseCase?: DeleteRole;
+    private getEmployeesUseCase?: GetEmployees;
+    private getEmployeeUseCase?: GetEmployee;
+    private createEmployeeUseCase?: CreateEmployee;
+    private updateEmployeeUseCase?: UpdateEmployee;
+    private deleteEmployeeUseCase?: DeleteEmployee;
 
     private constructor() {
         logger.info('DIContainer initialized');
@@ -130,6 +151,14 @@ export class DIContainer {
             logger.debug('BillRepository instantiated');
         }
         return this.billRepository;
+    }
+
+    public getRoleRepository(): IRoleRepository {
+        if (!this.roleRepository) {
+            this.roleRepository = new MongoRoleRepository();
+            logger.debug('RoleRepository instantiated');
+        }
+        return this.roleRepository;
     }
 
     // Use Case Getters (Lazy Initialization with Dependencies)
@@ -246,6 +275,78 @@ export class DIContainer {
         return this.getBillsUseCase;
     }
 
+    public getGetRolesUseCase(): GetRoles {
+        if (!this.getRolesUseCase) {
+            this.getRolesUseCase = new GetRoles(this.getRoleRepository());
+            logger.debug('GetRoles use case instantiated');
+        }
+        return this.getRolesUseCase;
+    }
+
+    public getCreateRoleUseCase(): CreateRole {
+        if (!this.createRoleUseCase) {
+            this.createRoleUseCase = new CreateRole(this.getRoleRepository());
+            logger.debug('CreateRole use case instantiated');
+        }
+        return this.createRoleUseCase;
+    }
+
+    public getUpdateRoleUseCase(): UpdateRole {
+        if (!this.updateRoleUseCase) {
+            this.updateRoleUseCase = new UpdateRole(this.getRoleRepository());
+            logger.debug('UpdateRole use case instantiated');
+        }
+        return this.updateRoleUseCase;
+    }
+
+    public getDeleteRoleUseCase(): DeleteRole {
+        if (!this.deleteRoleUseCase) {
+            this.deleteRoleUseCase = new DeleteRole(this.getRoleRepository(), this.getEmployeeRepository());
+            logger.debug('DeleteRole use case instantiated');
+        }
+        return this.deleteRoleUseCase;
+    }
+
+    public getGetEmployeesUseCase(): GetEmployees {
+        if (!this.getEmployeesUseCase) {
+            this.getEmployeesUseCase = new GetEmployees(this.getEmployeeRepository());
+            logger.debug('GetEmployees use case instantiated');
+        }
+        return this.getEmployeesUseCase;
+    }
+
+    public getGetEmployeeUseCase(): GetEmployee {
+        if (!this.getEmployeeUseCase) {
+            this.getEmployeeUseCase = new GetEmployee(this.getEmployeeRepository());
+            logger.debug('GetEmployee use case instantiated');
+        }
+        return this.getEmployeeUseCase;
+    }
+
+    public getCreateEmployeeUseCase(): CreateEmployee {
+        if (!this.createEmployeeUseCase) {
+            this.createEmployeeUseCase = new CreateEmployee(this.getEmployeeRepository(), this.getRoleRepository());
+            logger.debug('CreateEmployee use case instantiated');
+        }
+        return this.createEmployeeUseCase;
+    }
+
+    public getUpdateEmployeeUseCase(): UpdateEmployee {
+        if (!this.updateEmployeeUseCase) {
+            this.updateEmployeeUseCase = new UpdateEmployee(this.getEmployeeRepository(), this.getRoleRepository());
+            logger.debug('UpdateEmployee use case instantiated');
+        }
+        return this.updateEmployeeUseCase;
+    }
+
+    public getDeleteEmployeeUseCase(): DeleteEmployee {
+        if (!this.deleteEmployeeUseCase) {
+            this.deleteEmployeeUseCase = new DeleteEmployee(this.getEmployeeRepository());
+            logger.debug('DeleteEmployee use case instantiated');
+        }
+        return this.deleteEmployeeUseCase;
+    }
+
     /**
      * Reset all dependencies (useful for testing)
      */
@@ -270,6 +371,16 @@ export class DIContainer {
         this.updateRestaurantConfigUseCase = undefined;
         this.createBillUseCase = undefined;
         this.getBillsUseCase = undefined;
+        this.roleRepository = undefined;
+        this.getRolesUseCase = undefined;
+        this.createRoleUseCase = undefined;
+        this.updateRoleUseCase = undefined;
+        this.deleteRoleUseCase = undefined;
+        this.getEmployeesUseCase = undefined;
+        this.getEmployeeUseCase = undefined;
+        this.createEmployeeUseCase = undefined;
+        this.updateEmployeeUseCase = undefined;
+        this.deleteEmployeeUseCase = undefined;
         logger.info('DIContainer reset');
     }
 }

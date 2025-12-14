@@ -32,16 +32,6 @@ const STORAGE_KEYS = {
 } as const;
 
 /**
- * Mapeo de roles backend a frontend
- */
-const ROLE_ID_MAP: Record<string, string> = {
-    'admin': '1',
-    'cashier': '2',
-    'waiter': '3',
-    'chef': '4'
-};
-
-/**
  * Tipo para usuario autenticado
  */
 export type AuthenticatedUser = Employee & { role: Role };
@@ -64,20 +54,6 @@ export class AuthService {
             AuthService.instance = new AuthService();
         }
         return AuthService.instance;
-    }
-
-    /**
-     * Mapea roleId del backend al frontend
-     */
-    public mapRoleId(backendRoleId: string): string {
-        return ROLE_ID_MAP[backendRoleId] || '1'; // Default a admin si no se encuentra
-    }
-
-    /**
-     * Obtiene el rol por ID
-     */
-    public getRoleById(roleId: string, roles: Role[]): Role | undefined {
-        return roles.find(r => r.id === roleId);
     }
 
     /**
@@ -118,10 +94,12 @@ export class AuthService {
     /**
      * Inicia sesión
      */
+    /**
+     * Inicia sesión
+     */
     public async login(
         username: string,
-        password: string,
-        roles: Role[]
+        password: string
     ): Promise<{ success: boolean; user?: AuthenticatedUser; error?: string }> {
         try {
             logger.info('Login attempt', { username });
@@ -134,24 +112,22 @@ export class AuthService {
             }
 
             const employee = response.user;
-            const frontendRoleId = this.mapRoleId(employee.roleId);
-            const role = this.getRoleById(frontendRoleId, roles);
 
-            if (!role) {
-                logger.error('Role not found', { roleId: frontendRoleId });
-                return { success: false, error: 'Rol no encontrado' };
+            // La API ahora devuelve el rol populado dentro del usuario
+            if (!employee.role) {
+                logger.error('User has no role assigned from backend', { userId: employee.id });
+                return { success: false, error: 'Usuario sin rol asignado' };
             }
 
             const userWithRole: AuthenticatedUser = {
                 ...employee,
-                roleId: frontendRoleId,
-                role
+                role: employee.role // Usar el rol que viene del backend
             };
 
             // Guardar sesión
             this.saveSession(response.token, response.sessionId, userWithRole);
 
-            logger.info('Login successful', { userId: employee.id });
+            logger.info('Login successful', { userId: employee.id, role: employee.role.name });
             return { success: true, user: userWithRole };
 
         } catch (error) {
@@ -200,9 +176,7 @@ export class AuthService {
     /**
      * Restaura sesión desde storage
      */
-    public async restoreSession(
-        roles: Role[]
-    ): Promise<{ success: boolean; user?: AuthenticatedUser }> {
+    public async restoreSession(): Promise<{ success: boolean; user?: AuthenticatedUser }> {
         try {
             const session = this.loadSession();
 

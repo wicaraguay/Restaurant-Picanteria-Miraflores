@@ -3,6 +3,7 @@ import { NAV_ITEMS } from '../constants';
 import { ViewType } from '../types';
 import { SunIcon, MoonIcon, LogOutIcon } from './Icons';
 import { useRestaurantConfig } from '../contexts/RestaurantConfigContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
   currentView: ViewType;
@@ -32,6 +33,7 @@ const ThemeToggle: React.FC<{ theme: 'light' | 'dark'; setTheme: (theme: 'light'
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, theme, setTheme, navItems, onLogout }) => {
   const { config } = useRestaurantConfig();
+  const { currentUser } = useAuth();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -71,7 +73,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, theme, set
           ))}
         </ul>
       </nav>
-      <div className="p-2">
+      <div className="p-2 border-t border-gray-700 dark:border-dark-700">
+        {/* User Info Section */}
+        {currentUser && (
+          <div className="px-3 py-2 mb-2 bg-gray-900/50 rounded-lg">
+            <p className="text-sm font-semibold text-white truncate">{currentUser.name}</p>
+            <p className="text-xs text-gray-400 truncate">{currentUser.role?.name || 'Usuario'}</p>
+          </div>
+        )}
+
         <button
           onClick={onLogout}
           className="w-full flex items-center p-3 my-1 rounded-md text-left transition-colors text-gray-300 hover:bg-red-500 hover:text-white dark:hover:bg-red-600"

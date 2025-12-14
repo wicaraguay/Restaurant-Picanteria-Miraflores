@@ -24,10 +24,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
     children: ReactNode;
-    roles: Role[];
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children, roles }) => {
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(null);
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -39,7 +38,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, roles }) =
         try {
             logger.info('Attempting to restore session');
 
-            const result = await authService.restoreSession(roles);
+            const result = await authService.restoreSession();
 
             if (result.success && result.user) {
                 setCurrentUser(result.user);
@@ -60,7 +59,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, roles }) =
      */
     const login = async (username: string, password: string): Promise<boolean> => {
         try {
-            const result = await authService.login(username, password, roles);
+            const result = await authService.login(username, password);
 
             if (result.success && result.user) {
                 setCurrentUser(result.user);

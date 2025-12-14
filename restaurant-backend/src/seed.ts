@@ -155,6 +155,42 @@ const seedData = async () => {
         const createdCustomers = await CustomerModel.insertMany(customers);
         console.log(`✅ Created ${createdCustomers.length} customers`);
 
+        // Seed Roles first
+        console.log('\n🎭 Seeding roles...');
+        const { RoleModel } = require('./infrastructure/database/schemas/RoleSchema'); // CommonJS require if import fails or mixed modules
+
+        const rolesData = [
+            {
+                name: 'Administrador',
+                permissions: { dashboard: true, orders: true, customers: true, menu: true, kitchen: true, hr: true, billing: true, settings: true },
+                isSystem: true
+            },
+            {
+                name: 'Mesero',
+                permissions: { dashboard: true, orders: true, customers: true, menu: true, kitchen: true }
+            },
+            {
+                name: 'Chef',
+                permissions: { dashboard: true, orders: true, menu: true, kitchen: true }
+            },
+            {
+                name: 'Cajero',
+                permissions: { dashboard: true, orders: true, customers: true, billing: true }
+            }
+        ];
+
+        // Ensure roles exist and get their IDs
+        const rolesMap: Record<string, string> = {};
+        for (const r of rolesData) {
+            const role = await RoleModel.findOneAndUpdate(
+                { name: r.name },
+                { $set: r },
+                { upsert: true, new: true }
+            );
+            rolesMap[r.name] = role._id.toString();
+        }
+        console.log('✅ Roles seeded');
+
         // Seed Employees (including admin user)
         console.log('\n👨‍💼 Seeding employees...');
         const employees = [
@@ -162,59 +198,31 @@ const seedData = async () => {
                 name: 'Administrador',
                 username: process.env.SEED_ADMIN_USERNAME || 'admin',
                 password: process.env.SEED_ADMIN_PASSWORD || 'admin123',
-                roleId: 'admin',
+                roleId: rolesMap['Administrador'], // Use real ID
                 phone: '+1234567890',
                 salary: 5000,
-                shifts: {
-                    'Lunes': '9:00-17:00',
-                    'Martes': '9:00-17:00',
-                    'Miércoles': '9:00-17:00',
-                    'Jueves': '9:00-17:00',
-                    'Viernes': '9:00-17:00'
-                },
-                equipment: {
-                    uniform: true,
-                    epp: true
-                }
+                shifts: { 'Lunes': '9:00-17:00' },
+                equipment: { uniform: true, epp: true }
             },
             {
                 name: 'Carlos Mesero',
                 username: process.env.SEED_WAITER_USERNAME || 'cmesero',
                 password: process.env.SEED_WAITER_PASSWORD || 'mesero123',
-                roleId: 'waiter',
+                roleId: rolesMap['Mesero'],
                 phone: '+1234567893',
                 salary: 1500,
-                shifts: {
-                    'Lunes': '12:00-20:00',
-                    'Martes': '12:00-20:00',
-                    'Miércoles': '12:00-20:00',
-                    'Jueves': '12:00-20:00',
-                    'Viernes': '12:00-20:00'
-                },
-                equipment: {
-                    uniform: true,
-                    epp: false
-                }
+                shifts: { 'Lunes': '12:00-20:00' },
+                equipment: { uniform: true, epp: false }
             },
             {
                 name: 'Ana Cocinera',
                 username: process.env.SEED_CHEF_USERNAME || 'acocinera',
                 password: process.env.SEED_CHEF_PASSWORD || 'cocina123',
-                roleId: 'chef',
+                roleId: rolesMap['Chef'],
                 phone: '+1234567894',
                 salary: 2500,
-                shifts: {
-                    'Lunes': '10:00-18:00',
-                    'Martes': '10:00-18:00',
-                    'Miércoles': '10:00-18:00',
-                    'Jueves': '10:00-18:00',
-                    'Viernes': '10:00-18:00',
-                    'Sábado': '10:00-18:00'
-                },
-                equipment: {
-                    uniform: true,
-                    epp: true
-                }
+                shifts: { 'Lunes': '10:00-18:00' },
+                equipment: { uniform: true, epp: true }
             }
         ];
 

@@ -19,8 +19,10 @@ import { Employee } from '../entities/Employee';
 
 export interface IEmployeeRepository {
     findByUsername(username: string): Promise<Employee | null>;
-    create(employee: Employee): Promise<Employee>;
-    findAll(): Promise<Employee[]>;
-    updateSession(id: string, sessionId: string, lastLoginAt: Date): Promise<void>;
     findById(id: string): Promise<Employee | null>;
+    findAll(): Promise<Employee[]>;
+    create(employee: Employee): Promise<Employee>;
+    update(id: string, employee: Partial<Employee>): Promise<Employee | null>;
+    delete(id: string): Promise<boolean>;
+    updateSession(id: string, sessionId: string, lastLoginAt: Date): Promise<void>;
 }

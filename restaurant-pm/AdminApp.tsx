@@ -17,7 +17,7 @@
  */
 
 import React, { lazy, Suspense, useCallback } from 'react';
-import { ViewType, MenuItem } from './types';
+import { ViewType, MenuItem, Employee, Role } from './types';
 import Sidebar from './components/Sidebar';
 import { SunIcon, MoonIcon } from './components/Icons';
 import { NAV_ITEMS } from './constants';
@@ -34,7 +34,7 @@ import { useTheme } from './hooks/useTheme';
 import { useNavigation } from './hooks/useNavigation';
 
 // Services
-import { DataFactory } from './services/factories/DataFactory';
+
 
 // ✅ CODE SPLITTING: Lazy load de componentes grandes
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -66,7 +66,7 @@ const LoadingFallback: React.FC = () => (
  */
 const AdminContent: React.FC = () => {
     const { currentUser, logout } = useAuth();
-    const { state, updateMenuItem, setMenuItems: setMenuItemsContext } = useAppState();
+    const { state, updateMenuItem, setMenuItems: setMenuItemsContext, setEmployees: setEmployeesContext, setRoles: setRolesContext } = useAppState();
     const { theme, toggleTheme } = useTheme();
     const { currentView, setCurrentView, navItems, getCurrentViewLabel } = useNavigation(currentUser);
 
@@ -83,6 +83,24 @@ const AdminContent: React.FC = () => {
             setMenuItemsContext(value);
         }
     }, [state.menuItems, setMenuItemsContext]);
+
+    // Wrapper para setEmployees
+    const updateEmployees = useCallback((value: Employee[] | ((prev: Employee[]) => Employee[])) => {
+        if (typeof value === 'function') {
+            setEmployeesContext(value(state.employees));
+        } else {
+            setEmployeesContext(value);
+        }
+    }, [state.employees, setEmployeesContext]);
+
+    // Wrapper para setRoles
+    const updateRoles = useCallback((value: Role[] | ((prev: Role[]) => Role[])) => {
+        if (typeof value === 'function') {
+            setRolesContext(value(state.roles));
+        } else {
+            setRolesContext(value);
+        }
+    }, [state.roles, setRolesContext]);
 
     /**
      * Renderiza la vista actual según navegación
@@ -137,9 +155,9 @@ const AdminContent: React.FC = () => {
                 return (
                     <HRManagement
                         employees={state.employees}
-                        setEmployees={() => { }} // Manejado por context
+                        setEmployees={updateEmployees}
                         roles={state.roles}
-                        setRoles={() => { }} // Manejado por context
+                        setRoles={updateRoles}
                     />
                 );
 
@@ -211,10 +229,8 @@ const AdminContent: React.FC = () => {
  * Envuelve todo en providers necesarios
  */
 const AdminApp: React.FC = () => {
-    const roles = DataFactory.createDefaultRoles();
-
     return (
-        <AuthProvider roles={roles}>
+        <AuthProvider>
             <RestaurantConfigProvider>
                 <AppStateProvider>
                     <AdminAppContent />

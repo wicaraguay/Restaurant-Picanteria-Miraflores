@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DAYS_OF_WEEK, NAV_ITEMS } from '../constants';
 import { Employee, Training, LegalDocument, SetState, Role, ViewType } from '../types';
+import { api } from '../api';
 import Modal from './Modal';
 import { PlusIcon, EditIcon, TrashIcon } from './Icons';
 
@@ -17,7 +18,7 @@ const Card = ({ title, children, actions }: { title: string, children?: React.Re
     <div className="bg-white dark:bg-dark-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-dark-700">
         <div className="flex justify-between items-center mb-5">
             <h2 className="text-lg font-bold text-gray-800 dark:text-light-background">{title}</h2>
-             {actions && <div className="flex-shrink-0">{actions}</div>}
+            {actions && <div className="flex-shrink-0">{actions}</div>}
         </div>
         {children}
     </div>
@@ -43,7 +44,12 @@ const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, onClose, 
                 setFormData({ ...employeeData, password: '' });
             } else {
                 setFormData({
-                    name: '', username: '', password: '', roleId: roles[0]?.id || '', phone: '', salary: 0,
+                    name: '',
+                    username: '',
+                    password: '',
+                    roleId: roles.length > 0 ? roles[0].id : '',
+                    phone: '',
+                    salary: 0,
                     shifts: DAYS_OF_WEEK.reduce((acc, day) => ({ ...acc, [day]: 'Libre' }), {}),
                     equipment: { uniform: true, epp: false }
                 });
@@ -56,7 +62,7 @@ const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, onClose, 
         if (type === 'number') setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
         else setFormData(prev => ({ ...prev, [name]: value }));
     };
-    
+
     const handleShiftChange = (day: string, value: string) => {
         setFormData(prev => ({ ...prev, shifts: { ...prev.shifts, [day]: value } }));
     };
@@ -64,9 +70,8 @@ const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, onClose, 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name || !formData.username || (!isEditing && !formData.password)) return alert('Nombre, usuario y contraseña son obligatorios.');
-        
-        const dataToSave: Employee = {
-            id: employee?.id || Date.now().toString(),
+
+        const dataToSave: any = {
             name: formData.name,
             username: formData.username,
             roleId: formData.roleId || roles[0].id,
@@ -75,10 +80,15 @@ const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, onClose, 
             shifts: formData.shifts || {},
             equipment: formData.equipment || { uniform: false, epp: false },
         };
-        
+
+        // Solo incluir ID si estamos editando
+        if (isEditing && employee?.id) {
+            dataToSave.id = employee.id;
+        }
+
         if (formData.password) {
             dataToSave.password = formData.password;
-        } else if (isEditing) {
+        } else if (isEditing && employee?.password) {
             dataToSave.password = employee.password;
         }
 
@@ -91,11 +101,11 @@ const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, onClose, 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Empleado' : 'Añadir Empleado'}>
             <form onSubmit={handleSubmit} className="space-y-4">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input type="text" name="name" value={formData.name || ''} onChange={handleChange} required placeholder="Nombre Completo" className={inputClass} />
                     <input type="tel" name="phone" value={formData.phone || ''} onChange={handleChange} placeholder="Teléfono" className={inputClass} />
                 </div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input type="text" name="username" value={formData.username || ''} onChange={handleChange} required placeholder="Usuario" className={inputClass} />
                     <input type="password" name="password" value={formData.password || ''} onChange={handleChange} placeholder={isEditing ? 'Nueva contraseña (opcional)' : 'Contraseña'} required={!isEditing} className={inputClass} />
                 </div>
@@ -106,17 +116,17 @@ const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, onClose, 
                     <input type="number" step="0.01" name="salary" value={formData.salary || ''} onChange={handleChange} placeholder="Salario ($)" className={inputClass} />
                 </div>
                 <div>
-                     <label className="block text-sm font-medium dark:text-gray-300 mb-2">Turnos Semanales</label>
-                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                    <label className="block text-sm font-medium dark:text-gray-300 mb-2">Turnos Semanales</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                         {DAYS_OF_WEEK.map(day => (
                             <div key={day} className="bg-gray-50 p-2 rounded dark:bg-dark-700/30 border border-gray-100 dark:border-dark-600">
-                                <label className="block text-xs font-bold text-gray-500 mb-1">{day.substring(0,3)}</label>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">{day.substring(0, 3)}</label>
                                 <select value={formData.shifts?.[day] || 'Libre'} onChange={(e) => handleShiftChange(day, e.target.value)} className="w-full text-xs rounded border-gray-200 bg-white dark:bg-dark-600 dark:border-dark-500 dark:text-white p-1">
                                     <option>AM</option><option>PM</option><option>AM-PM</option><option>Libre</option>
                                 </select>
                             </div>
                         ))}
-                     </div>
+                    </div>
                 </div>
                 <div className="flex justify-end pt-4 gap-2">
                     <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-200 font-medium">Cancelar</button>
@@ -149,25 +159,30 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, 
 
     const handleSave = () => {
         if (formData.name) {
-            const roleToSave: Role = {
-                id: role?.id || Date.now().toString(),
+            const roleToSave: any = {
                 name: formData.name,
                 permissions: formData.permissions || {},
             };
+
+            // Solo incluir ID si estamos editando
+            if (isEditing && role?.id) {
+                roleToSave.id = role.id;
+            }
+
             onSave(roleToSave);
             onClose();
         } else alert('El nombre del rol es obligatorio.');
     };
-    
+
     if (!isOpen) return null;
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? `Editar Rol` : 'Añadir Rol'}>
             <div className="space-y-4">
-                 <input type="text" value={formData.name || ''} onChange={(e) => setFormData(p => ({...p, name: e.target.value}))} disabled={isEditing && role?.name === 'Administrador'} required placeholder="Nombre del Rol" className={inputClass} />
+                <input type="text" value={formData.name || ''} onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))} disabled={isEditing && role?.name === 'Administrador'} required placeholder="Nombre del Rol" className={inputClass} />
                 <div>
                     <label className="block text-sm font-medium dark:text-gray-300 mb-2">Permisos de Acceso</label>
-                     <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                         {NAV_ITEMS.map(item => (
                             <div key={item.id} className="flex items-center p-3 border rounded-lg bg-gray-50 dark:bg-dark-700/50 dark:border-dark-600 hover:bg-gray-100 dark:hover:bg-dark-700 transition-colors">
                                 <input type="checkbox" id={`perm-${item.view}`} checked={formData.permissions?.[item.view] || false} onChange={(e) => handlePermissionChange(item.view, e.target.checked)} className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
@@ -191,51 +206,136 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
     const [editingRole, setEditingRole] = useState<Role | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    // Cargar empleados desde backend
+    useEffect(() => {
+        const loadEmployees = async () => {
+            try {
+                setLoading(true);
+                const data = await api.employees.getAll();
+                setEmployees(data);
+            } catch (error) {
+                console.error('Error loading employees:', error);
+                alert('Error al cargar empleados. Usando datos locales.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadEmployees();
+    }, []);
+
+    // Cargar roles desde backend
+    useEffect(() => {
+        const loadRoles = async () => {
+            try {
+                setLoading(true);
+                const data = await api.roles.getAll();
+                setRoles(data);
+            } catch (error) {
+                console.error('Error loading roles:', error);
+                alert('Error al cargar roles. Usando datos locales.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadRoles();
+    }, []);
 
     const handleOpenEmployeeModal = (employee: Employee | null) => {
+        if (roles.length === 0) {
+            alert('Debes crear al menos un rol antes de agregar empleados.');
+            return;
+        }
         setEditingEmployee(employee);
         setIsEmployeeModalOpen(true);
     };
-    
+
     const handleOpenRoleModal = (role: Role | null) => {
         setEditingRole(role);
         setIsRoleModalOpen(true);
     };
 
-    const handleSaveEmployee = (employeeToSave: Employee) => {
-        setEmployees(prev => {
-            const exists = prev.some(e => e.id === employeeToSave.id);
-            if (exists) {
-                return prev.map(e => e.id === employeeToSave.id ? employeeToSave : e);
+    const handleSaveEmployee = async (employeeToSave: any) => {
+        try {
+            setLoading(true);
+            const isEditing = !!employeeToSave.id; // Si tiene ID, es edición
+
+            if (isEditing) {
+                // Actualizar empleado existente
+                const updated = await api.employees.update(employeeToSave.id, employeeToSave);
+                setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e));
+            } else {
+                // Crear nuevo empleado
+                const created = await api.employees.create(employeeToSave);
+                setEmployees(prev => [...prev, created]);
             }
-            return [...prev, employeeToSave];
-        });
-    };
-    
-    const handleDeleteEmployee = (employeeId: string) => {
-        if (window.confirm('¿Seguro que quieres eliminar a este empleado?')) {
-            setEmployees(prev => prev.filter(e => e.id !== employeeId));
+            alert(isEditing ? 'Empleado actualizado exitosamente' : 'Empleado creado exitosamente');
+        } catch (error: any) {
+            console.error('Error saving employee:', error);
+            alert(`Error al guardar empleado: ${error.message || 'Error desconocido'}`);
+        } finally {
+            setLoading(false);
         }
     };
-    
-    const handleSaveRole = (roleToSave: Role) => {
-        setRoles(prev => {
-            const exists = prev.some(r => r.id === roleToSave.id);
-            if (exists) {
-                return prev.map(r => r.id === roleToSave.id ? roleToSave : r);
-            }
-            return [...prev, roleToSave];
-        });
+
+    const handleDeleteEmployee = async (employeeId: string) => {
+        if (!window.confirm('¿Seguro que quieres eliminar a este empleado?')) return;
+
+        try {
+            setLoading(true);
+            await api.employees.delete(employeeId);
+            setEmployees(prev => prev.filter(e => e.id !== employeeId));
+            alert('Empleado eliminado exitosamente');
+        } catch (error: any) {
+            console.error('Error deleting employee:', error);
+            alert(`Error al eliminar empleado: ${error.message || 'Error desconocido'}`);
+        } finally {
+            setLoading(false);
+        }
     };
-    
-    const handleDeleteRole = (roleId: string) => {
+
+    const handleSaveRole = async (roleToSave: Role) => {
+        try {
+            setLoading(true);
+            const isEditing = !!roleToSave.id; // Si tiene ID, es edición
+
+            if (isEditing) {
+                // Actualizar rol existente
+                const updated = await api.roles.update(roleToSave.id, roleToSave);
+                setRoles(prev => prev.map(r => r.id === updated.id ? updated : r));
+            } else {
+                // Crear nuevo rol
+                const created = await api.roles.create(roleToSave);
+                setRoles(prev => [...prev, created]);
+            }
+            alert(isEditing ? 'Rol actualizado exitosamente' : 'Rol creado exitosamente');
+        } catch (error: any) {
+            console.error('Error saving role:', error);
+            alert(`Error al guardar rol: ${error.message || 'Error desconocido'}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeleteRole = async (roleId: string) => {
         const roleToDelete = roles.find(r => r.id === roleId);
         if (!roleToDelete) return;
         if (roleToDelete.name === 'Administrador') return alert('El rol de Administrador no se puede eliminar.');
         if (employees.some(e => e.roleId === roleId)) return alert('No se puede eliminar un rol asignado a un empleado.');
 
-        if (window.confirm(`¿Seguro que quieres eliminar el rol "${roleToDelete.name}"?`)) {
+        if (!window.confirm(`¿Seguro que quieres eliminar el rol "${roleToDelete.name}"?`)) return;
+
+        try {
+            setLoading(true);
+            await api.roles.delete(roleId);
             setRoles(prev => prev.filter(r => r.id !== roleId));
+            alert('Rol eliminado exitosamente');
+        } catch (error: any) {
+            console.error('Error deleting role:', error);
+            alert(`Error al eliminar rol: ${error.message || 'Error desconocido'}`);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -248,7 +348,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
             default: return 'bg-gray-50 text-gray-500';
         }
     };
-    
+
     const getCurrentDay = () => {
         const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
         return days[new Date().getDay()];
@@ -256,15 +356,16 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
     const currentDayName = getCurrentDay();
 
     const renderContent = () => (
-         <div className="space-y-6">
-            <Card title="Equipo de Trabajo" actions={<button onClick={() => handleOpenEmployeeModal(null)} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-sm rounded-lg transition-colors shadow-sm"><PlusIcon className="w-4 h-4 mr-1"/> Añadir</button>}>
+        <div className="space-y-6">
+            {loading && <div className="text-center py-4"><p className="text-gray-600 dark:text-gray-400">Cargando...</p></div>}
+            <Card title="Equipo de Trabajo" actions={<button onClick={() => handleOpenEmployeeModal(null)} disabled={loading} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-sm rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"><PlusIcon className="w-4 h-4 mr-1" /> Añadir</button>}>
                 {/* Desktop Table */}
                 <div className="hidden lg:block overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead className="text-xs uppercase bg-gray-50 dark:bg-dark-700 text-gray-600 dark:text-gray-300">
                             <tr>
                                 <th className="px-4 py-3">Empleado</th><th className="px-4 py-3">Rol</th>
-                                {DAYS_OF_WEEK.map(day => <th key={day} className={`px-2 py-3 text-center ${day === currentDayName ? 'bg-blue-50 dark:bg-blue-900/20 font-bold text-blue-700 dark:text-blue-300' : ''}`}>{day.substring(0,3)}</th>)}
+                                {DAYS_OF_WEEK.map(day => <th key={day} className={`px-2 py-3 text-center ${day === currentDayName ? 'bg-blue-50 dark:bg-blue-900/20 font-bold text-blue-700 dark:text-blue-300' : ''}`}>{day.substring(0, 3)}</th>)}
                                 <th className="px-4 py-3 text-center">Acciones</th>
                             </tr>
                         </thead>
@@ -284,8 +385,8 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
                                         ))}
                                         <td className="px-4 py-4 text-center">
                                             <div className="flex items-center justify-center space-x-2">
-                                                <button onClick={() => handleOpenEmployeeModal(e)} className="text-blue-600 hover:text-blue-800 p-1"><EditIcon className="w-5 h-5"/></button>
-                                                <button onClick={() => handleDeleteEmployee(e.id)} className="text-red-600 hover:text-red-800 p-1"><TrashIcon className="w-5 h-5"/></button>
+                                                <button onClick={() => handleOpenEmployeeModal(e)} className="text-blue-600 hover:text-blue-800 p-1"><EditIcon className="w-5 h-5" /></button>
+                                                <button onClick={() => handleDeleteEmployee(e.id)} className="text-red-600 hover:text-red-800 p-1"><TrashIcon className="w-5 h-5" /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -298,41 +399,41 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
                 {/* Mobile Cards */}
                 <div className="lg:hidden space-y-4">
                     {employees.map(e => {
-                         const roleName = roles.find(r => r.id === e.roleId)?.name || 'Sin Rol';
-                         const todayShift = e.shifts[currentDayName];
-                         return (
-                             <div key={e.id} className="p-4 rounded-lg bg-gray-50 dark:bg-dark-700/50 border border-gray-100 dark:border-dark-600 relative">
+                        const roleName = roles.find(r => r.id === e.roleId)?.name || 'Sin Rol';
+                        const todayShift = e.shifts[currentDayName];
+                        return (
+                            <div key={e.id} className="p-4 rounded-lg bg-gray-50 dark:bg-dark-700/50 border border-gray-100 dark:border-dark-600 relative">
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
                                         <h3 className="font-bold text-gray-900 dark:text-white">{e.name}</h3>
                                         <p className="text-sm text-gray-500">{roleName}</p>
                                     </div>
                                     <div className="flex space-x-2">
-                                        <button onClick={() => handleOpenEmployeeModal(e)} className="text-blue-600 bg-blue-100 p-2 rounded-lg dark:bg-blue-900/30"><EditIcon className="w-4 h-4"/></button>
-                                        <button onClick={() => handleDeleteEmployee(e.id)} className="text-red-600 bg-red-100 p-2 rounded-lg dark:bg-red-900/30"><TrashIcon className="w-4 h-4"/></button>
+                                        <button onClick={() => handleOpenEmployeeModal(e)} className="text-blue-600 bg-blue-100 p-2 rounded-lg dark:bg-blue-900/30"><EditIcon className="w-4 h-4" /></button>
+                                        <button onClick={() => handleDeleteEmployee(e.id)} className="text-red-600 bg-red-100 p-2 rounded-lg dark:bg-red-900/30"><TrashIcon className="w-4 h-4" /></button>
                                     </div>
                                 </div>
-                                
+
                                 <div className="mt-3 flex items-center justify-between bg-white dark:bg-dark-800 p-3 rounded-md border border-gray-100 dark:border-dark-600">
                                     <span className="text-sm text-gray-500">Turno de Hoy ({currentDayName}):</span>
                                     <span className={`px-3 py-1 text-xs font-bold rounded ${getShiftClasses(todayShift)}`}>
                                         {todayShift}
                                     </span>
                                 </div>
-                             </div>
-                         )
+                            </div>
+                        )
                     })}
                 </div>
             </Card>
 
-            <Card title="Roles y Permisos" actions={<button onClick={() => handleOpenRoleModal(null)} className="flex items-center bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-dark-700 dark:text-white dark:hover:bg-dark-600 px-3 py-2 text-sm rounded-lg transition-colors"><PlusIcon className="w-4 h-4 mr-1"/> Gestionar</button>}>
+            <Card title="Roles y Permisos" actions={<button onClick={() => handleOpenRoleModal(null)} disabled={loading} className="flex items-center bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-dark-700 dark:text-white dark:hover:bg-dark-600 px-3 py-2 text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><PlusIcon className="w-4 h-4 mr-1" /> Gestionar</button>}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {roles.map(role => (
                         <div key={role.id} className="p-3 rounded-lg border border-gray-100 dark:border-dark-700 flex justify-between items-center bg-gray-50 dark:bg-dark-700/50">
                             <p className="font-medium text-gray-800 dark:text-light-background">{role.name}</p>
                             <div className="flex items-center space-x-1">
-                                <button onClick={() => handleOpenRoleModal(role)} className="text-blue-600 p-1.5 hover:bg-blue-50 rounded dark:hover:bg-blue-900/20"><EditIcon className="w-4 h-4"/></button>
-                                <button onClick={() => handleDeleteRole(role.id)} className="text-red-600 p-1.5 hover:bg-red-50 rounded dark:hover:bg-red-900/20" disabled={role.name === 'Administrador'}><TrashIcon className="w-4 h-4"/></button>
+                                <button onClick={() => handleOpenRoleModal(role)} className="text-blue-600 p-1.5 hover:bg-blue-50 rounded dark:hover:bg-blue-900/20"><EditIcon className="w-4 h-4" /></button>
+                                <button onClick={() => handleDeleteRole(role.id)} className="text-red-600 p-1.5 hover:bg-red-50 rounded dark:hover:bg-red-900/20" disabled={role.name === 'Administrador'}><TrashIcon className="w-4 h-4" /></button>
                             </div>
                         </div>
                     ))}
@@ -343,8 +444,8 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
 
     return (
         <div>
-            <EmployeeFormModal isOpen={isEmployeeModalOpen} onClose={() => setIsEmployeeModalOpen(false)} onSave={handleSaveEmployee} employee={editingEmployee} roles={roles}/>
-            <RoleFormModal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} onSave={handleSaveRole} role={editingRole}/>
+            <EmployeeFormModal isOpen={isEmployeeModalOpen} onClose={() => setIsEmployeeModalOpen(false)} onSave={handleSaveEmployee} employee={editingEmployee} roles={roles} />
+            <RoleFormModal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} onSave={handleSaveRole} role={editingRole} />
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-light-background mb-6 hidden lg:block">Recursos Humanos</h1>
             {renderContent()}
         </div>
