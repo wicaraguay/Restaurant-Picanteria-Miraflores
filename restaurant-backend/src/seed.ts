@@ -28,6 +28,7 @@ import { MenuItemModel } from './infrastructure/database/schemas/MenuItemSchema'
 import { CustomerModel } from './infrastructure/database/schemas/CustomerSchema';
 import { OrderModel } from './infrastructure/database/schemas/OrderSchema';
 import { EmployeeModel } from './infrastructure/database/schemas/EmployeeSchema';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
@@ -226,7 +227,14 @@ const seedData = async () => {
             }
         ];
 
-        const createdEmployees = await EmployeeModel.insertMany(employees);
+
+        // Hash passwords before inserting
+        const employeesWithHashedPasswords = await Promise.all(employees.map(async (emp) => {
+            const hashedPassword = await bcrypt.hash(emp.password, 10);
+            return { ...emp, password: hashedPassword };
+        }));
+
+        const createdEmployees = await EmployeeModel.insertMany(employeesWithHashedPasswords);
         console.log(`✅ Created ${createdEmployees.length} employees`);
 
         // Seed Orders
