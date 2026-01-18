@@ -177,7 +177,13 @@ const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems
                                     <div key={item.id} className="py-4 first:pt-0 last:pb-0">
                                         <div className="flex flex-row items-start gap-4">
                                             <div className="flex-shrink-0">
-                                                <img src={item.imageUrl || 'https://via.placeholder.com/80'} alt={item.name} loading="eager" className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg object-cover shadow-sm bg-gray-100 border border-gray-100 dark:border-gray-700" />
+                                                <img
+                                                    src={item.imageUrl || 'https://via.placeholder.com/80'}
+                                                    alt={item.name}
+                                                    loading="lazy"
+                                                    decoding="async"
+                                                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg object-cover shadow-sm bg-gray-100 border border-gray-100 dark:border-gray-700 transition-opacity duration-300"
+                                                />
                                             </div>
 
                                             <div className="flex-1 min-w-0">
