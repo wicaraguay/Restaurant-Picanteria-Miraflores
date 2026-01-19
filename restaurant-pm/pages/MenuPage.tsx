@@ -57,7 +57,7 @@ const MenuPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Hero Section - Warm & Elegant */}
-            <header className="relative h-[50vh] overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
+            <header className="relative h-[70vh] overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
                 {/* Animated gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-600/90 via-orange-600/90 to-red-600/90"></div>
 
