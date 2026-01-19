@@ -13,7 +13,19 @@ import { useRestaurantConfig } from '../contexts/RestaurantConfigContext';
 const MenuPage: React.FC = () => {
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isOpen, setIsOpen] = useState(false);
     const { config } = useRestaurantConfig();
+
+    const checkBusinessStatus = () => {
+        const now = new Date();
+        const day = now.getDay(); // 0 = Domingo, 5 = Viernes, 6 = Sábado
+        const hour = now.getHours();
+
+        const isWeekEnd = day === 0 || day === 5 || day === 6;
+        const isWorkingHours = hour >= 9 && hour < 21; // 9:00 AM - 9:00 PM
+
+        setIsOpen(isWeekEnd && isWorkingHours);
+    };
 
     const fetchMenu = async () => {
         try {
@@ -28,15 +40,14 @@ const MenuPage: React.FC = () => {
     };
 
     useEffect(() => {
-        // Fetch inicial
         fetchMenu();
+        checkBusinessStatus();
 
-        // Polling cada 5 segundos para actualizaciones en tiempo real
         const intervalId = setInterval(() => {
             fetchMenu();
+            checkBusinessStatus();
         }, 5000);
 
-        // Cleanup al desmontar
         return () => clearInterval(intervalId);
     }, []);
 
@@ -57,7 +68,7 @@ const MenuPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Hero Section - Warm & Elegant */}
-            <header className="relative h-[70vh] overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
+            <header className="relative h-[50vh] overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
                 {/* Animated gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-600/90 via-orange-600/90 to-red-600/90"></div>
 
@@ -72,7 +83,16 @@ const MenuPage: React.FC = () => {
 
                 {/* Contenido del Hero */}
                 <div className="relative h-full flex items-center justify-center text-center px-4">
-                    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+                    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in relative">
+
+                        {/* Status Badge */}
+                        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2">
+                            <div className={`px-6 py-2 rounded-full font-bold text-sm shadow-xl backdrop-blur-md border border-white/20 flex items-center gap-2 ${isOpen ? 'bg-green-500/90 text-white animate-pulse' : 'bg-red-500/90 text-white'}`}>
+                                <span className={`w-3 h-3 rounded-full ${isOpen ? 'bg-white' : 'bg-red-200'}`}></span>
+                                {isOpen ? 'ABIERTO - Ordena Ahora' : 'CERRADO - Abrimos Viernes, Sábado y Domingo'}
+                            </div>
+                        </div>
+
                         {/* Logo */}
                         {config.logo ? (
                             <img
@@ -138,7 +158,7 @@ const MenuPage: React.FC = () => {
                                     src={item.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&h=400&fit=crop'}
                                     alt={item.name}
                                     loading="eager"
-                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                    className={`w-full h-full object-cover transition-transform duration-500 ${isOpen ? 'group-hover:scale-110' : 'grayscale'}`}
                                 />
 
                                 {/* Price Badge */}
@@ -162,8 +182,14 @@ const MenuPage: React.FC = () => {
                                 </p>
 
                                 {/* Simple Order Button */}
-                                <button className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-4 rounded-xl font-bold text-lg hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
-                                    Ordenar
+                                <button
+                                    disabled={!isOpen}
+                                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all duration-300 transform ${isOpen
+                                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 hover:shadow-xl hover:scale-105'
+                                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        }`}
+                                >
+                                    {isOpen ? 'Ordenar' : 'Cerrado'}
                                 </button>
                             </div>
                         </div>
@@ -191,7 +217,7 @@ const MenuPage: React.FC = () => {
                             <p className="text-amber-50 text-lg font-medium">
                                 {config.slogan || 'Sabores auténticos que deleitan tu paladar'}
                             </p>
-                            <img src="/image1.png" alt="Sabor Tradicional" className="mt-4 w-48 h-auto rounded-lg shadow-lg opacity-90 hover:opacity-100 transition-opacity mx-auto md:mx-0" />
+                            <img src="/image1.png" alt="Sabor Tradicional" className="mt-4 w-70 h-auto rounded-lg shadow-lg opacity-90 hover:opacity-100 transition-opacity mx-auto md:mx-0" />
                         </div>
 
                         {/* Horarios */}
