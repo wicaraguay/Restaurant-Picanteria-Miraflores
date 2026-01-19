@@ -15,7 +15,7 @@
  * @layer Hooks - Custom Hook
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ViewType, Role, Employee } from '../types';
 import { NAV_ITEMS } from '../constants';
 
@@ -62,6 +62,25 @@ export function useNavigation(currentUser: (Employee & { role: Role }) | null) {
         const item = NAV_ITEMS.find(item => item.view === currentView);
         return item?.label || 'Dashboard';
     };
+
+    /**
+     * Efecto para redirigir si el usuario no tiene acceso a la vista actual
+     * Esto soluciona el problema de ver el Dashboard sin permisos al iniciar sesión
+     */
+    // @ts-ignore - Import useEffect if not already imported, currently assumes it needs to be added to imports
+    useEffect(() => {
+        if (!currentUser || navItems.length === 0) return;
+
+        // Verificar si la vista actual está en los items permitidos
+        const isAllowed = navItems.some(item => item.view === currentView);
+
+        if (!isAllowed) {
+            // Si no está permitido, redirigir al primer item disponible
+            const firstAllowedView = navItems[0].view;
+            // console.log(`Redirecting from ${currentView} to ${firstAllowedView} due to lack of permission`);
+            setCurrentView(firstAllowedView);
+        }
+    }, [currentUser, currentView, navItems]);
 
     return {
         currentView,
