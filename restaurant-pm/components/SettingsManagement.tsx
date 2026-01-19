@@ -310,7 +310,7 @@ const SettingsManagement: React.FC = () => {
                                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                                     <QRCodeCanvas
                                         id="qr-code-canvas"
-                                        value={businessInfo.website}
+                                        value={businessInfo.website.startsWith('http') ? businessInfo.website : `https://${businessInfo.website}`}
                                         size={200}
                                         level={"H"}
                                         includeMargin={true}
