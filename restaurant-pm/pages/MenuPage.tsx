@@ -52,12 +52,11 @@ const MenuPage: React.FC = () => {
     }, []);
 
     const handleOrder = (item: MenuItem) => {
-        if (!isOpen) return;
+        // if (!isOpen) return; // Validación desactivada para permitir probar
 
         // AQUÍ SE TOMA EL NÚMERO DE WHATSAPP
-        // Viene de la configuración (Panel de Admin), pero puedes poner uno fijo así:
-        // const phoneNumber = '593987654321'; 
-        const phoneNumber = config.phone.replace(/\D/g, '593967812717');
+        // Usando el número fijo que solicitaste
+        const phoneNumber = '593967812717';
 
         // Construimos el mensaje con el Nombre, Precio y la FOTO (URL)
         const message = `Hola *${config.name}*, quisiera ordenar:%0A%0A` +
