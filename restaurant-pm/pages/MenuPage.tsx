@@ -68,7 +68,7 @@ const MenuPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Hero Section - Warm & Elegant */}
-            <header className="relative h-[50vh] overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
+            <header className="relative h-[70vh] overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
                 {/* Animated gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-600/90 via-orange-600/90 to-red-600/90"></div>
 
@@ -83,15 +83,18 @@ const MenuPage: React.FC = () => {
 
                 {/* Contenido del Hero */}
                 <div className="relative h-full flex items-center justify-center text-center px-4">
-                    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in relative">
-
-                        {/* Status Badge */}
-                        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2">
-                            <div className={`px-6 py-2 rounded-full font-bold text-sm shadow-xl backdrop-blur-md border border-white/20 flex items-center gap-2 ${isOpen ? 'bg-green-500/90 text-white animate-pulse' : 'bg-red-500/90 text-white'}`}>
-                                <span className={`w-3 h-3 rounded-full ${isOpen ? 'bg-white' : 'bg-red-200'}`}></span>
-                                {isOpen ? 'ABIERTO - Ordena Ahora' : 'CERRADO - Abrimos Viernes, Sábado y Domingo'}
-                            </div>
+                    {/* Status Badge - Top Right */}
+                    <div className="absolute top-6 right-6 md:top-8 md:right-8 z-10">
+                        <div className={`px-4 py-2 rounded-full font-bold text-sm shadow-lg backdrop-blur-md border border-white/20 flex items-center gap-2 transition-all duration-300 ${isOpen ? 'bg-green-500 text-white shadow-green-500/30' : 'bg-gray-800 text-gray-300 border-gray-700'}`}>
+                            <span className={`relative flex h-3 w-3`}>
+                                {isOpen && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>}
+                                <span className={`relative inline-flex rounded-full h-3 w-3 ${isOpen ? 'bg-white' : 'bg-red-500'}`}></span>
+                            </span>
+                            {isOpen ? 'ABIERTO' : 'CERRADO'}
                         </div>
+                    </div>
+
+                    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in relative">
 
                         {/* Logo */}
                         {config.logo ? (
@@ -185,8 +188,8 @@ const MenuPage: React.FC = () => {
                                 <button
                                     disabled={!isOpen}
                                     className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all duration-300 transform ${isOpen
-                                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 hover:shadow-xl hover:scale-105'
-                                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 hover:shadow-xl hover:scale-105'
+                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                         }`}
                                 >
                                     {isOpen ? 'Ordenar' : 'Cerrado'}
@@ -217,7 +220,7 @@ const MenuPage: React.FC = () => {
                             <p className="text-amber-50 text-lg font-medium">
                                 {config.slogan || 'Sabores auténticos que deleitan tu paladar'}
                             </p>
-                            <img src="/image1.png" alt="Sabor Tradicional" className="mt-4 w-70 h-auto rounded-lg shadow-lg opacity-90 hover:opacity-100 transition-opacity mx-auto md:mx-0" />
+                            <img src="/image1.png" alt="Sabor Tradicional" className="mt-4 w-60 h-auto rounded-lg shadow-lg opacity-90 hover:opacity-100 transition-opacity mx-auto md:mx-0" />
                         </div>
 
                         {/* Horarios */}
