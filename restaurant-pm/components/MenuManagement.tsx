@@ -104,22 +104,30 @@ const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, onSave, 
         e.preventDefault();
         if (!formData.name || !formData.category || formData.price === undefined) return alert('Nombre, Categoría y Precio son obligatorios.');
 
+        console.log('--- INICIO GUARDADO ---');
+        console.log('Tiene archivo nuevo?', !!imageFile);
+
         setIsUploading(true);
         let finalImageUrl = formData.imageUrl || '';
 
         try {
             if (imageFile) {
                 try {
+                    console.log('Subiendo a Cloudinary...');
                     finalImageUrl = await uploadToCloudinary(imageFile);
+                    console.log('Subida exitosa. URL:', finalImageUrl);
                 } catch (error: any) {
+                    console.error('Error Cloudinary:', error);
                     setIsUploading(false);
                     if (error.message === 'CONFIG_MISSING') {
                         alert('¡FALTAN LAS CREDENCIALES DE CLOUDINARY!\n\nPor favor, abre el archivo "components/MenuManagement.tsx" y coloca tu Cloud Name y Upload Preset en las líneas 16 y 17.');
                     } else {
-                        alert('Error al subir la imagen. Verifica tu conexión o configuración.');
+                        alert('Error al subir la imagen: ' + error.message);
                     }
                     return;
                 }
+            } else {
+                console.log('No hay archivo nuevo, usando URL existente:', finalImageUrl ? finalImageUrl.substring(0, 50) + '...' : 'Ninguna');
             }
 
             const itemToSave: MenuItem = {
@@ -131,7 +139,9 @@ const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, onSave, 
                 available: formData.available || false,
                 imageUrl: finalImageUrl,
             };
-            onSave(itemToSave);
+
+            console.log('Guardando item con imagen:', itemToSave.imageUrl ? itemToSave.imageUrl.substring(0, 50) + '...' : 'Ninguna');
+            await onSave(itemToSave); // Added await to catch if onSave fails
             onClose();
         } catch (error) {
             logger.error('Error in form submission', error);
