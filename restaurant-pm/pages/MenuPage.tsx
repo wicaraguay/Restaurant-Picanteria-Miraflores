@@ -54,10 +54,18 @@ const MenuPage: React.FC = () => {
     const handleOrder = (item: MenuItem) => {
         if (!isOpen) return;
 
-        // Clean phone number (remove non-digits)
-        const phoneNumber = config.phone.replace(/\D/g, '');
-        const message = `Hola ${config.name}, quisiera ordenar: ${item.name} - $${item.price.toFixed(2)}`;
-        const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+        // AQUÍ SE TOMA EL NÚMERO DE WHATSAPP
+        // Viene de la configuración (Panel de Admin), pero puedes poner uno fijo así:
+        // const phoneNumber = '593987654321'; 
+        const phoneNumber = config.phone.replace(/\D/g, '593967812717');
+
+        // Construimos el mensaje con el Nombre, Precio y la FOTO (URL)
+        const message = `Hola *${config.name}*, quisiera ordenar:%0A%0A` +
+            `🍽️ *${item.name}* - $${item.price.toFixed(2)}%0A` +
+            `📝 ${item.description || ''}%0A%0A` +
+            `📸 Foto: ${item.imageUrl || 'Sin foto'}`;
+
+        const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
 
         window.open(whatsappUrl, '_blank');
     };
