@@ -112,7 +112,7 @@ const MenuPage: React.FC = () => {
                         )}
 
                         {/* Title */}
-                        <h1 className="text-6xl md:text-7xl lg:text-8xl font-bold text-white tracking-tight drop-shadow-2xl animate-pop-in">
+                        <h1 className="text-6xl md:text-7xl lg:text-8xl font-bold text-white tracking-tight drop-shadow-2xl animate-pop-in" style={{ fontFamily: '"Architects Daughter", cursive' }}>
                             {config.name}
                         </h1>
 
