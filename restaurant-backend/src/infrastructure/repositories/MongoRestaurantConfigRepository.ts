@@ -14,11 +14,11 @@ const FIXED_CONFIG_ID = 'restaurant-config';
 
 // Configuración por defecto
 const DEFAULT_CONFIG: Omit<RestaurantConfig, 'id' | 'createdAt' | 'updatedAt'> = {
-    name: 'RestoAI',
-    slogan: 'Sistema de Gestión Gastronómica',
-    phone: '+593 99 123 4567',
-    email: 'contacto@restoai.com',
-    address: 'Av. Principal 123, Quito, Ecuador',
+    name: 'Picanteria Miraflores',
+    slogan: 'Sabor Tradicional',
+    phone: '+593 967812717',
+    email: 'picanterimiraflores@gmail.com',
+    address: 'Av. Eugenio Espejo Vía Antigua a Catamayo, calles entre collas e inés jiménez',
     website: 'https://restoai.com',
     ruc: '1790012345001',
     businessName: 'Restaurante Ejemplo CIA LTDA',

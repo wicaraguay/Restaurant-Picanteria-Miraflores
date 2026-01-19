@@ -247,7 +247,7 @@ const SettingsManagement: React.FC = () => {
                                     value={businessInfo.slogan}
                                     onChange={(e) => setBusinessInfo({ ...businessInfo, slogan: e.target.value })}
                                     className={inputClass}
-                                    placeholder="Sistema de Gestión Gastronómica"
+                                    placeholder="Sabor Tradicional"
                                 />
                             </div>
                             <div>

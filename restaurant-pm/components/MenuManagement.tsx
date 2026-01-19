@@ -29,6 +29,39 @@ const ToggleSwitch = ({ checked, onChange }: { checked: boolean, onChange: () =>
     </label>
 );
 
+// ==========================================
+// CONFIGURACIÓN DE CLOUDINARY
+// ==========================================
+// 1. Ve a https://cloudinary.com/ y crea una cuenta gratis.
+// 2. Ve a Settings > Upload > Upload presets y crea uno nuevo (Mode: Unsigned).
+// 3. Pega tus credenciales aquí abajo:
+
+const CLOUDINARY_CLOUD_NAME = 'dxxf1gy0f';
+const CLOUDINARY_UPLOAD_PRESET = 'picanteria-miraflores';
+
+const uploadToCloudinary = async (file: File): Promise<string> => {
+    // Validación básica: asegurarse que no estén vacíos (pero permitir los valores del usuario)
+    if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+        throw new Error('CONFIG_MISSING');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        throw new Error('Error al subir imagen a Cloudinary');
+    }
+
+    const data = await response.json();
+    return data.secure_url;
+};
+
 interface MenuFormModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -38,11 +71,15 @@ interface MenuFormModalProps {
 
 const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, onSave, item }) => {
     const [formData, setFormData] = useState<Partial<MenuItem>>({});
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
     const isEditing = item !== null;
 
     React.useEffect(() => {
         if (isOpen) {
             setFormData(isEditing ? { ...item } : { name: '', category: '', price: 0, description: '', available: true, imageUrl: '' });
+            setImageFile(null);
+            setIsUploading(false);
         }
     }, [isOpen, item, isEditing]);
 
@@ -55,27 +92,53 @@ const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, onSave, 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            setImageFile(file);
+            // Mostrar previsualización local mientras se sube
             const reader = new FileReader();
             reader.onloadend = () => setFormData(prev => ({ ...prev, imageUrl: reader.result as string }));
             reader.readAsDataURL(file);
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name || !formData.category || formData.price === undefined) return alert('Nombre, Categoría y Precio son obligatorios.');
 
-        const itemToSave: MenuItem = {
-            id: item?.id || Date.now().toString(),
-            name: formData.name,
-            category: formData.category,
-            price: formData.price,
-            description: formData.description || '',
-            available: formData.available || false,
-            imageUrl: formData.imageUrl || '',
-        };
-        onSave(itemToSave);
-        onClose();
+        setIsUploading(true);
+        let finalImageUrl = formData.imageUrl || '';
+
+        try {
+            if (imageFile) {
+                try {
+                    finalImageUrl = await uploadToCloudinary(imageFile);
+                } catch (error: any) {
+                    setIsUploading(false);
+                    if (error.message === 'CONFIG_MISSING') {
+                        alert('¡FALTAN LAS CREDENCIALES DE CLOUDINARY!\n\nPor favor, abre el archivo "components/MenuManagement.tsx" y coloca tu Cloud Name y Upload Preset en las líneas 16 y 17.');
+                    } else {
+                        alert('Error al subir la imagen. Verifica tu conexión o configuración.');
+                    }
+                    return;
+                }
+            }
+
+            const itemToSave: MenuItem = {
+                id: item?.id || Date.now().toString(),
+                name: formData.name,
+                category: formData.category,
+                price: formData.price,
+                description: formData.description || '',
+                available: formData.available || false,
+                imageUrl: finalImageUrl,
+            };
+            onSave(itemToSave);
+            onClose();
+        } catch (error) {
+            logger.error('Error in form submission', error);
+            alert('Ocurrió un error inesperado.');
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     return (
@@ -99,8 +162,20 @@ const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, onSave, 
                 </div>
 
                 <div className="flex justify-end pt-4 gap-2">
-                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-200 font-medium">Cancelar</button>
-                    <button type="submit" className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium">{isEditing ? 'Guardar' : 'Crear'}</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-200 font-medium" disabled={isUploading}>Cancelar</button>
+                    <button type="submit" className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium flex items-center" disabled={isUploading}>
+                        {isUploading ? (
+                            <>
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                {isEditing ? 'Guardando...' : 'Creando...'}
+                            </>
+                        ) : (
+                            isEditing ? 'Guardar' : 'Crear'
+                        )}
+                    </button>
                 </div>
             </form>
         </Modal>
