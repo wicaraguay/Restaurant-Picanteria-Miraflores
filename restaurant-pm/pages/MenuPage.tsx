@@ -51,6 +51,17 @@ const MenuPage: React.FC = () => {
         return () => clearInterval(intervalId);
     }, []);
 
+    const handleOrder = (item: MenuItem) => {
+        if (!isOpen) return;
+
+        // Clean phone number (remove non-digits)
+        const phoneNumber = config.phone.replace(/\D/g, '');
+        const message = `Hola ${config.name}, quisiera ordenar: ${item.name} - $${item.price.toFixed(2)}`;
+        const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+
+        window.open(whatsappUrl, '_blank');
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-amber-500 via-orange-500 to-red-600 flex items-center justify-center">
@@ -90,7 +101,8 @@ const MenuPage: React.FC = () => {
                                 {isOpen && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>}
                                 <span className={`relative inline-flex rounded-full h-3 w-3 bg-white`}></span>
                             </span>
-                            {isOpen ? 'ABIERTO' : 'CERRADO • Atención: Viernes-Domingo 9:00 - 21:00'}
+                            <span className="md:hidden">{isOpen ? 'ABIERTO' : 'CERRADO'}</span>
+                            <span className="hidden md:inline">{isOpen ? 'ABIERTO' : 'CERRADO • Atención: Viernes-Domingo 9:00 - 21:00'}</span>
                         </div>
                     </div>
 
@@ -185,8 +197,14 @@ const MenuPage: React.FC = () => {
                                 </p>
 
                                 {/* Simple Order Button */}
-                                <button className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-4 rounded-xl font-bold text-lg hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
-                                    Ordenar
+                                <button
+                                    onClick={() => handleOrder(item)}
+                                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-4 rounded-xl font-bold text-lg hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center gap-2"
+                                >
+                                    <span>Ordenar por WhatsApp</span>
+                                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.654-.698c.991.56 2.151.761 3.238.74h.013c.092-.001.185-.005.277-.013 2.924-.265 5.09-2.736 5.09-5.65 0-3.18-2.585-5.766-5.766-5.766zm-3.235 3.326c.148-.28.423-.326.697-.309.28.016.398-.01.52.279.148.35.39.957.423 1.025.033.068.047.169.006.27-.043.101-.066.162-.129.227-.064.065-.133.144-.191.205-.065.068-.13.14-.055.273.076.133.334.686.711 1.026.483.435.889.57 1.017.632.128.062.204.053.28-.035.076-.088.326-.419.414-.564.088-.145.176-.119.303-.075.127.043.803.379.94.448.138.07.23.104.263.162.033.058.033.337-.113.75-.147.413-.865.811-1.187.848-.322.038-.621-.027-1.428-.35-1.012-.405-1.659-1.047-1.898-1.407-.239-.36-1.037-1.373-1.037-2.618 0-1.246.65-1.928.88-2.193.23-.266.496-.347.66-.347z" />
+                                    </svg>
                                 </button>
                             </div>
                         </div>
