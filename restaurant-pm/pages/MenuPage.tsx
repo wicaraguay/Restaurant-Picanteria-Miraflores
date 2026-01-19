@@ -61,8 +61,7 @@ const MenuPage: React.FC = () => {
         // Construimos el mensaje con el Nombre, Precio y la FOTO (URL)
         const message = `Hola *${config.name}*, quisiera ordenar:%0A%0A` +
             `🍽️ *${item.name}* - $${item.price.toFixed(2)}%0A` +
-            `📝 ${item.description || ''}%0A%0A` +
-            `📸 Foto: ${item.imageUrl || 'Sin foto'}`;
+            `📝 ${item.description || ''}%0A%0A`;
 
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
 
