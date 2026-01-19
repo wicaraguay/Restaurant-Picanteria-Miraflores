@@ -116,19 +116,52 @@ const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems
         setIsModalOpen(true);
     };
 
-    const handleSaveItem = (itemToSave: MenuItem) => {
-        setMenuItems(prev => {
-            const exists = prev.some(item => item.id === itemToSave.id);
+    const handleSaveItem = async (itemToSave: MenuItem) => {
+        try {
+            const exists = menuItems.some(item => item.id === itemToSave.id);
+            let savedItem: MenuItem;
+
             if (exists) {
-                return prev.map(item => item.id === itemToSave.id ? itemToSave : item);
+                // Update existing item
+                logger.info('Updating menu item', { id: itemToSave.id, name: itemToSave.name });
+                // We send the itemToSave, ensuring we don't send the ID if it's not needed by the backend update body, 
+                // but usually PUT takes the ID in URL and body as payload.
+                // Note: The backend route put('/:id') uses req.params.id and req.body.
+                savedItem = await api.menu.update(itemToSave.id, itemToSave);
+
+                setMenuItems(prev => prev.map(item => item.id === itemToSave.id ? savedItem : item));
+                logger.info('Menu item updated successfully');
+            } else {
+                // Create new item
+                // Remove ID if it's a temp ID (optional, but backend usually assigns ID)
+                // However, menuRoutes.ts:40 uses req.body as MenuItem. If backend ignores ID it's fine.
+                // Let's assume backend assigns a new ID or uses the one provided if valid (usually Mongo assigns _id).
+                // Ideally we shouldn't send the temp ID 'Date.now().toString()'.
+                const { id, ...newItemData } = itemToSave;
+                logger.info('Creating new menu item', { name: newItemData.name });
+
+                savedItem = await api.menu.create(newItemData);
+
+                setMenuItems(prev => [...prev, savedItem]);
+                logger.info('Menu item created successfully');
             }
-            return [...prev, itemToSave];
-        });
+        } catch (error) {
+            logger.error('Failed to save menu item', error);
+            alert('Error al guardar el plato. Por favor, intenta de nuevo.');
+        }
     };
 
-    const handleDeleteItem = (id: string) => {
+    const handleDeleteItem = async (id: string) => {
         if (window.confirm('¿Seguro que quieres eliminar este plato?')) {
-            setMenuItems(prev => prev.filter(item => item.id !== id));
+            try {
+                logger.info('Deleting menu item', { id });
+                await api.menu.delete(id);
+                setMenuItems(prev => prev.filter(item => item.id !== id));
+                logger.info('Menu item deleted successfully');
+            } catch (error) {
+                logger.error('Failed to delete menu item', error);
+                alert('Error al eliminar el plato. Por favor, intenta de nuevo.');
+            }
         }
     };
 

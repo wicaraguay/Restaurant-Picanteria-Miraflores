@@ -354,6 +354,9 @@ export class ApiService {
         update: async (id: string, data: any): Promise<any> => {
             return this.put(API_ENDPOINTS.MENU.BY_ID(id), data);
         },
+        delete: async (id: string): Promise<any> => {
+            return this.delete(API_ENDPOINTS.MENU.BY_ID(id));
+        },
     };
 
     /**
