@@ -90,7 +90,7 @@ const MenuPage: React.FC = () => {
                                 {isOpen && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>}
                                 <span className={`relative inline-flex rounded-full h-3 w-3 bg-white`}></span>
                             </span>
-                            {isOpen ? 'ABIERTO' : 'CERRADO • Viernes-Domingo 9:00 - 21:00'}
+                            {isOpen ? 'ABIERTO' : 'CERRADO • Atención: Viernes-Domingo 9:00 - 21:00'}
                         </div>
                     </div>
 
