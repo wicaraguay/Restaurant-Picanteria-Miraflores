@@ -161,7 +161,7 @@ const MenuPage: React.FC = () => {
                                     src={item.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&h=400&fit=crop'}
                                     alt={item.name}
                                     loading="eager"
-                                    className={`w-full h-full object-cover transition-transform duration-500 ${isOpen ? 'group-hover:scale-110' : 'grayscale'}`}
+                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                 />
 
                                 {/* Price Badge */}
@@ -185,14 +185,8 @@ const MenuPage: React.FC = () => {
                                 </p>
 
                                 {/* Simple Order Button */}
-                                <button
-                                    disabled={!isOpen}
-                                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all duration-300 transform ${isOpen
-                                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 hover:shadow-xl hover:scale-105'
-                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                        }`}
-                                >
-                                    {isOpen ? 'Ordenar' : 'Cerrado'}
+                                <button className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-4 rounded-xl font-bold text-lg hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
+                                    Ordenar
                                 </button>
                             </div>
                         </div>
