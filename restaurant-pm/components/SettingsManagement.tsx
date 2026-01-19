@@ -13,6 +13,7 @@ import { useRestaurantConfig } from '../contexts/RestaurantConfigContext';
 import { processImage } from '../utils/imageUtils';
 import { ErrorHandler } from '../utils/errorHandler';
 import Modal from './Modal';
+import { QRCodeCanvas } from 'qrcode.react';
 
 const inputClass = "w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-gray-900 text-sm focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700/50 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:bg-gray-700 dark:focus:ring-blue-500/20";
 
@@ -299,6 +300,64 @@ const SettingsManagement: React.FC = () => {
                             <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors">Guardar Información</button>
                         </div>
                     </form>
+                </Card>
+
+                {/* Código QR del Menú */}
+                <Card title="Código QR del Menú">
+                    <div className="flex flex-col items-center justify-center p-6 space-y-4">
+                        {businessInfo.website ? (
+                            <>
+                                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                    <QRCodeCanvas
+                                        id="qr-code-canvas"
+                                        value={businessInfo.website}
+                                        size={200}
+                                        level={"H"}
+                                        includeMargin={true}
+                                    />
+                                </div>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">
+                                    Este código QR dirige a los clientes a: <br />
+                                    <a href={businessInfo.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium break-all">
+                                        {businessInfo.website}
+                                    </a>
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const canvas = document.getElementById('qr-code-canvas') as HTMLCanvasElement;
+                                        if (canvas) {
+                                            const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+                                            const downloadLink = document.createElement("a");
+                                            downloadLink.href = pngUrl;
+                                            downloadLink.download = `menu-qr-${businessInfo.name.replace(/\s+/g, '-').toLowerCase()}.png`;
+                                            document.body.appendChild(downloadLink);
+                                            downloadLink.click();
+                                            document.body.removeChild(downloadLink);
+                                        }
+                                    }}
+                                    className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    </svg>
+                                    <span>Descargar QR</span>
+                                </button>
+                            </>
+                        ) : (
+                            <div className="text-center py-8">
+                                <div className="text-orange-500 mb-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">URL no configurada</h3>
+                                <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-4">
+                                    Para generar el código QR, primero debes configurar la URL de "Sitio Web" en la sección de Información del Negocio.
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </Card>
 
                 {/* Personalización de Marca */}
