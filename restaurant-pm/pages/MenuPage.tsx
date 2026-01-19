@@ -85,12 +85,12 @@ const MenuPage: React.FC = () => {
                 <div className="relative h-full flex items-center justify-center text-center px-4">
                     {/* Status Badge - Top Right */}
                     <div className="absolute top-6 right-6 md:top-8 md:right-8 z-10">
-                        <div className={`px-4 py-2 rounded-full font-bold text-sm shadow-lg backdrop-blur-md border border-white/20 flex items-center gap-2 transition-all duration-300 ${isOpen ? 'bg-green-500 text-white shadow-green-500/30' : 'bg-gray-800 text-gray-300 border-gray-700'}`}>
+                        <div className={`px-4 py-2 rounded-full font-bold text-sm shadow-lg backdrop-blur-md border border-white/20 flex items-center gap-2 transition-all duration-300 ${isOpen ? 'bg-green-500 text-white shadow-green-500/30' : 'bg-red-600 text-white shadow-red-500/30 animate-pulse'}`}>
                             <span className={`relative flex h-3 w-3`}>
                                 {isOpen && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>}
-                                <span className={`relative inline-flex rounded-full h-3 w-3 ${isOpen ? 'bg-white' : 'bg-red-500'}`}></span>
+                                <span className={`relative inline-flex rounded-full h-3 w-3 bg-white`}></span>
                             </span>
-                            {isOpen ? 'ABIERTO' : 'CERRADO'}
+                            {isOpen ? 'ABIERTO' : 'CERRADO • Viernes-Domingo 9:00 - 21:00'}
                         </div>
                     </div>
 
