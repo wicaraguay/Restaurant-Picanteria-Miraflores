@@ -214,7 +214,7 @@ const MenuPage: React.FC = () => {
                             <p className="text-amber-50 text-lg font-medium">
                                 {config.slogan || 'Sabores auténticos que deleitan tu paladar'}
                             </p>
-                            <img src="/image1.png" alt="Sabor Tradicional" className="mt-4 w-50 h-auto opacity-90 hover:opacity-100 transition-opacity mx-auto md:mx-0" />
+                            <img src="/image1.png" alt="Sabor Tradicional" className="mt-4 w-40 h-auto opacity-90 hover:opacity-100 transition-opacity mx-auto md:mx-0" />
                         </div>
 
                         {/* Horarios */}
