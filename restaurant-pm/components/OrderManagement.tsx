@@ -34,11 +34,12 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
 
     useEffect(() => {
         const updateTimer = () => {
-            if (!order.createdAt || isNaN(order.createdAt)) {
+            const createdTime = new Date(order.createdAt).getTime();
+            if (isNaN(createdTime)) {
                 setTimeAgo('');
                 return;
             }
-            const minutes = Math.floor((Date.now() - order.createdAt) / 60000);
+            const minutes = Math.floor((Date.now() - createdTime) / 60000);
             if (minutes < 1) setTimeAgo('Ahora');
             else if (minutes < 60) setTimeAgo(`hace ${minutes} min`);
             else setTimeAgo(`hace ${Math.floor(minutes / 60)}h`);
@@ -48,7 +49,7 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
         return () => clearInterval(intervalId);
     }, [order.createdAt]);
 
-    const formattedDate = (order.createdAt && !isNaN(order.createdAt))
+    const formattedDate = (order.createdAt && !isNaN(new Date(order.createdAt).getTime()))
         ? new Date(order.createdAt).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' })
         : '';
 
@@ -139,7 +140,7 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
             type,
             status,
             items: finalItems,
-            createdAt: order?.createdAt || Date.now(),
+            createdAt: order?.createdAt || new Date().toISOString(),
         };
         onSave(newOrder);
         onClose();
@@ -245,7 +246,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {[...orders]
-                    .sort((a, b) => b.createdAt - a.createdAt)
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                     .map(order => (
                         <OrderCard
                             key={order.id}

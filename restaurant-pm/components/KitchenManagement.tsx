@@ -33,11 +33,11 @@ const Card = ({ title, children }: { title: string, children?: React.ReactNode }
 const KitchenManagement: React.FC<KitchenManagementProps> = ({ orders }) => {
     const kitchenOrders = orders
         .filter(o => o.status === OrderStatus.New)
-        .sort((a, b) => a.createdAt - b.createdAt);
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
     const renderContent = () => {
         if (kitchenOrders.length === 0) return <p className="text-gray-500 dark:text-gray-400">No hay pedidos para preparar.</p>;
-        
+
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {kitchenOrders.map(order => <KitchenOrderCard key={order.id} order={order} />)}

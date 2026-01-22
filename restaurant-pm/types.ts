@@ -57,7 +57,7 @@ export interface Order {
   items: OrderItem[];
   type: 'En Local' | 'Delivery' | 'Para Llevar';
   status: OrderStatus;
-  createdAt: number; // Unix timestamp
+  createdAt: string; // ISO 8601 string from backend
   billed?: boolean; // Track if order has been converted to a bill
 }
 

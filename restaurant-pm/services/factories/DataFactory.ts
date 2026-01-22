@@ -239,7 +239,7 @@ export class DataFactory {
                 items: [{ name: 'Lomo a la Piedra', quantity: 2 }],
                 type: 'En Local',
                 status: OrderStatus.New,
-                createdAt: Date.now() - 5 * 60000,
+                createdAt: new Date(Date.now() - 5 * 60000).toISOString(),
                 billed: false
             },
             {
@@ -248,7 +248,7 @@ export class DataFactory {
                 items: [{ name: 'Ceviche Mixto', quantity: 1 }],
                 type: 'Delivery',
                 status: OrderStatus.Completed,
-                createdAt: Date.now() - 30 * 60000,
+                createdAt: new Date(Date.now() - 30 * 60000).toISOString(),
                 billed: false
             }
         ];
