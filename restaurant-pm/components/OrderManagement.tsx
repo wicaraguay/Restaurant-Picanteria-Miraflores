@@ -34,6 +34,10 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
 
     useEffect(() => {
         const updateTimer = () => {
+            if (!order.createdAt || isNaN(order.createdAt)) {
+                setTimeAgo('');
+                return;
+            }
             const minutes = Math.floor((Date.now() - order.createdAt) / 60000);
             if (minutes < 1) setTimeAgo('Ahora');
             else if (minutes < 60) setTimeAgo(`hace ${minutes} min`);
@@ -44,6 +48,10 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
         return () => clearInterval(intervalId);
     }, [order.createdAt]);
 
+    const formattedDate = (order.createdAt && !isNaN(order.createdAt))
+        ? new Date(order.createdAt).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' })
+        : '';
+
     const handleStatusClick = () => {
         onStatusChange(order.status === OrderStatus.Completed ? OrderStatus.New : OrderStatus.Completed);
     };
@@ -53,7 +61,10 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
             <div>
                 <div className="flex justify-between items-center mb-2">
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white">#{order.id.slice(-6)} - {order.customerName}</h3>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">{timeAgo}</span>
+                    <div className="flex flex-col items-end">
+                        <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">{timeAgo}</span>
+                        {formattedDate && <span className="text-xs text-gray-400 dark:text-gray-500">{formattedDate}</span>}
+                    </div>
                 </div>
                 <div className="flex justify-between items-center mb-3">
                     <p className="text-sm text-gray-600 dark:text-gray-300 font-semibold">{order.type}</p>
