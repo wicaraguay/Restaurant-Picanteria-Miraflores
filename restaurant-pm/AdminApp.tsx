@@ -66,7 +66,7 @@ const LoadingFallback: React.FC = () => (
  */
 const AdminContent: React.FC = () => {
     const { currentUser, logout } = useAuth();
-    const { state, updateMenuItem, setMenuItems: setMenuItemsContext, setEmployees: setEmployeesContext, setRoles: setRolesContext } = useAppState();
+    const { state, updateMenuItem, setMenuItems: setMenuItemsContext, setEmployees: setEmployeesContext, setRoles: setRolesContext, setOrders: setOrdersContext } = useAppState();
     const { theme, toggleTheme } = useTheme();
     const { currentView, setCurrentView, navItems, getCurrentViewLabel } = useNavigation(currentUser);
 
@@ -102,6 +102,15 @@ const AdminContent: React.FC = () => {
         }
     }, [state.roles, setRolesContext]);
 
+    // Wrapper para setOrders
+    const updateOrders = useCallback((value: import('./types').Order[] | ((prev: import('./types').Order[]) => import('./types').Order[])) => {
+        if (typeof value === 'function') {
+            setOrdersContext(value(state.orders));
+        } else {
+            setOrdersContext(value);
+        }
+    }, [state.orders, setOrdersContext]);
+
     /**
      * Renderiza la vista actual según navegación
      */
@@ -124,7 +133,7 @@ const AdminContent: React.FC = () => {
                 return (
                     <OrderManagement
                         orders={state.orders}
-                        setOrders={() => { }} // Manejado por context
+                        setOrders={updateOrders}
                         menuItems={state.menuItems}
                     />
                 );
@@ -133,7 +142,7 @@ const AdminContent: React.FC = () => {
                 return (
                     <BillingManagement
                         orders={state.orders}
-                        setOrders={() => { }} // Manejado por context
+                        setOrders={updateOrders}
                         bills={state.bills}
                         setBills={() => { }} // Manejado por context
                         menuItems={state.menuItems}
