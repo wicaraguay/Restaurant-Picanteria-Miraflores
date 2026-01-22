@@ -60,11 +60,11 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
     return (
         <div className={`bg-white dark:bg-dark-800 p-4 rounded-lg shadow-md border-l-4 ${getStatusColor()} flex flex-col justify-between`}>
             <div>
-                <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">#{order.id.slice(-6)} - {order.customerName}</h3>
-                    <div className="flex flex-col items-end">
-                        <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">{timeAgo}</span>
-                        {formattedDate && <span className="text-xs text-gray-400 dark:text-gray-500">{formattedDate}</span>}
+                <div className="flex justify-between items-start mb-2 gap-2">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white leading-tight">#{order.id.slice(-6)} - {order.customerName}</h3>
+                    <div className="flex flex-col items-end shrink-0">
+                        <span className="text-sm text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">{timeAgo}</span>
+                        {formattedDate && <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">{formattedDate}</span>}
                     </div>
                 </div>
                 <div className="flex justify-between items-center mb-3">
