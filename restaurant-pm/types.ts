@@ -59,6 +59,7 @@ export interface Order {
   status: OrderStatus;
   createdAt: string; // ISO 8601 string from backend
   billed?: boolean; // Track if order has been converted to a bill
+  orderNumber?: string; // Sequential identifier for UI (e.g., "001")
 }
 
 export interface MenuItem {

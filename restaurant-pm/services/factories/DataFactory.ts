@@ -17,6 +17,7 @@
 
 import { Customer, Order, OrderStatus, MenuItem, Employee, Role, Reservation, Bill } from '../../types';
 import { DAYS_OF_WEEK } from '../../constants';
+import { OrderNumberGenerator } from '../../utils/orderNumberGenerator';
 
 /**
  * Utilidad para generar fechas relativas
@@ -232,6 +233,9 @@ export class DataFactory {
      * Crea órdenes de ejemplo
      */
     static createDefaultOrders(): Order[] {
+        // Initialize the sequence to match the highest mocked number
+        OrderNumberGenerator.ensureSequenceSynced(2);
+
         return [
             {
                 id: 'ord1',
@@ -240,7 +244,8 @@ export class DataFactory {
                 type: 'En Local',
                 status: OrderStatus.New,
                 createdAt: new Date(Date.now() - 5 * 60000).toISOString(),
-                billed: false
+                billed: false,
+                orderNumber: '001'
             },
             {
                 id: 'ord2',
@@ -249,7 +254,8 @@ export class DataFactory {
                 type: 'Delivery',
                 status: OrderStatus.Completed,
                 createdAt: new Date(Date.now() - 30 * 60000).toISOString(),
-                billed: false
+                billed: false,
+                orderNumber: '002'
             }
         ];
     }

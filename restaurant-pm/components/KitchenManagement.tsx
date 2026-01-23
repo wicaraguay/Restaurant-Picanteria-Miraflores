@@ -9,7 +9,7 @@ const KitchenOrderCard: React.FC<{ order: Order }> = ({ order }) => {
     return (
         <div className={`p-4 rounded-lg shadow-md bg-blue-100 dark:bg-blue-900/30`}>
             <div className="flex justify-between items-center mb-2">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-white">#{order.id.slice(-6)} - {order.customerName}</h3>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white">#{order.orderNumber || order.id.slice(-6)} - {order.customerName}</h3>
                 <span className="text-sm font-semibold text-gray-800 dark:text-gray-300">{order.status}</span>
             </div>
             <ul className="space-y-1 text-sm list-disc list-inside text-gray-700 dark:text-gray-300">
