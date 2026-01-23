@@ -117,6 +117,7 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
     const [type, setType] = useState<'En Local' | 'Delivery' | 'Para Llevar'>('En Local');
     const [status, setStatus] = useState<OrderStatus>(OrderStatus.New);
     const [items, setItems] = useState<OrderItem[]>([]);
+    const [manualItems, setManualItems] = useState<boolean[]>([]); // Track which rows are manual
     const isEditing = order !== null;
     const availableItems = menuItems.filter(item => item.available);
 
@@ -133,11 +134,15 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
                     return { ...item, price: menuItem ? menuItem.price : 0 };
                 });
                 setItems(enrichedItems);
+
+                // Determine manual state: if item name not in menu, it's manual
+                setManualItems(enrichedItems.map(item => !menuItems.some(m => m.name === item.name)));
             } else {
                 setCustomerName('');
                 setType('En Local');
                 setStatus(OrderStatus.New);
                 setItems([{ name: availableItems[0]?.name || '', quantity: 1, price: availableItems[0]?.price || 0 }]);
+                setManualItems([false]);
             }
         }
     }, [isOpen, order]); // Removed menuItems from dependency to avoid reset on menu update unless necessary
@@ -149,8 +154,15 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
             newItems[index].quantity = qty;
         } else if (field === 'name') {
             newItems[index].name = value as string;
-            const menuItem = menuItems.find(m => m.name === value);
-            newItems[index].price = menuItem ? menuItem.price : 0;
+            // If NOT manual, update price from menu
+            if (!manualItems[index]) {
+                const menuItem = menuItems.find(m => m.name === value);
+                newItems[index].price = menuItem ? menuItem.price : 0;
+            }
+        } else if (field === 'price') {
+            // Only allow price update if manual (or if we want to allow overriding menu price too?)
+            // For now, allow only if manual or force override
+            newItems[index].price = parseFloat(value as string) || 0;
         }
         setItems(newItems);
     };
@@ -159,10 +171,23 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
         // Ensure we don't add empty items if one already exists empty? No, just add default first item
         const defaultItem = availableItems[0];
         setItems([...items, { name: defaultItem?.name || '', quantity: 1, price: defaultItem?.price || 0, prepared: false }]);
+        setManualItems([...manualItems, false]);
     };
 
     const handleRemoveItem = (index: number) => {
-        if (items.length > 0) setItems(items.filter((_, i) => i !== index));
+        if (items.length > 0) {
+            setItems(items.filter((_, i) => i !== index));
+            setManualItems(manualItems.filter((_, i) => i !== index));
+        }
+    };
+
+    const toggleManual = (index: number) => {
+        const newManualStates = [...manualItems];
+        newManualStates[index] = !newManualStates[index];
+        setManualItems(newManualStates);
+
+        // If switching to manual, clear name/price to avoid confusion? Or keep current?
+        // Keep current is better UX usually.
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -255,20 +280,40 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
                         )}
                         {items.map((item, index) => (
                             <div key={index} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center bg-white dark:bg-dark-800 p-3 rounded-md shadow-sm border border-gray-100 dark:border-gray-700">
-                                <div className="flex-grow w-full sm:w-auto">
-                                    <select
-                                        value={item.name}
-                                        onChange={e => handleItemChange(index, 'name', e.target.value)}
-                                        className={`${inputClass} !mb-0`}
-                                        required
+                                <div className="flex-grow w-full sm:w-auto flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleManual(index)}
+                                        className={`p-2 rounded text-xs font-bold transition-colors ${manualItems[index] ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                                        title={manualItems[index] ? "Cambiar a menú" : "Cambiar a manual"}
                                     >
-                                        <option value="" disabled>Seleccionar plato...</option>
-                                        {availableItems.map(menuItem => (
-                                            <option key={menuItem.id} value={menuItem.name}>
-                                                {menuItem.name} - ${menuItem.price.toFixed(2)}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        {manualItems[index] ? '✏️' : '📋'}
+                                    </button>
+
+                                    {manualItems[index] ? (
+                                        <input
+                                            type="text"
+                                            value={item.name}
+                                            onChange={e => handleItemChange(index, 'name', e.target.value)}
+                                            placeholder="Nombre del ítem..."
+                                            className={`${inputClass} !mb-0 flex-grow`}
+                                            required
+                                        />
+                                    ) : (
+                                        <select
+                                            value={item.name}
+                                            onChange={e => handleItemChange(index, 'name', e.target.value)}
+                                            className={`${inputClass} !mb-0 flex-grow`}
+                                            required
+                                        >
+                                            <option value="" disabled>Seleccionar plato...</option>
+                                            {availableItems.map(menuItem => (
+                                                <option key={menuItem.id} value={menuItem.name}>
+                                                    {menuItem.name} - ${menuItem.price.toFixed(2)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
                                     <div className="flex items-center">
@@ -278,20 +323,23 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
                                             value={item.quantity}
                                             onChange={e => handleItemChange(index, 'quantity', e.target.value)}
                                             min="1"
-                                            className={`w-20 text-center ${inputClass} !mb-0`}
+                                            className={`w-16 text-center ${inputClass} !mb-0`}
                                         />
                                     </div>
-                                    <div className="text-right min-w-[60px] font-medium text-gray-700 dark:text-gray-300">
-                                        ${((item.price || 0) * item.quantity).toFixed(2)}
+                                    <div className="text-right min-w-[80px]">
+                                        <div className="relative">
+                                            <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">$</span>
+                                            <input
+                                                type="number"
+                                                value={item.price}
+                                                onChange={e => handleItemChange(index, 'price', e.target.value)}
+                                                readOnly={!manualItems[index]}
+                                                className={`w-20 pl-5 pr-1 py-1 text-right text-sm rounded border ${manualItems[index] ? 'border-gray-300 bg-white' : 'border-transparent bg-transparent font-medium text-gray-700 dark:text-gray-300'} focus:outline-none`}
+                                                step="0.01"
+                                            />
+                                        </div>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRemoveItem(index)}
-                                        className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full transition-colors"
-                                        title="Eliminar ítem"
-                                    >
-                                        <TrashIcon className="w-4 h-4" />
-                                    </button>
+
                                 </div>
                             </div>
                         ))}
@@ -353,7 +401,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 const updated = await api.orders.update(orderToSave.id, orderToSave);
                 setOrders(prevOrders => prevOrders.map(o => o.id === orderToSave.id ? updated : o));
             } else {
-                // Remove the temporary ID generated by the form if needed, 
+                // Remove the temporary ID generated by the form if needed,
                 // but the backend usually ignores validation of ID on create or overwrites it.
                 // We'll send it as is, but rely on the returned object which has the real DB ID.
                 const orderWithNumber = {
@@ -396,7 +444,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         }
     };
 
-    const filteredOrders = orders.filter(order => {
+    const filteredOrders = (Array.isArray(orders) ? orders : []).filter(order => {
         if (activeTab === 'active') {
             return order.status === OrderStatus.New || order.status === OrderStatus.Ready;
         } else {

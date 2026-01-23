@@ -16,8 +16,9 @@
  * - Reducido de 321 líneas a ~150 líneas (-53%)
  */
 
-import React, { lazy, Suspense, useCallback } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect } from 'react';
 import { ViewType, MenuItem, Employee, Role } from './types';
+import { api } from './api'; // Import API for polling
 import Sidebar from './components/Sidebar';
 import { SunIcon, MoonIcon } from './components/Icons';
 import { NAV_ITEMS } from './constants';
@@ -72,6 +73,34 @@ const AdminContent: React.FC = () => {
 
     // Cargar datos iniciales automáticamente
     const { isLoading } = useAppData();
+
+    // ✅ POLLING: Sincronización automática de pedidos cada 5 seg
+    useEffect(() => {
+        const pollOrders = async () => {
+            // Avoid polling if already loading
+            if (isLoading) return;
+
+            try {
+                // Usamos la API directamente para no recargar toda la app
+                const response = await api.orders.getAll();
+
+                // Validate response is an array
+                if (Array.isArray(response)) {
+                    setOrdersContext(response);
+                } else if (response && response.data && Array.isArray(response.data)) {
+                    // Handle potential paginated/wrapped response
+                    setOrdersContext(response.data);
+                } else {
+                    console.warn("Polling received invalid orders format:", response);
+                }
+            } catch (error) {
+                console.error("Error sincronizando pedidos:", error);
+            }
+        };
+
+        const intervalId = setInterval(pollOrders, 5000);
+        return () => clearInterval(intervalId);
+    }, [setOrdersContext, isLoading]);
 
     // Wrapper para setMenuItems que acepta funciones updater
     const setMenuItems = useCallback((value: MenuItem[] | ((prev: MenuItem[]) => MenuItem[])) => {

@@ -41,7 +41,10 @@ const Card = ({ title, children }: { title: string, children?: React.ReactNode }
 );
 
 const KitchenManagement: React.FC<KitchenManagementProps> = ({ orders, setOrders }) => {
-    const kitchenOrders = orders
+    // Defensive check: Ensure orders is an array
+    const safeOrders = Array.isArray(orders) ? orders : [];
+
+    const kitchenOrders = safeOrders
         .filter(o => o.status === OrderStatus.New)
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
