@@ -117,7 +117,9 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
     const [customerName, setCustomerName] = useState('');
     const [type, setType] = useState<'En Local' | 'Delivery' | 'Para Llevar'>('En Local');
     const [status, setStatus] = useState<OrderStatus>(OrderStatus.New);
-    const [items, setItems] = useState<OrderItem[]>([]);
+    // Local type for items with UI state
+    type LocalOrderItem = OrderItem & { isNew?: boolean };
+    const [items, setItems] = useState<LocalOrderItem[]>([]);
 
     // UI State
     const [searchQuery, setSearchQuery] = useState('');
@@ -145,9 +147,9 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
                 setStatus(order.status);
                 // Enrich items with price if missing
                 const enrichedItems = order.items.map(item => {
-                    if (item.price !== undefined) return item;
+                    if (item.price !== undefined) return { ...item, isNew: false };
                     const menuItem = menuItems.find(m => m.name === item.name);
-                    return { ...item, price: menuItem ? menuItem.price : 0 };
+                    return { ...item, price: menuItem ? menuItem.price : 0, isNew: false };
                 });
                 setItems(enrichedItems);
             } else {
@@ -163,13 +165,17 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
     }, [isOpen, order]);
 
     const handleAddItem = (menuItem: MenuItem) => {
-        const existingItemIndex = items.findIndex(i => i.name === menuItem.name);
-        if (existingItemIndex >= 0) {
+        // Find if there is an existing NEW item to merge with
+        const existingNewItemIndex = items.findIndex(i => i.name === menuItem.name && i.isNew === true);
+
+        if (existingNewItemIndex >= 0) {
+            // Merge with the existing NEW item
             const newItems = [...items];
-            newItems[existingItemIndex].quantity += 1;
+            newItems[existingNewItemIndex].quantity += 1;
             setItems(newItems);
         } else {
-            setItems([...items, { name: menuItem.name, quantity: 1, price: menuItem.price, prepared: false }]);
+            // Create a new line item, even if the same product exists as a saved item
+            setItems([...items, { name: menuItem.name, quantity: 1, price: menuItem.price, prepared: false, isNew: true }]);
         }
     };
 
@@ -193,7 +199,7 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
         const price = parseFloat(priceStr || '0');
         if (isNaN(price)) return;
 
-        setItems([...items, { name, quantity: 1, price, prepared: false }]);
+        setItems([...items, { name, quantity: 1, price, prepared: false, isNew: true }]);
     };
 
     const handleSubmit = (e?: React.FormEvent) => {
@@ -215,12 +221,15 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
             finalStatus = OrderStatus.New;
         }
 
+        // Strip the isNew flag before saving to backend
+        const cleanItems = items.map(({ isNew, ...item }) => item);
+
         const newOrder: Order = {
             id: order?.id || Date.now().toString(),
             customerName,
             type,
             status: finalStatus,
-            items,
+            items: cleanItems,
             createdAt: order?.createdAt || new Date().toISOString(),
             orderNumber: order?.orderNumber,
         };
@@ -350,23 +359,48 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
                             </div>
                         ) : (
                             items.map((item, index) => (
-                                <div key={index} className="flex items-center gap-2 p-2 bg-white dark:bg-dark-700 rounded-lg shadow-sm border border-gray-100 dark:border-dark-600 animate-in fade-in slide-in-from-right-2 duration-200">
+                                <div key={index} className={`flex items-center gap-2 p-2 rounded-lg shadow-sm border animate-in fade-in slide-in-from-right-2 duration-200 ${item.isNew === false
+                                    ? 'bg-gray-100 dark:bg-dark-700/50 border-gray-200 dark:border-dark-600'
+                                    : 'bg-white dark:bg-dark-700 border-green-100 dark:border-green-900/30 ring-1 ring-green-400/20'
+                                    }`}>
                                     <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{item.name}</div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-sm font-semibold truncate ${item.isNew === false ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                                                {item.name}
+                                            </span>
+                                            {item.isNew === false && (
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${item.prepared
+                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                                    : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                                    }`}>
+                                                    {item.prepared ? 'Despachado' : 'En Cocina'}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="text-xs text-gray-500 dark:text-gray-400">${item.price?.toFixed(2)}</div>
                                     </div>
 
-                                    <div className="flex items-center bg-gray-100 dark:bg-dark-800 rounded-lg p-0.5">
+                                    <div className={`flex items-center rounded-lg p-0.5 ${item.isNew === false ? 'bg-gray-200 dark:bg-dark-600' : 'bg-gray-100 dark:bg-dark-800'} ${item.prepared ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                         <button
-                                            onClick={() => handleUpdateQuantity(index, -1)}
-                                            className="w-7 h-7 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600 rounded-md transition-colors"
+                                            onClick={() => !item.prepared && handleUpdateQuantity(index, -1)}
+                                            disabled={item.prepared}
+                                            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${item.prepared
+                                                ? 'text-gray-400 cursor-not-allowed'
+                                                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-dark-500'
+                                                }`}
                                         >
                                             <MinusIcon className="w-3 h-3" />
                                         </button>
-                                        <span className="w-8 text-center text-xs font-bold text-gray-900 dark:text-white">{item.quantity}</span>
+                                        <span className={`w-8 text-center text-xs font-bold ${item.isNew === false ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                                            {item.quantity}
+                                        </span>
                                         <button
-                                            onClick={() => handleUpdateQuantity(index, 1)}
-                                            className="w-7 h-7 flex items-center justify-center text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-md transition-colors"
+                                            onClick={() => !item.prepared && handleUpdateQuantity(index, 1)}
+                                            disabled={item.prepared}
+                                            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${item.prepared
+                                                ? 'text-gray-400 cursor-not-allowed'
+                                                : 'text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                                                }`}
                                         >
                                             <PlusIcon className="w-3 h-3" />
                                         </button>
@@ -377,8 +411,9 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
                                     </div>
 
                                     <button
-                                        onClick={() => handleRemoveItem(index)}
-                                        className="text-gray-400 hover:text-red-500 p-1 transition-colors"
+                                        onClick={() => !item.prepared && handleRemoveItem(index)}
+                                        disabled={item.prepared}
+                                        className={`p-1 transition-colors ${item.prepared ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500'}`}
                                     >
                                         <TrashIcon className="w-4 h-4" />
                                     </button>
