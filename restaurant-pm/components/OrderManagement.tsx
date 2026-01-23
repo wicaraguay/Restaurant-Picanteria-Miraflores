@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { Order, OrderItem, OrderStatus, SetState, MenuItem } from '../types';
 import Modal from './Modal';
-import { PlusIcon, EditIcon, TrashIcon } from './Icons';
+import { PlusIcon, EditIcon, TrashIcon, SearchIcon, MinusIcon, ClipboardListIcon } from './Icons';
 import { OrderNumberGenerator } from '../utils/orderNumberGenerator';
 
 interface OrderManagementProps {
@@ -113,13 +113,29 @@ interface OrderFormModalProps {
 }
 
 const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave, order, menuItems }) => {
+    // Form State
     const [customerName, setCustomerName] = useState('');
     const [type, setType] = useState<'En Local' | 'Delivery' | 'Para Llevar'>('En Local');
     const [status, setStatus] = useState<OrderStatus>(OrderStatus.New);
     const [items, setItems] = useState<OrderItem[]>([]);
-    const [manualItems, setManualItems] = useState<boolean[]>([]); // Track which rows are manual
+
+    // UI State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+    const [showCartOnMobile, setShowCartOnMobile] = useState(false);
+
     const isEditing = order !== null;
     const availableItems = menuItems.filter(item => item.available);
+
+    // Derived State: Categories
+    const categories = ['Todos', ...Array.from(new Set(availableItems.map(item => item.category)))];
+
+    // Filtered Menu Items
+    const filteredMenuItems = availableItems.filter(item => {
+        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesCategory = selectedCategory === 'Todos' || item.category === selectedCategory;
+        return matchesSearch && matchesCategory;
+    });
 
     useEffect(() => {
         if (isOpen) {
@@ -127,79 +143,73 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
                 setCustomerName(order.customerName);
                 setType(order.type);
                 setStatus(order.status);
-                // Ensure items have price, if not fetch from menu
+                // Enrich items with price if missing
                 const enrichedItems = order.items.map(item => {
                     if (item.price !== undefined) return item;
                     const menuItem = menuItems.find(m => m.name === item.name);
                     return { ...item, price: menuItem ? menuItem.price : 0 };
                 });
                 setItems(enrichedItems);
-
-                // Determine manual state: if item name not in menu, it's manual
-                setManualItems(enrichedItems.map(item => !menuItems.some(m => m.name === item.name)));
             } else {
                 setCustomerName('');
                 setType('En Local');
                 setStatus(OrderStatus.New);
-                setItems([{ name: availableItems[0]?.name || '', quantity: 1, price: availableItems[0]?.price || 0 }]);
-                setManualItems([false]);
+                setItems([]);
+                setSearchQuery('');
+                setSelectedCategory('Todos');
+                setShowCartOnMobile(false);
             }
         }
-    }, [isOpen, order]); // Removed menuItems from dependency to avoid reset on menu update unless necessary
+    }, [isOpen, order]);
 
-    const handleItemChange = (index: number, field: keyof OrderItem, value: string | number) => {
-        const newItems = [...items];
-        if (field === 'quantity') {
-            const qty = parseInt(value as string, 10) || 1;
-            newItems[index].quantity = qty;
-        } else if (field === 'name') {
-            newItems[index].name = value as string;
-            // If NOT manual, update price from menu
-            if (!manualItems[index]) {
-                const menuItem = menuItems.find(m => m.name === value);
-                newItems[index].price = menuItem ? menuItem.price : 0;
-            }
-        } else if (field === 'price') {
-            // Only allow price update if manual (or if we want to allow overriding menu price too?)
-            // For now, allow only if manual or force override
-            newItems[index].price = parseFloat(value as string) || 0;
+    const handleAddItem = (menuItem: MenuItem) => {
+        const existingItemIndex = items.findIndex(i => i.name === menuItem.name);
+        if (existingItemIndex >= 0) {
+            const newItems = [...items];
+            newItems[existingItemIndex].quantity += 1;
+            setItems(newItems);
+        } else {
+            setItems([...items, { name: menuItem.name, quantity: 1, price: menuItem.price, prepared: false }]);
         }
-        setItems(newItems);
     };
 
-    const handleAddItem = () => {
-        // Ensure we don't add empty items if one already exists empty? No, just add default first item
-        const defaultItem = availableItems[0];
-        setItems([...items, { name: defaultItem?.name || '', quantity: 1, price: defaultItem?.price || 0, prepared: false }]);
-        setManualItems([...manualItems, false]);
+    const handleUpdateQuantity = (index: number, delta: number) => {
+        const newItems = [...items];
+        const newQty = newItems[index].quantity + delta;
+        if (newQty > 0) {
+            newItems[index].quantity = newQty;
+            setItems(newItems);
+        }
     };
 
     const handleRemoveItem = (index: number) => {
-        if (items.length > 0) {
-            setItems(items.filter((_, i) => i !== index));
-            setManualItems(manualItems.filter((_, i) => i !== index));
+        setItems(items.filter((_, i) => i !== index));
+    };
+
+    const handleAddManualItem = () => {
+        const name = prompt("Nombre del producto manual:");
+        if (!name) return;
+        const priceStr = prompt("Precio del producto:");
+        const price = parseFloat(priceStr || '0');
+        if (isNaN(price)) return;
+
+        setItems([...items, { name, quantity: 1, price, prepared: false }]);
+    };
+
+    const handleSubmit = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+
+        if (!customerName.trim()) {
+            alert('Por favor, ingrese el nombre del cliente o mesa.');
+            return;
         }
-    };
+        if (items.length === 0) {
+            alert('El pedido debe tener al menos un ítem.');
+            return;
+        }
 
-    const toggleManual = (index: number) => {
-        const newManualStates = [...manualItems];
-        newManualStates[index] = !newManualStates[index];
-        setManualItems(newManualStates);
-
-        // If switching to manual, clear name/price to avoid confusion? Or keep current?
-        // Keep current is better UX usually.
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const finalItems = items.filter(item => item.name.trim() !== '' && item.quantity > 0);
-        if (!customerName || finalItems.length === 0) return alert('Por favor, complete el nombre y añada al menos un ítem.');
-
-        // Smart Status Logic: If any item is NOT prepared, the order should be New to alert kitchen.
-        // Unless it's already New, or we explicitly want to keep it.
-        // We auto-switch to New if there are unprepared items and the status was ready/completed.
         let finalStatus = status;
-        const hasUnpreparedItems = finalItems.some(item => !item.prepared);
+        const hasUnpreparedItems = items.some(item => !item.prepared);
 
         if (hasUnpreparedItems && (status === OrderStatus.Ready || status === OrderStatus.Completed)) {
             finalStatus = OrderStatus.New;
@@ -210,7 +220,7 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
             customerName,
             type,
             status: finalStatus,
-            items: finalItems,
+            items,
             createdAt: order?.createdAt || new Date().toISOString(),
             orderNumber: order?.orderNumber,
         };
@@ -219,160 +229,204 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
     };
 
     const total = items.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
+    const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Pedido' : 'Crear Nuevo Pedido'} maxWidth="max-w-4xl">
-            <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-6">
+        <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Pedido' : 'Nuevo Pedido'} maxWidth="max-w-6xl">
+            <div className="flex flex-col md:flex-row h-[80vh] md:h-[600px] overflow-hidden bg-gray-100 dark:bg-dark-900 -m-6 rounded-b-lg">
 
-                {/* Left Column: Customer Details */}
-                <div className="md:w-1/3 flex flex-col gap-4">
-                    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 border-b pb-2">Datos del Cliente</h3>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre / Mesa</label>
-                        <input
-                            type="text"
-                            value={customerName}
-                            onChange={e => setCustomerName(e.target.value)}
-                            required
-                            placeholder="Ej. Mesa 5 o Juan Pérez"
-                            className={inputClass}
-                        />
+                {/* --- LEFT COLUMN: PRODUCT CATALOG --- */}
+                <div className={`flex-1 flex flex-col h-full overflow-hidden ${showCartOnMobile ? 'hidden md:flex' : 'flex'}`}>
+                    {/* Catalog Header: Search & Categories */}
+                    <div className="p-4 bg-white dark:bg-dark-800 shadow-sm z-10 space-y-3">
+                        <div className="relative">
+                            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                            <input
+                                type="text"
+                                placeholder="Buscar productos..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className={inputClass.replace('p-2.5', 'pl-10 p-2.5')}
+                            />
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                            {categories.map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setSelectedCategory(cat)}
+                                    className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedCategory === cat
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
+                                        }`}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Pedido</label>
-                        <select value={type} onChange={e => setType(e.target.value as any)} className={inputClass}>
-                            <option>En Local</option>
-                            <option>Delivery</option>
-                            <option>Para Llevar</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
-                        <select value={status} onChange={e => setStatus(e.target.value as any)} className={inputClass}>
-                            <option value={OrderStatus.New}>{OrderStatus.New}</option>
-                            <option value={OrderStatus.Ready}>{OrderStatus.Ready}</option>
-                            <option value={OrderStatus.Completed}>{OrderStatus.Completed}</option>
-                        </select>
-                    </div>
-
-                    {/* Total Display for Mobile / Small Screens */}
-                    <div className="md:hidden mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <span className="text-gray-600 dark:text-gray-300 text-sm">Total Estimado:</span>
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">${total.toFixed(2)}</div>
+                    {/* Catalog Grid */}
+                    <div className="flex-1 overflow-y-auto p-4 content-start">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {filteredMenuItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => handleAddItem(item)}
+                                    className="flex flex-col items-center p-3 bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-100 dark:border-dark-700 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all text-left group active:scale-95"
+                                >
+                                    <div className="w-full aspect-square bg-gray-100 dark:bg-dark-700 rounded-lg mb-2 overflow-hidden relative">
+                                        {item.imageUrl ? (
+                                            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-4xl">🍽️</div>
+                                        )}
+                                        {/* Price Tag Overlay */}
+                                        <div className="absolute bottom-1 right-1 bg-black/60 text-white text-xs font-bold px-1.5 py-0.5 rounded backdrop-blur-sm">
+                                            ${item.price.toFixed(2)}
+                                        </div>
+                                    </div>
+                                    <h4 className="font-semibold text-gray-800 dark:text-gray-200 text-sm w-full truncate leading-tight">{item.name}</h4>
+                                </button>
+                            ))}
+                        </div>
+                        {filteredMenuItems.length === 0 && (
+                            <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                                <SearchIcon className="w-10 h-10 mb-2 opacity-50" />
+                                <p>No se encontraron productos</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Right Column: Order Items */}
-                <div className="md:w-2/3 flex flex-col gap-4">
-                    <div className="flex justify-between items-center border-b pb-2">
-                        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">Detalle del Pedido</h3>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">{items.length} ítems</span>
+                {/* --- RIGHT COLUMN: TICKET / CART --- */}
+                <div className={`md:w-[400px] w-full flex flex-col h-full bg-white dark:bg-dark-800 border-l dark:border-dark-700 shadow-xl z-20 ${showCartOnMobile ? 'flex' : 'hidden md:flex'}`}>
+                    {/* Ticket Header */}
+                    <div className="p-4 border-b dark:border-dark-700 bg-gray-50 dark:bg-dark-900/50">
+                        <div className="space-y-3">
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={customerName}
+                                    onChange={e => setCustomerName(e.target.value)}
+                                    placeholder="Nombre / Mesa *"
+                                    className="flex-1 bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <button
+                                    className="md:hidden p-2 text-gray-500"
+                                    onClick={() => setShowCartOnMobile(false)}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <div className="flex gap-2">
+                                <select
+                                    value={type}
+                                    onChange={e => setType(e.target.value as any)}
+                                    className="w-1/2 bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-600 rounded-lg px-2 py-1.5 text-xs font-medium"
+                                >
+                                    <option>En Local</option>
+                                    <option>Delivery</option>
+                                    <option>Para Llevar</option>
+                                </select>
+                                <select
+                                    value={status}
+                                    onChange={e => setStatus(e.target.value as any)}
+                                    className="w-1/2 bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-600 rounded-lg px-2 py-1.5 text-xs font-medium"
+                                >
+                                    <option value={OrderStatus.New}>{OrderStatus.New}</option>
+                                    <option value={OrderStatus.Ready}>{OrderStatus.Ready}</option>
+                                    <option value={OrderStatus.Completed}>{OrderStatus.Completed}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 max-h-[400px] overflow-y-auto space-y-3">
-                        {items.length === 0 && (
-                            <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic">
-                                No hay ítems en el pedido.
+                    {/* Ticket Items (Scrollable) */}
+                    <div className="flex-1 overflow-y-auto p-2 space-y-2 bg-gray-50/50 dark:bg-dark-800">
+                        {items.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
+                                <ClipboardListIcon className="w-12 h-12 mb-2" />
+                                <p className="text-sm">El pedido está vacío</p>
                             </div>
-                        )}
-                        {items.map((item, index) => (
-                            <div key={index} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center bg-white dark:bg-dark-800 p-3 rounded-md shadow-sm border border-gray-100 dark:border-gray-700">
-                                <div className="flex-grow w-full sm:w-auto flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleManual(index)}
-                                        className={`p-2 rounded text-xs font-bold transition-colors ${manualItems[index] ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                                        title={manualItems[index] ? "Cambiar a menú" : "Cambiar a manual"}
-                                    >
-                                        {manualItems[index] ? '✏️' : '📋'}
-                                    </button>
+                        ) : (
+                            items.map((item, index) => (
+                                <div key={index} className="flex items-center gap-2 p-2 bg-white dark:bg-dark-700 rounded-lg shadow-sm border border-gray-100 dark:border-dark-600 animate-in fade-in slide-in-from-right-2 duration-200">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{item.name}</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400">${item.price?.toFixed(2)}</div>
+                                    </div>
 
-                                    {manualItems[index] ? (
-                                        <input
-                                            type="text"
-                                            value={item.name}
-                                            onChange={e => handleItemChange(index, 'name', e.target.value)}
-                                            placeholder="Nombre del ítem..."
-                                            className={`${inputClass} !mb-0 flex-grow`}
-                                            required
-                                        />
-                                    ) : (
-                                        <select
-                                            value={item.name}
-                                            onChange={e => handleItemChange(index, 'name', e.target.value)}
-                                            className={`${inputClass} !mb-0 flex-grow`}
-                                            required
+                                    <div className="flex items-center bg-gray-100 dark:bg-dark-800 rounded-lg p-0.5">
+                                        <button
+                                            onClick={() => handleUpdateQuantity(index, -1)}
+                                            className="w-7 h-7 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600 rounded-md transition-colors"
                                         >
-                                            <option value="" disabled>Seleccionar plato...</option>
-                                            {availableItems.map(menuItem => (
-                                                <option key={menuItem.id} value={menuItem.name}>
-                                                    {menuItem.name} - ${menuItem.price.toFixed(2)}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                                    <div className="flex items-center">
-                                        <span className="text-xs text-gray-500 mr-2 sm:hidden">Cant:</span>
-                                        <input
-                                            type="number"
-                                            value={item.quantity}
-                                            onChange={e => handleItemChange(index, 'quantity', e.target.value)}
-                                            min="1"
-                                            className={`w-16 text-center ${inputClass} !mb-0`}
-                                        />
-                                    </div>
-                                    <div className="text-right min-w-[80px]">
-                                        <div className="relative">
-                                            <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">$</span>
-                                            <input
-                                                type="number"
-                                                value={item.price}
-                                                onChange={e => handleItemChange(index, 'price', e.target.value)}
-                                                readOnly={!manualItems[index]}
-                                                className={`w-20 pl-5 pr-1 py-1 text-right text-sm rounded border ${manualItems[index] ? 'border-gray-300 bg-white' : 'border-transparent bg-transparent font-medium text-gray-700 dark:text-gray-300'} focus:outline-none`}
-                                                step="0.01"
-                                            />
-                                        </div>
+                                            <MinusIcon className="w-3 h-3" />
+                                        </button>
+                                        <span className="w-8 text-center text-xs font-bold text-gray-900 dark:text-white">{item.quantity}</span>
+                                        <button
+                                            onClick={() => handleUpdateQuantity(index, 1)}
+                                            className="w-7 h-7 flex items-center justify-center text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-md transition-colors"
+                                        >
+                                            <PlusIcon className="w-3 h-3" />
+                                        </button>
                                     </div>
 
+                                    <div className="w-16 text-right font-bold text-sm text-gray-700 dark:text-gray-300">
+                                        ${((item.price || 0) * item.quantity).toFixed(2)}
+                                    </div>
+
+                                    <button
+                                        onClick={() => handleRemoveItem(index)}
+                                        className="text-gray-400 hover:text-red-500 p-1 transition-colors"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                    </button>
                                 </div>
-                            </div>
-                        ))}
+                            ))
+                        )}
+                        <button onClick={handleAddManualItem} className="w-full py-2 text-xs text-blue-600 hover:text-blue-700 font-medium border border-dashed border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+                            + Añadir ítem manual
+                        </button>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={handleAddItem}
-                        className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all flex justify-center items-center gap-2 font-medium"
-                        disabled={availableItems.length === 0}
-                    >
-                        <PlusIcon className="w-5 h-5" /> Añadir Otro Plato
-                    </button>
+                    {/* Ticket Footer (Totals & Actions) */}
+                    <div className="p-4 bg-white dark:bg-dark-800 border-t dark:border-dark-700 shadow-lg">
+                        <div className="flex justify-between items-end mb-4">
+                            <span className="text-sm text-gray-500 font-medium">Total ({totalItems} items)</span>
+                            <span className="text-3xl font-bold text-gray-900 dark:text-white pb-1">${total.toFixed(2)}</span>
+                        </div>
+                        <div className="flex gap-3">
+                            {/* Mobile Only: Back to Catalog */}
+                            <button
+                                onClick={() => setShowCartOnMobile(false)}
+                                className="md:hidden flex-1 py-3 px-4 rounded-xl border border-gray-300 text-gray-700 font-bold"
+                            >
+                                Seguir Pidiendo
+                            </button>
 
-                    <div className="mt-auto pt-4 border-t dark:border-gray-700 flex justify-end items-center gap-4">
-                        <div className="text-right">
-                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-semibold">Total Total</span>
-                            <span className="text-2xl font-bold text-gray-900 dark:text-white">${total.toFixed(2)}</span>
+                            <button
+                                onClick={() => handleSubmit()}
+                                className="flex-[2] md:flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all text-sm sm:text-base flex justify-center items-center gap-2"
+                            >
+                                <span className="uppercase tracking-wide">{isEditing ? 'Guardar' : 'Confirmar'}</span>
+                            </button>
                         </div>
                     </div>
                 </div>
-            </form>
 
-            <div className="flex justify-end pt-6 gap-3 border-t mt-6 dark:border-gray-700">
-                <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors font-medium">
-                    Cancelar
-                </button>
-                <button
-                    onClick={handleSubmit}
-                    className="px-5 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 font-medium flex items-center gap-2"
-                >
-                    {isEditing ? 'Guardar Cambios' : 'Crear Pedido'}
-                </button>
+                {/* Mobile Bottom Bar (When Cart Hidden) */}
+                {!showCartOnMobile && (
+                    <div className="md:hidden absolute bottom-0 left-0 right-0 bg-white dark:bg-dark-800 border-t dark:border-dark-700 p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex items-center justify-between z-30" onClick={() => setShowCartOnMobile(true)}>
+                        <div className="flex flex-col">
+                            <span className="text-xs text-gray-500 font-medium">{totalItems} ítems</span>
+                            <span className="text-xl font-bold text-gray-900 dark:text-white">${total.toFixed(2)}</span>
+                        </div>
+                        <button className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-md">
+                            Ver Pedido
+                        </button>
+                    </div>
+                )}
             </div>
         </Modal>
     );
