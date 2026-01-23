@@ -42,6 +42,7 @@ export interface Reservation {
 
 export enum OrderStatus {
   New = 'Nuevo',
+  Ready = 'Listo',
   Completed = 'Completado',
 }
 
@@ -49,6 +50,7 @@ export interface OrderItem {
   name: string;
   quantity: number;
   price?: number; // Added to track price per item at moment of order
+  prepared?: boolean;
 }
 
 export interface Order {

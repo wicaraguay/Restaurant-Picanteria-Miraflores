@@ -158,7 +158,7 @@ const AdminContent: React.FC = () => {
                 );
 
             case 'kitchen':
-                return <KitchenManagement orders={state.orders} />;
+                return <KitchenManagement orders={state.orders} setOrders={updateOrders} />;
 
             case 'hr':
                 return (

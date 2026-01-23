@@ -31,13 +31,15 @@ const OrderSchema: Schema = new Schema({
     items: [{
         name: { type: String, required: true },
         quantity: { type: Number, required: true },
-        price: { type: Number }
+        price: { type: Number },
+        prepared: { type: Boolean, default: false }
     }],
     type: { type: String, enum: ['En Local', 'Delivery', 'Para Llevar'], required: true },
     status: { type: String, enum: Object.values(OrderStatus), default: OrderStatus.New },
-    billed: { type: Boolean, default: false }
+    billed: { type: Boolean, default: false },
+    orderNumber: { type: String }
 }, {
-    timestamps: { createdAt: true, updatedAt: false } // We use createdAt from timestamps
+    timestamps: { createdAt: true, updatedAt: false } // We use createdAt from timestamps. Schema updated for prepared flag.
 });
 
 // ==================== INDEXES FOR PERFORMANCE ====================

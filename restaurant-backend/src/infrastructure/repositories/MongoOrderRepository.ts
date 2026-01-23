@@ -23,7 +23,8 @@ export class MongoOrderRepository extends BaseRepository<Order> implements IOrde
             type: doc.type,
             status: doc.status,
             createdAt: doc.createdAt,
-            billed: doc.billed
+            billed: doc.billed,
+            orderNumber: doc.orderNumber
         };
     }
 }

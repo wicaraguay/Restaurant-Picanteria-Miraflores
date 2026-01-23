@@ -18,6 +18,7 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
     const getStatusColor = () => {
         switch (order.status) {
             case OrderStatus.New: return 'border-blue-500 dark:border-blue-400';
+            case OrderStatus.Ready: return 'border-orange-500 dark:border-orange-400';
             case OrderStatus.Completed: return 'border-green-500 dark:border-green-400';
             default: return 'border-gray-300 dark:border-gray-600';
         }
@@ -26,6 +27,7 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
     const getStatusBadgeColor = () => {
         switch (order.status) {
             case OrderStatus.New: return 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300';
+            case OrderStatus.Ready: return 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300';
             case OrderStatus.Completed: return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
             default: return 'bg-gray-100 text-gray-800 dark:bg-dark-600 dark:text-gray-300';
         }
@@ -55,8 +57,12 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
         : '';
 
     const handleStatusClick = () => {
-        onStatusChange(order.status === OrderStatus.Completed ? OrderStatus.New : OrderStatus.Completed);
+        if (order.status === OrderStatus.New) onStatusChange(OrderStatus.Ready);
+        else if (order.status === OrderStatus.Ready) onStatusChange(OrderStatus.Completed);
+        else onStatusChange(OrderStatus.New);
     };
+
+    const total = order.items.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
 
     return (
         <div className={`bg-white dark:bg-dark-800 p-4 rounded-lg shadow-md border-l-4 ${getStatusColor()} flex flex-col justify-between`}>
@@ -74,13 +80,21 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
                         {order.status}
                     </button>
                 </div>
-                <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300 mb-4">
                     {order.items.map((item: OrderItem, index: number) => (
                         <li key={index} className="flex justify-between"><span>{item.name}</span><span className="font-semibold">x{item.quantity}</span></li>
                     ))}
                 </ul>
             </div>
-            <div className="mt-4 pt-3 border-t dark:border-dark-700 flex justify-end space-x-4">
+
+            <div className="border-t dark:border-dark-700 pt-2 mb-2 flex justify-between items-center">
+                <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">Total:</span>
+                <span className={`text-xl font-bold ${order.status === OrderStatus.Completed ? 'text-green-600 dark:text-green-400' : 'text-gray-800 dark:text-white'}`}>
+                    ${total.toFixed(2)}
+                </span>
+            </div>
+
+            <div className="pt-2 border-t dark:border-dark-700 flex justify-end space-x-4">
                 <button onClick={onEdit} className="flex items-center text-sm text-blue-600 dark:text-blue-400"><EditIcon className="w-4 h-4 mr-1" />Editar</button>
                 <button onClick={onDelete} className="flex items-center text-sm text-red-600 dark:text-red-400"><TrashIcon className="w-4 h-4 mr-1" />Eliminar</button>
             </div>
@@ -144,7 +158,7 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
     const handleAddItem = () => {
         // Ensure we don't add empty items if one already exists empty? No, just add default first item
         const defaultItem = availableItems[0];
-        setItems([...items, { name: defaultItem?.name || '', quantity: 1, price: defaultItem?.price || 0 }]);
+        setItems([...items, { name: defaultItem?.name || '', quantity: 1, price: defaultItem?.price || 0, prepared: false }]);
     };
 
     const handleRemoveItem = (index: number) => {
@@ -156,11 +170,21 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
         const finalItems = items.filter(item => item.name.trim() !== '' && item.quantity > 0);
         if (!customerName || finalItems.length === 0) return alert('Por favor, complete el nombre y añada al menos un ítem.');
 
+        // Smart Status Logic: If any item is NOT prepared, the order should be New to alert kitchen.
+        // Unless it's already New, or we explicitly want to keep it.
+        // We auto-switch to New if there are unprepared items and the status was ready/completed.
+        let finalStatus = status;
+        const hasUnpreparedItems = finalItems.some(item => !item.prepared);
+
+        if (hasUnpreparedItems && (status === OrderStatus.Ready || status === OrderStatus.Completed)) {
+            finalStatus = OrderStatus.New;
+        }
+
         const newOrder: Order = {
             id: order?.id || Date.now().toString(),
             customerName,
             type,
-            status,
+            status: finalStatus,
             items: finalItems,
             createdAt: order?.createdAt || new Date().toISOString(),
             orderNumber: order?.orderNumber,
@@ -204,6 +228,7 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
                         <select value={status} onChange={e => setStatus(e.target.value as any)} className={inputClass}>
                             <option value={OrderStatus.New}>{OrderStatus.New}</option>
+                            <option value={OrderStatus.Ready}>{OrderStatus.Ready}</option>
                             <option value={OrderStatus.Completed}>{OrderStatus.Completed}</option>
                         </select>
                     </div>
@@ -309,6 +334,7 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
 const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, menuItems }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+    const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
 
     const handleOpenModal = (order: Order | null) => {
         setEditingOrder(order);
@@ -370,25 +396,59 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         }
     };
 
+    const filteredOrders = orders.filter(order => {
+        if (activeTab === 'active') {
+            return order.status === OrderStatus.New || order.status === OrderStatus.Ready;
+        } else {
+            return order.status === OrderStatus.Completed;
+        }
+    });
+
+
+
     return (
         <div>
             <OrderFormModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveOrder} order={editingOrder} menuItems={menuItems} />
-            <div className="flex justify-between items-center mb-6">
+
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <h1 className="text-3xl font-bold dark:text-light-background">Gestión de Pedidos</h1>
+
+                <div className="flex bg-gray-100 dark:bg-dark-800 p-1 rounded-lg">
+                    <button
+                        onClick={() => setActiveTab('active')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'active' ? 'bg-white dark:bg-dark-600 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                    >
+                        En Curso
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('history')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-white dark:bg-dark-600 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                    >
+                        Historial
+                    </button>
+                </div>
+
                 <button onClick={() => handleOpenModal(null)} className="flex items-center bg-blue-600 text-white px-3 py-2 text-sm rounded-lg hover:bg-blue-700 transition-colors shadow-sm"><PlusIcon className="w-5 h-5 mr-1" /> Añadir Pedido</button>
             </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {[...orders]
-                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                    .map(order => (
-                        <OrderCard
-                            key={order.id}
-                            order={order}
-                            onEdit={() => handleOpenModal(order)}
-                            onDelete={() => handleDeleteOrder(order.id)}
-                            onStatusChange={(newStatus) => handleStatusChange(order.id, newStatus)}
-                        />
-                    ))}
+                {filteredOrders.length === 0 ? (
+                    <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
+                        {activeTab === 'active' ? 'No hay pedidos en curso.' : 'No hay historial de pedidos completados.'}
+                    </div>
+                ) : (
+                    filteredOrders
+                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                        .map(order => (
+                            <OrderCard
+                                key={order.id}
+                                order={order}
+                                onEdit={() => handleOpenModal(order)}
+                                onDelete={() => handleDeleteOrder(order.id)}
+                                onStatusChange={(newStatus) => handleStatusChange(order.id, newStatus)}
+                            />
+                        ))
+                )}
             </div>
         </div>
     );

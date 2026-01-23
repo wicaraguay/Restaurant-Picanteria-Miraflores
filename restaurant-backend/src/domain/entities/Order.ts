@@ -19,6 +19,7 @@
 
 export enum OrderStatus {
     New = 'Nuevo',
+    Ready = 'Listo',
     Completed = 'Completado',
 }
 
@@ -26,6 +27,7 @@ export interface OrderItem {
     name: string;
     quantity: number;
     price?: number;
+    prepared?: boolean;
 }
 
 export interface Order {
@@ -36,4 +38,5 @@ export interface Order {
     status: OrderStatus;
     createdAt: Date;
     billed?: boolean;
+    orderNumber?: string;
 }
