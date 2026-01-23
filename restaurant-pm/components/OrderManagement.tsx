@@ -89,6 +89,7 @@ const OrderCard: React.FC<{ order: Order; onEdit: () => void; onDelete: () => vo
 };
 
 // --- Order Form Modal Component ---
+// --- Order Form Modal Component ---
 interface OrderFormModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -101,7 +102,7 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
     const [customerName, setCustomerName] = useState('');
     const [type, setType] = useState<'En Local' | 'Delivery' | 'Para Llevar'>('En Local');
     const [status, setStatus] = useState<OrderStatus>(OrderStatus.New);
-    const [items, setItems] = useState<OrderItem[]>([{ name: '', quantity: 1 }]);
+    const [items, setItems] = useState<OrderItem[]>([]);
     const isEditing = order !== null;
     const availableItems = menuItems.filter(item => item.available);
 
@@ -111,29 +112,49 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
                 setCustomerName(order.customerName);
                 setType(order.type);
                 setStatus(order.status);
-                setItems(order.items.length > 0 ? order.items : [{ name: '', quantity: 1 }]);
+                // Ensure items have price, if not fetch from menu
+                const enrichedItems = order.items.map(item => {
+                    if (item.price !== undefined) return item;
+                    const menuItem = menuItems.find(m => m.name === item.name);
+                    return { ...item, price: menuItem ? menuItem.price : 0 };
+                });
+                setItems(enrichedItems);
             } else {
                 setCustomerName('');
                 setType('En Local');
                 setStatus(OrderStatus.New);
-                setItems([{ name: availableItems[0]?.name || '', quantity: 1 }]);
+                setItems([{ name: availableItems[0]?.name || '', quantity: 1, price: availableItems[0]?.price || 0 }]);
             }
         }
-    }, [isOpen, order, menuItems]);
+    }, [isOpen, order]); // Removed menuItems from dependency to avoid reset on menu update unless necessary
 
     const handleItemChange = (index: number, field: keyof OrderItem, value: string | number) => {
         const newItems = [...items];
-        if (field === 'quantity') newItems[index][field] = parseInt(value as string, 10) || 1;
-        else (newItems[index] as any)[field] = value;
+        if (field === 'quantity') {
+            const qty = parseInt(value as string, 10) || 1;
+            newItems[index].quantity = qty;
+        } else if (field === 'name') {
+            newItems[index].name = value as string;
+            const menuItem = menuItems.find(m => m.name === value);
+            newItems[index].price = menuItem ? menuItem.price : 0;
+        }
         setItems(newItems);
     };
-    const handleAddItem = () => setItems([...items, { name: availableItems[0]?.name || '', quantity: 1 }]);
-    const handleRemoveItem = (index: number) => { if (items.length > 1) setItems(items.filter((_, i) => i !== index)); };
+
+    const handleAddItem = () => {
+        // Ensure we don't add empty items if one already exists empty? No, just add default first item
+        const defaultItem = availableItems[0];
+        setItems([...items, { name: defaultItem?.name || '', quantity: 1, price: defaultItem?.price || 0 }]);
+    };
+
+    const handleRemoveItem = (index: number) => {
+        if (items.length > 0) setItems(items.filter((_, i) => i !== index));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const finalItems = items.filter(item => item.name.trim() !== '' && item.quantity > 0);
-        if (!customerName || finalItems.length === 0) return alert('Por favor, complete el nombre y al menos un ítem.');
+        if (!customerName || finalItems.length === 0) return alert('Por favor, complete el nombre y añada al menos un ítem.');
 
         const newOrder: Order = {
             id: order?.id || Date.now().toString(),
@@ -142,43 +163,144 @@ const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose, onSave
             status,
             items: finalItems,
             createdAt: order?.createdAt || new Date().toISOString(),
-            orderNumber: order?.orderNumber, // Preserve existing number if editing
+            orderNumber: order?.orderNumber,
         };
         onSave(newOrder);
         onClose();
     };
 
+    const total = items.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
+
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Pedido' : 'Crear Pedido'}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} required placeholder="Nombre Cliente / Mesa" className={inputClass} />
-                <select value={type} onChange={e => setType(e.target.value as any)} className={inputClass}>
-                    <option>En Local</option><option>Delivery</option><option>Para Llevar</option>
-                </select>
-                <select value={status} onChange={e => setStatus(e.target.value as any)} className={inputClass}>
-                    <option value={OrderStatus.New}>{OrderStatus.New}</option><option value={OrderStatus.Completed}>{OrderStatus.Completed}</option>
-                </select>
-                <div>
-                    <label className="block text-sm font-medium dark:text-gray-300 mb-2">Ítems</label>
-                    <div className="space-y-2">
+        <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Pedido' : 'Crear Nuevo Pedido'} maxWidth="max-w-4xl">
+            <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-6">
+
+                {/* Left Column: Customer Details */}
+                <div className="md:w-1/3 flex flex-col gap-4">
+                    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 border-b pb-2">Datos del Cliente</h3>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre / Mesa</label>
+                        <input
+                            type="text"
+                            value={customerName}
+                            onChange={e => setCustomerName(e.target.value)}
+                            required
+                            placeholder="Ej. Mesa 5 o Juan Pérez"
+                            className={inputClass}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Pedido</label>
+                        <select value={type} onChange={e => setType(e.target.value as any)} className={inputClass}>
+                            <option>En Local</option>
+                            <option>Delivery</option>
+                            <option>Para Llevar</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
+                        <select value={status} onChange={e => setStatus(e.target.value as any)} className={inputClass}>
+                            <option value={OrderStatus.New}>{OrderStatus.New}</option>
+                            <option value={OrderStatus.Completed}>{OrderStatus.Completed}</option>
+                        </select>
+                    </div>
+
+                    {/* Total Display for Mobile / Small Screens */}
+                    <div className="md:hidden mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <span className="text-gray-600 dark:text-gray-300 text-sm">Total Estimado:</span>
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">${total.toFixed(2)}</div>
+                    </div>
+                </div>
+
+                {/* Right Column: Order Items */}
+                <div className="md:w-2/3 flex flex-col gap-4">
+                    <div className="flex justify-between items-center border-b pb-2">
+                        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">Detalle del Pedido</h3>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{items.length} ítems</span>
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 max-h-[400px] overflow-y-auto space-y-3">
+                        {items.length === 0 && (
+                            <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic">
+                                No hay ítems en el pedido.
+                            </div>
+                        )}
                         {items.map((item, index) => (
-                            <div key={index} className="flex items-center space-x-2">
-                                <select value={item.name} onChange={e => handleItemChange(index, 'name', e.target.value)} className={inputClass} required>
-                                    <option value="" disabled>Seleccionar plato...</option>
-                                    {availableItems.map(menuItem => <option key={menuItem.id} value={menuItem.name}>{menuItem.name}</option>)}
-                                </select>
-                                <input type="number" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} min="1" className={`w-20 ${inputClass}`} />
-                                <button type="button" onClick={() => handleRemoveItem(index)} disabled={items.length === 1} className="text-red-500 disabled:text-gray-300 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                            <div key={index} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center bg-white dark:bg-dark-800 p-3 rounded-md shadow-sm border border-gray-100 dark:border-gray-700">
+                                <div className="flex-grow w-full sm:w-auto">
+                                    <select
+                                        value={item.name}
+                                        onChange={e => handleItemChange(index, 'name', e.target.value)}
+                                        className={`${inputClass} !mb-0`}
+                                        required
+                                    >
+                                        <option value="" disabled>Seleccionar plato...</option>
+                                        {availableItems.map(menuItem => (
+                                            <option key={menuItem.id} value={menuItem.name}>
+                                                {menuItem.name} - ${menuItem.price.toFixed(2)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                                    <div className="flex items-center">
+                                        <span className="text-xs text-gray-500 mr-2 sm:hidden">Cant:</span>
+                                        <input
+                                            type="number"
+                                            value={item.quantity}
+                                            onChange={e => handleItemChange(index, 'quantity', e.target.value)}
+                                            min="1"
+                                            className={`w-20 text-center ${inputClass} !mb-0`}
+                                        />
+                                    </div>
+                                    <div className="text-right min-w-[60px] font-medium text-gray-700 dark:text-gray-300">
+                                        ${((item.price || 0) * item.quantity).toFixed(2)}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveItem(index)}
+                                        className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full transition-colors"
+                                        title="Eliminar ítem"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
-                    <button type="button" onClick={handleAddItem} className="mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 flex items-center font-medium" disabled={availableItems.length === 0}><PlusIcon className="w-4 h-4 mr-1" /> Añadir Ítem</button>
-                </div>
-                <div className="flex justify-end pt-4">
-                    <button type="button" onClick={onClose} className="mr-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-200 font-medium transition-colors">Cancelar</button>
-                    <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors">{isEditing ? 'Guardar' : 'Crear'}</button>
+
+                    <button
+                        type="button"
+                        onClick={handleAddItem}
+                        className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all flex justify-center items-center gap-2 font-medium"
+                        disabled={availableItems.length === 0}
+                    >
+                        <PlusIcon className="w-5 h-5" /> Añadir Otro Plato
+                    </button>
+
+                    <div className="mt-auto pt-4 border-t dark:border-gray-700 flex justify-end items-center gap-4">
+                        <div className="text-right">
+                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-semibold">Total Total</span>
+                            <span className="text-2xl font-bold text-gray-900 dark:text-white">${total.toFixed(2)}</span>
+                        </div>
+                    </div>
                 </div>
             </form>
+
+            <div className="flex justify-end pt-6 gap-3 border-t mt-6 dark:border-gray-700">
+                <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors font-medium">
+                    Cancelar
+                </button>
+                <button
+                    onClick={handleSubmit}
+                    className="px-5 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 font-medium flex items-center gap-2"
+                >
+                    {isEditing ? 'Guardar Cambios' : 'Crear Pedido'}
+                </button>
+            </div>
         </Modal>
     );
 };
