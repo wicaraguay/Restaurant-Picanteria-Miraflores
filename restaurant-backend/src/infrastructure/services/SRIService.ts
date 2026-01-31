@@ -219,12 +219,30 @@ export class SRIService {
             }
 
             const p12Buffer = fs.readFileSync(p12Path);
+            console.log(`[SRIService] P12 file loaded from ${p12Path}. Size: ${p12Buffer.length} bytes`);
+
+            if (p12Buffer.length === 0) {
+                throw new Error(`The P12 file at ${p12Path} is empty (0 bytes)! Please re-upload it.`);
+            }
 
             // Use appropriate signer based on document type
             const isCreditNote = xmlContent.includes('<notaCredito');
-            const signedXml = isCreditNote
-                ? signCreditNoteXml(xmlContent, p12Buffer, { pkcs12Password: signaturePassword })
-                : signInvoiceXml(xmlContent, p12Buffer, { pkcs12Password: signaturePassword });
+            let signedXml: string;
+
+            try {
+                signedXml = isCreditNote
+                    ? signCreditNoteXml(xmlContent, p12Buffer, { pkcs12Password: signaturePassword })
+                    : signInvoiceXml(xmlContent, p12Buffer, { pkcs12Password: signaturePassword });
+            } catch (signingError: any) {
+                console.error('[SRIService] Critical Signing Error:', signingError);
+                // Detect common node-forge errors related to bad password or corrupt file
+                if (signingError.message?.includes('Only 8, 16, 24, or 32 bits supported') ||
+                    signingError.message?.includes('Too few bytes to parse') ||
+                    signingError.message?.includes('Invalid password')) {
+                    throw new Error('Error de Firma Electrónica: Es probable que la CONTRASEÑA sea incorrecta o el archivo .p12 esté CORRUPTO/DAÑADO. Verifique sus credenciales.');
+                }
+                throw signingError;
+            }
 
             console.log('[SRIService] XML signed successfully');
 
