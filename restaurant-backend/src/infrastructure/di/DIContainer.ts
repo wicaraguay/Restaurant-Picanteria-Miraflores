@@ -9,6 +9,10 @@
  * Patrones utilizados: Singleton, Factory, Dependency Injection
  */
 
+import { SRIService } from '../services/SRIService';
+import { PDFService } from '../services/PDFService';
+import { EmailService } from '../services/EmailService';
+
 import { MongoCustomerRepository } from '../repositories/MongoCustomerRepository';
 import { MongoEmployeeRepository } from '../repositories/MongoEmployeeRepository';
 import { MongoOrderRepository } from '../repositories/MongoOrderRepository';
@@ -16,6 +20,10 @@ import { MongoMenuRepository } from '../repositories/MongoMenuRepository';
 import { MongoRestaurantConfigRepository } from '../repositories/MongoRestaurantConfigRepository';
 import { MongoBillRepository } from '../repositories/MongoBillRepository';
 import { MongoRoleRepository } from '../repositories/MongoRoleRepository';
+import { MongoCreditNoteRepository } from '../repositories/MongoCreditNoteRepository';
+
+import { OrderController } from '../controllers/OrderController';
+import { CustomerController } from '../controllers/CustomerController';
 
 import { CreateCustomer } from '../../application/use-cases/CreateCustomer';
 import { GetCustomers } from '../../application/use-cases/GetCustomers';
@@ -24,6 +32,11 @@ import { GetOrders } from '../../application/use-cases/GetOrders';
 import { UpdateOrder } from '../../application/use-cases/UpdateOrder';
 import { DeleteOrder } from '../../application/use-cases/DeleteOrder';
 import { GetMenu } from '../../application/use-cases/GetMenu';
+import { CreateMenu } from '../../application/use-cases/CreateMenu';
+import { UpdateMenu } from '../../application/use-cases/UpdateMenu';
+import { DeleteMenu } from '../../application/use-cases/DeleteMenu';
+import { GenerateInvoice } from '../../application/use-cases/GenerateInvoice';
+import { CheckInvoiceStatus } from '../../application/use-cases/CheckInvoiceStatus';
 import { Login } from '../../application/use-cases/Login';
 import { ValidateSession } from '../../application/use-cases/ValidateSession';
 import { Logout } from '../../application/use-cases/Logout';
@@ -31,6 +44,10 @@ import { GetRestaurantConfig } from '../../application/use-cases/GetRestaurantCo
 import { UpdateRestaurantConfig } from '../../application/use-cases/UpdateRestaurantConfig';
 import { CreateBill } from '../../application/use-cases/CreateBill';
 import { GetBills } from '../../application/use-cases/GetBills';
+import { DeleteBill } from '../../application/use-cases/DeleteBill';
+import { GenerateCreditNote } from '../../application/use-cases/GenerateCreditNote';
+import { GetCreditNotes } from '../../application/use-cases/GetCreditNotes';
+import { CheckCreditNoteStatus } from '../../application/use-cases/CheckCreditNoteStatus';
 import { GetRoles } from '../../application/use-cases/GetRoles';
 import { CreateRole } from '../../application/use-cases/CreateRole';
 import { UpdateRole } from '../../application/use-cases/UpdateRole';
@@ -40,6 +57,7 @@ import { GetEmployee } from '../../application/use-cases/GetEmployee';
 import { CreateEmployee } from '../../application/use-cases/CreateEmployee';
 import { UpdateEmployee } from '../../application/use-cases/UpdateEmployee';
 import { DeleteEmployee } from '../../application/use-cases/DeleteEmployee';
+import { ResetBillingSystem } from '../../application/use-cases/ResetBillingSystem';
 
 import { ICustomerRepository } from '../../domain/repositories/ICustomerRepository';
 import { IEmployeeRepository } from '../../domain/repositories/IEmployeeRepository';
@@ -48,6 +66,7 @@ import { IMenuRepository } from '../../domain/repositories/IMenuRepository';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IRoleRepository } from '../../domain/repositories/IRoleRepository';
+import { ICreditNoteRepository } from '../../domain/repositories/ICreditNoteRepository';
 
 import { logger } from '../utils/Logger';
 
@@ -66,6 +85,11 @@ export class DIContainer {
     private configRepository?: IRestaurantConfigRepository;
     private billRepository?: IBillRepository;
     private roleRepository?: IRoleRepository;
+    private creditNoteRepository?: ICreditNoteRepository;
+
+    // Controllers
+    private orderController?: OrderController;
+    private customerController?: CustomerController;
 
     // Use Cases
     private createCustomerUseCase?: CreateCustomer;
@@ -75,6 +99,17 @@ export class DIContainer {
     private updateOrderUseCase?: UpdateOrder;
     private deleteOrderUseCase?: DeleteOrder;
     private getMenuUseCase?: GetMenu;
+    private createMenuUseCase?: CreateMenu;
+    private updateMenuUseCase?: UpdateMenu;
+    private deleteMenuUseCase?: DeleteMenu;
+    private generateInvoiceUseCase?: GenerateInvoice;
+    private checkInvoiceStatusUseCase?: CheckInvoiceStatus;
+
+    // Services
+    private sriService?: SRIService;
+    private pdfService?: PDFService;
+    private emailService?: EmailService;
+
     private loginUseCase?: Login;
     private validateSessionUseCase?: ValidateSession;
     private logoutUseCase?: Logout;
@@ -91,6 +126,11 @@ export class DIContainer {
     private createEmployeeUseCase?: CreateEmployee;
     private updateEmployeeUseCase?: UpdateEmployee;
     private deleteEmployeeUseCase?: DeleteEmployee;
+    private deleteBillUseCase?: DeleteBill;
+    private generateCreditNoteUseCase?: GenerateCreditNote;
+    private getCreditNotesUseCase?: GetCreditNotes;
+    private checkCreditNoteStatusUseCase?: CheckCreditNoteStatus;
+    private resetBillingSystemUseCase?: ResetBillingSystem;
 
     private constructor() {
         logger.info('DIContainer initialized');
@@ -161,6 +201,39 @@ export class DIContainer {
         return this.roleRepository;
     }
 
+    public getCreditNoteRepository(): ICreditNoteRepository {
+        if (!this.creditNoteRepository) {
+            this.creditNoteRepository = new MongoCreditNoteRepository();
+            logger.debug('CreditNoteRepository instantiated');
+        }
+        return this.creditNoteRepository;
+    }
+
+    // Controllers
+    public getOrderController(): OrderController {
+        if (!this.orderController) {
+            this.orderController = new OrderController(
+                this.getCreateOrderUseCase(),
+                this.getGetOrdersUseCase(),
+                this.getUpdateOrderUseCase(),
+                this.getDeleteOrderUseCase()
+            );
+            logger.debug('OrderController instantiated');
+        }
+        return this.orderController;
+    }
+
+    public getCustomerController(): CustomerController {
+        if (!this.customerController) {
+            this.customerController = new CustomerController(
+                this.getCreateCustomerUseCase(),
+                this.getGetCustomersUseCase()
+            );
+            logger.debug('CustomerController instantiated');
+        }
+        return this.customerController;
+    }
+
     // Use Case Getters (Lazy Initialization with Dependencies)
 
     public getCreateCustomerUseCase(): CreateCustomer {
@@ -219,6 +292,85 @@ export class DIContainer {
         return this.getMenuUseCase;
     }
 
+    public getCreateMenuUseCase(): CreateMenu {
+        if (!this.createMenuUseCase) {
+            this.createMenuUseCase = new CreateMenu(this.getMenuRepository());
+            logger.debug('CreateMenu use case instantiated');
+        }
+        return this.createMenuUseCase;
+    }
+
+    public getUpdateMenuUseCase(): UpdateMenu {
+        if (!this.updateMenuUseCase) {
+            this.updateMenuUseCase = new UpdateMenu(this.getMenuRepository());
+            logger.debug('UpdateMenu use case instantiated');
+        }
+        return this.updateMenuUseCase;
+    }
+
+    public getDeleteMenuUseCase(): DeleteMenu {
+        if (!this.deleteMenuUseCase) {
+            this.deleteMenuUseCase = new DeleteMenu(this.getMenuRepository());
+            logger.debug('DeleteMenu use case instantiated');
+        }
+        return this.deleteMenuUseCase;
+    }
+
+    // Services
+    public getSRIService(): SRIService {
+        if (!this.sriService) {
+            this.sriService = new SRIService();
+            logger.debug('SRIService instantiated');
+        }
+        return this.sriService;
+    }
+
+    public getPDFService(): PDFService {
+        if (!this.pdfService) {
+            this.pdfService = new PDFService();
+            logger.debug('PDFService instantiated');
+        }
+        return this.pdfService;
+    }
+
+    public getEmailService(): EmailService {
+        if (!this.emailService) {
+            this.emailService = new EmailService();
+            logger.debug('EmailService instantiated');
+        }
+        return this.emailService;
+    }
+
+    public getGenerateInvoiceUseCase(): GenerateInvoice {
+        if (!this.generateInvoiceUseCase) {
+            this.generateInvoiceUseCase = new GenerateInvoice(
+                this.getRestaurantConfigRepository(),
+                this.getBillRepository(),
+                this.getOrderRepository(),
+                this.getSRIService(),
+                this.getPDFService(),
+                this.getEmailService()
+            );
+            logger.debug('GenerateInvoice use case instantiated');
+        }
+        return this.generateInvoiceUseCase;
+    }
+
+    public getCheckInvoiceStatusUseCase(): CheckInvoiceStatus {
+        if (!this.checkInvoiceStatusUseCase) {
+            this.checkInvoiceStatusUseCase = new CheckInvoiceStatus(
+                this.getRestaurantConfigRepository(),
+                this.getBillRepository(),
+                this.getOrderRepository(),
+                this.getSRIService(),
+                this.getPDFService(),
+                this.getEmailService()
+            );
+            logger.debug('CheckInvoiceStatus use case instantiated');
+        }
+        return this.checkInvoiceStatusUseCase;
+    }
+
     public getLoginUseCase(): Login {
         if (!this.loginUseCase) {
             this.loginUseCase = new Login(this.getEmployeeRepository());
@@ -273,6 +425,14 @@ export class DIContainer {
             logger.debug('GetBills use case instantiated');
         }
         return this.getBillsUseCase;
+    }
+
+    public getDeleteBillUseCase(): DeleteBill {
+        if (!this.deleteBillUseCase) {
+            this.deleteBillUseCase = new DeleteBill(this.getBillRepository());
+            logger.debug('DeleteBill use case instantiated');
+        }
+        return this.deleteBillUseCase;
     }
 
     public getGetRolesUseCase(): GetRoles {
@@ -347,6 +507,48 @@ export class DIContainer {
         return this.deleteEmployeeUseCase;
     }
 
+    public getGenerateCreditNoteUseCase(): GenerateCreditNote {
+        if (!this.generateCreditNoteUseCase) {
+            this.generateCreditNoteUseCase = new GenerateCreditNote(
+                this.getRestaurantConfigRepository(),
+                this.getCreditNoteRepository(),
+                this.getBillRepository(),
+                this.getSRIService(),
+                this.getPDFService(),
+                this.getEmailService()
+            );
+            logger.debug('GenerateCreditNote use case instantiated');
+        }
+        return this.generateCreditNoteUseCase;
+    }
+
+    public getGetCreditNotesUseCase(): GetCreditNotes {
+        if (!this.getCreditNotesUseCase) {
+            this.getCreditNotesUseCase = new GetCreditNotes(this.getCreditNoteRepository());
+            logger.debug('GetCreditNotes use case instantiated');
+        }
+        return this.getCreditNotesUseCase;
+    }
+
+    public getCheckCreditNoteStatusUseCase(): CheckCreditNoteStatus {
+        if (!this.checkCreditNoteStatusUseCase) {
+            this.checkCreditNoteStatusUseCase = new CheckCreditNoteStatus(
+                this.getCreditNoteRepository(),
+                this.getSRIService()
+            );
+            logger.debug('CheckCreditNoteStatus use case instantiated');
+        }
+        return this.checkCreditNoteStatusUseCase;
+    }
+
+    public getResetBillingSystemUseCase(): ResetBillingSystem {
+        if (!this.resetBillingSystemUseCase) {
+            this.resetBillingSystemUseCase = new ResetBillingSystem();
+            logger.debug('ResetBillingSystem use case instantiated');
+        }
+        return this.resetBillingSystemUseCase;
+    }
+
     /**
      * Reset all dependencies (useful for testing)
      */
@@ -364,6 +566,9 @@ export class DIContainer {
         this.updateOrderUseCase = undefined;
         this.deleteOrderUseCase = undefined;
         this.getMenuUseCase = undefined;
+        this.createMenuUseCase = undefined;
+        this.updateMenuUseCase = undefined;
+        this.deleteMenuUseCase = undefined;
         this.loginUseCase = undefined;
         this.validateSessionUseCase = undefined;
         this.logoutUseCase = undefined;
@@ -371,6 +576,7 @@ export class DIContainer {
         this.updateRestaurantConfigUseCase = undefined;
         this.createBillUseCase = undefined;
         this.getBillsUseCase = undefined;
+        this.deleteBillUseCase = undefined;
         this.roleRepository = undefined;
         this.getRolesUseCase = undefined;
         this.createRoleUseCase = undefined;
@@ -381,6 +587,13 @@ export class DIContainer {
         this.createEmployeeUseCase = undefined;
         this.updateEmployeeUseCase = undefined;
         this.deleteEmployeeUseCase = undefined;
+        this.generateInvoiceUseCase = undefined;
+        this.checkInvoiceStatusUseCase = undefined;
+        this.sriService = undefined;
+        this.pdfService = undefined;
+        this.emailService = undefined;
+        this.emailService = undefined;
+        this.resetBillingSystemUseCase = undefined;
         logger.info('DIContainer reset');
     }
 }

@@ -9,8 +9,8 @@
  * @layer Tests
  */
 
-import { DataFactory } from '../services/factories/DataFactory';
-import { DAYS_OF_WEEK } from '../constants';
+import { DataFactory } from '../src/services/factories/DataFactory';
+import { DAYS_OF_WEEK } from '../src/constants';
 
 describe('DataFactory', () => {
     describe('createDefaultRoles', () => {

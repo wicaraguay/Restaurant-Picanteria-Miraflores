@@ -44,4 +44,12 @@ export class GetBills {
     ): Promise<PaginatedResult<Bill>> {
         return this.billRepository.findPaginated(page, limit, filter, sort);
     }
+
+    /**
+     * Get a single bill by ID
+     * @param id - Internal bill ID
+     */
+    async executeById(id: string): Promise<Bill | null> {
+        return this.billRepository.findById(id);
+    }
 }

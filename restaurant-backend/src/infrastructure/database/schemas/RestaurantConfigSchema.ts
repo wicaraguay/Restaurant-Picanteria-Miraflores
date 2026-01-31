@@ -24,6 +24,10 @@ const RestaurantConfigSchema = new Schema({
     // Información fiscal
     ruc: { type: String, required: true },
     businessName: { type: String, required: true },
+    fiscalEmail: { type: String },
+    fiscalLogo: { type: String },
+    obligadoContabilidad: { type: Boolean, default: false },
+    contribuyenteEspecial: { type: String },
 
     // Configuración regional
     currency: { type: String, required: true, default: 'USD' },
@@ -48,6 +52,7 @@ const RestaurantConfigSchema = new Schema({
             enum: ['General', 'RIMPE - Negocio Popular', 'RIMPE - Emprendedor']
         },
         currentSequenceFactura: { type: Number, required: true, default: 1 },
+        currentSequenceNotaCredito: { type: Number, required: true, default: 1 },
         currentSequenceNotaVenta: { type: Number, required: true, default: 1 }
     }
 }, {

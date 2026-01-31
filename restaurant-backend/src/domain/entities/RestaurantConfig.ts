@@ -22,6 +22,10 @@ export interface RestaurantConfig {
     // Información fiscal (Ecuador)
     ruc: string;
     businessName: string;
+    fiscalEmail?: string;
+    fiscalLogo?: string;
+    obligadoContabilidad?: boolean;
+    contribuyenteEspecial?: string;
 
     // Configuración regional
     currency: string;
@@ -42,6 +46,7 @@ export interface RestaurantConfig {
         emissionPoint: string;
         regime: 'General' | 'RIMPE - Negocio Popular' | 'RIMPE - Emprendedor';
         currentSequenceFactura: number;
+        currentSequenceNotaCredito: number;
         currentSequenceNotaVenta: number;
     };
 

@@ -4,62 +4,51 @@
  * 
  * @purpose
  * Define los endpoints para gestión de facturación (crear, listar facturas).
- * Utiliza el DIContainer para obtener dependencias.
- * Implementa manejo de errores estandarizado y logging.
- * 
- * @connections
- * - Usa: DIContainer (infrastructure/di)
- * - Usa: CreateBill, GetBills use cases (application/use-cases)
- * - Usa: ErrorHandler, ResponseFormatter, Logger (infrastructure/utils)
- * - Usado por: main.ts (configuración de rutas)
- * 
- * @layer Infrastructure - Web/API
+ * Utiliza el BillController para manejar la lógica.
  */
 
 import { Router } from 'express';
 import { container } from '../../di/DIContainer';
-import { ResponseFormatter } from '../../utils/ResponseFormatter';
-import { ErrorHandler } from '../../utils/ErrorHandler';
-import { logger } from '../../utils/Logger';
+import { BillController } from '../../controllers/BillController';
 
 const router = Router();
 
-// GET /api/bills - Obtener todas las facturas
-router.get('/', ErrorHandler.asyncHandler(async (req, res) => {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
+// Instantiate controller with dependencies from DI Container
+const billController = new BillController(
+    container.getCreateBillUseCase(),
+    container.getGetBillsUseCase(),
+    container.getDeleteBillUseCase(),
+    container.getResetBillingSystemUseCase()
+);
 
-    // Build filter from query params
-    const filter: any = {};
-    if (req.query.documentNumber) filter.documentNumber = req.query.documentNumber;
-    if (req.query.customerIdentification) filter.customerIdentification = req.query.customerIdentification;
-    if (req.query.documentType) filter.documentType = req.query.documentType;
+/**
+ * GET /api/bills
+ * Obtener todas las facturas con paginación y filtros
+ */
+router.get('/', billController.getAll);
 
-    // Build sort from query params (default: newest first)
-    const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { createdAt: -1 };
+/**
+ * POST /api/bills
+ * Crear una nueva factura
+ */
+router.post('/', billController.create);
 
-    logger.info('Fetching bills with pagination', { page, limit, filter });
+/**
+ * GET /api/bills/:id/pdf
+ * Descargar PDF de una factura existente
+ */
+router.get('/:id/pdf', billController.generatePdf);
 
-    const getBills = container.getGetBillsUseCase();
-    const result = await getBills.executePaginated(page, limit, filter, sort);
+/**
+ * DELETE /api/bills/:id
+ * Eliminar una factura
+ */
+router.delete('/:id', billController.delete);
 
-    logger.info('Bills fetched successfully', {
-        count: result.data.length,
-        page: result.pagination.page,
-        total: result.pagination.total
-    });
-    res.json(ResponseFormatter.success(result));
-}));
-
-// POST /api/bills - Crear una nueva factura
-router.post('/', ErrorHandler.asyncHandler(async (req, res) => {
-    logger.info('Creating new bill', { data: req.body });
-
-    const createBill = container.getCreateBillUseCase();
-    const createdBill = await createBill.execute(req.body);
-
-    logger.info('Bill created successfully', { id: createdBill.id });
-    res.status(201).json(ResponseFormatter.success(createdBill));
-}));
+/**
+ * DELETE /api/bills/reset
+ * RESETEA TODO EL SISTEMA DE FACTURACION (CUIDADO)
+ */
+router.post('/reset', billController.reset);
 
 export default router;

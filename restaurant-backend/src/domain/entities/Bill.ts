@@ -41,6 +41,14 @@ export class Bill {
         public readonly subtotal: number,
         public readonly tax: number,
         public readonly total: number,
-        public readonly regime: string
+        public readonly regime: string,
+        public readonly accessKey?: string,
+        public readonly sriStatus?: string,
+        public readonly environment?: string,
+        public readonly authorizationDate?: string,
+        public readonly xmlUrl?: string,
+        public readonly pdfUrl?: string,
+        public readonly hasCreditNote?: boolean,
+        public readonly createdAt?: Date
     ) { }
 }

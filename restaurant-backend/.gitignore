@@ -7,6 +7,7 @@ pnpm-debug.log*
 
 # Build outputs
 dist/
+debug-xml/
 build/
 *.js.map
 
@@ -85,3 +86,6 @@ public/uploads/
 *.key
 *.cert
 *.crt
+
+# SRI Electronic Signature
+*.p12

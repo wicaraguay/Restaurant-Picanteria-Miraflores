@@ -36,6 +36,7 @@ const DEFAULT_CONFIG: Omit<RestaurantConfig, 'id' | 'createdAt' | 'updatedAt'> =
         emissionPoint: '001',
         regime: 'General',
         currentSequenceFactura: 1,
+        currentSequenceNotaCredito: 1,
         currentSequenceNotaVenta: 1
     }
 };
@@ -54,6 +55,10 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
             website: doc.website,
             ruc: doc.ruc,
             businessName: doc.businessName,
+            fiscalEmail: doc.fiscalEmail,
+            fiscalLogo: doc.fiscalLogo,
+            obligadoContabilidad: doc.obligadoContabilidad,
+            contribuyenteEspecial: doc.contribuyenteEspecial,
             currency: doc.currency,
             currencySymbol: doc.currencySymbol,
             timezone: doc.timezone,
@@ -68,6 +73,7 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
                 emissionPoint: doc.billing.emissionPoint,
                 regime: doc.billing.regime,
                 currentSequenceFactura: doc.billing.currentSequenceFactura,
+                currentSequenceNotaCredito: doc.billing.currentSequenceNotaCredito,
                 currentSequenceNotaVenta: doc.billing.currentSequenceNotaVenta
             },
             createdAt: doc.createdAt,
@@ -123,5 +129,69 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
 
         logger.info('Restaurant config updated successfully');
         return this.mapToEntity(doc);
+    }
+
+    /**
+     * Atomically retrieves and increments the sequential number for invoices.
+     * Uses MongoDB's $inc operator with findOneAndUpdate to ensure atomicity.
+     * If config doesn't exist, creates it with default values.
+     */
+    async getNextSequential(): Promise<number> {
+        logger.debug('Getting next sequential number for invoice');
+
+        // Ensure config exists first
+        await this.getOrCreate();
+
+        // Atomically increment and return the new value
+        const doc = await RestaurantConfigModel.findByIdAndUpdate(
+            FIXED_CONFIG_ID,
+            { $inc: { 'billing.currentSequenceFactura': 1 } },
+            {
+                new: true, // Return the updated document
+                upsert: true, // Create if doesn't exist
+                runValidators: false // Skip validation for performance
+            }
+        );
+
+        if (!doc || !doc.billing || typeof doc.billing.currentSequenceFactura !== 'number') {
+            logger.error('Failed to get next sequential number');
+            throw new Error('Failed to increment sequential counter');
+        }
+
+        const nextSequential = doc.billing.currentSequenceFactura;
+        logger.info('Generated new sequential number', { sequential: nextSequential });
+
+        return nextSequential;
+    }
+
+    /**
+     * Atomically retrieves and increments the sequential number for credit notes.
+     */
+    async getNextCreditNoteSequential(): Promise<number> {
+        logger.debug('Getting next sequential number for credit note');
+
+        // Ensure config exists first
+        await this.getOrCreate();
+
+        // Atomically increment and return the new value
+        const doc = await RestaurantConfigModel.findByIdAndUpdate(
+            FIXED_CONFIG_ID,
+            { $inc: { 'billing.currentSequenceNotaCredito': 1 } },
+            {
+                new: true, // Return the updated document
+                upsert: true, // Create if doesn't exist
+                runValidators: false // Skip validation for performance
+            }
+        );
+
+        if (!doc || !doc.billing || typeof doc.billing.currentSequenceNotaCredito !== 'number') {
+            logger.error('Failed to get next sequential number for credit note');
+            throw new Error('Failed to increment credit note sequential counter');
+        }
+
+        const nextSequential = doc.billing.currentSequenceNotaCredito;
+        logger.info('Generated new sequential number for credit note', { sequential: nextSequential });
+
+        return nextSequential;
     }
 }

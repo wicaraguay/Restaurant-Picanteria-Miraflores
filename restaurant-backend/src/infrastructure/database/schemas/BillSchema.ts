@@ -38,7 +38,14 @@ const BillSchema = new Schema({
     subtotal: { type: Number, required: true },
     tax: { type: Number, required: true },
     total: { type: Number, required: true },
-    regime: { type: String, required: true }
+    regime: { type: String, required: true },
+    accessKey: { type: String, unique: true, sparse: true },
+    sriStatus: { type: String },
+    environment: { type: String },
+    authorizationDate: { type: String },
+    xmlUrl: { type: String },
+    pdfUrl: { type: String },
+    hasCreditNote: { type: Boolean, default: false }
 }, {
     timestamps: true
 });

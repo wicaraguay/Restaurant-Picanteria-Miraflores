@@ -7,12 +7,12 @@
  * Incluye manejo de shutdown graceful para SIGTERM y SIGINT.
  */
 
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import { dbConnection } from './infrastructure/database/DatabaseConnection';
 import { logger } from './infrastructure/utils/Logger';
 import { ErrorHandler } from './infrastructure/utils/ErrorHandler';
@@ -25,9 +25,10 @@ import configRoutes from './infrastructure/web/routes/configRoutes';
 import billRoutes from './infrastructure/web/routes/billRoutes';
 import employeeRoutes from './infrastructure/web/routes/employeeRoutes';
 import roleRoutes from './infrastructure/web/routes/roleRoutes';
+import creditNoteRoutes from './infrastructure/web/routes/creditNoteRoutes';
 import { cacheService } from './infrastructure/utils/CacheService';
 
-dotenv.config();
+// dotenv configured at top level
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,15 +59,19 @@ app.use((req, res, next) => {
     next();
 });
 
+import billingRoutes from './infrastructure/web/routes/billingRoutes';
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/config', configRoutes);
-app.use('/api/bills', billRoutes);
+app.use('/api/bills', billRoutes); // CRUD de facturas internas
+app.use('/api/billing', billingRoutes); // Generación de XML SRI
 app.use('/api/employees', employeeRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api/credit-notes', creditNoteRoutes); // Notas de crédito SRI
 
 app.get('/health', (req, res) => {
     const cacheStats = cacheService.getStats();
