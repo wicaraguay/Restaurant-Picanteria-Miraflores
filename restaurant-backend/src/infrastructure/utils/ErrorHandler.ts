@@ -76,9 +76,7 @@ export class ErrorHandler {
 
         // Handle unknown errors
         const statusCode = 500;
-        const message = process.env.NODE_ENV === 'production'
-            ? 'Internal server error'
-            : error.message;
+        const message = error.message;
 
         res.status(statusCode).json(
             ResponseFormatter.error(
