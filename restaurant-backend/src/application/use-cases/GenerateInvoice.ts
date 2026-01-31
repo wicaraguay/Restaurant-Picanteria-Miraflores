@@ -182,56 +182,94 @@ export class GenerateInvoice {
                 authResult = { estado: 'TIMEOUT_POLLING', mensajes: ['El SRI tardó demasiado en responder. Intente "Verificar Status" más tarde.'] };
             }
 
-            // 8. Persist Bill
-            await this.billRepository.upsert({
-                accessKey: invoice.info.claveAcceso,
-                documentNumber: `${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}`,
-                orderId: invoice.orderId,
-                date: now.toISOString(), // Storing as ISO String
-                documentType: 'Factura',
-                customerName: invoice.info.razonSocialComprador,
-                customerIdentification: invoice.info.identificacionComprador,
-                customerAddress: invoice.info.direccionComprador,
-                customerEmail: invoice.info.emailComprador,
-                items: details.map(d => ({
-                    name: d.descripcion,
-                    quantity: d.cantidad,
-                    price: d.precioUnitario,
-                    total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)
-                })),
-                subtotal: invoice.info.totalSinImpuestos,
-                tax: totalImpuestos,
-                total: invoice.info.importeTotal,
-                sriStatus: authResult.estado || result.estado,
-                environment: invoice.info.ambiente,
-                authorizationDate: authResult.fechaAutorizacion
-            });
+        } else if (result.estado === 'DEVUELTA') {
+            // Check for SEQUENCE REGISTERED Error explicitly
+            const responseStr = JSON.stringify(result);
+            if (responseStr.includes('ERROR SECUENCIAL REGISTRADO')) {
+                console.log('⚠️ Sequence Registered Error detected in GenerateInvoice. Auto-healing...');
 
-            // 9. Update Order
-            await this.orderRepository.update(invoice.orderId, { billed: true });
+                // AUTO-HEAL: Increment Sequence and Retry locally
+                const nextSequential = await this.configRepository.getNextSequential(); // Get NEW next (since previous one failed)
+                const newSecuencial = nextSequential.toString().padStart(9, '0');
+                console.log(`[GenerateInvoice] Retrying with NEW Sequence: ${invoice.info.secuencial} -> ${newSecuencial}`);
 
-            // 10. Send Email
-            // Skip email for Consumidor Final or invalid email addresses
-            const isConsumidorFinal = client.identification === '9999999999999';
-            const isValidEmail = client.email &&
-                !client.email.includes('consumidor@final') &&
-                !client.email.includes('noemail') &&
-                client.email.includes('@') &&
-                client.email.includes('.');
+                // Update Invoice Object
+                invoice.info.secuencial = newSecuencial;
+                // Regenerate XML
+                const newXml = this.sriService.generateInvoiceXML(invoice);
+                const newSignedXml = await this.sriService.signXML(newXml);
 
-            if (authResult.estado === 'AUTORIZADO' && !isConsumidorFinal && isValidEmail) {
-                console.log(`[GenerateInvoice] Sending email to ${client.email}`);
-                if (authResult.fechaAutorizacion) invoice.authorizationDate = authResult.fechaAutorizacion;
-                const pdfBuffer = await this.pdfService.generateInvoicePDF(invoice);
-                await this.emailService.sendInvoiceEmail(client.email, invoice, pdfBuffer, signedXml);
-            } else {
-                if (isConsumidorFinal) {
-                    console.log('[GenerateInvoice] Skipping email - Consumidor Final detected');
-                } else if (!isValidEmail) {
-                    console.log('[GenerateInvoice] Skipping email - Invalid or generic email address');
+                // Resend
+                const retryResult = await this.sriService.sendToSRI(newSignedXml, isProd);
+
+                if (retryResult.estado === 'RECIBIDA') {
+                    console.log('✅ Auto-heal successful. Invoice Received. Authorizing...');
+                    // Authorize NEW Access Key
+                    const retryAuth = await this.sriService.authorizeInvoice(invoice.info.claveAcceso!, isProd);
+                    if (retryAuth.estado === 'AUTORIZADO') {
+                        authResult = retryAuth;
+                        result.estado = 'RECIBIDA'; // Override original failure
+                    } else {
+                        authResult = retryAuth;
+                    }
                 } else {
-                    console.log('[GenerateInvoice] Skipping email - Invoice not authorized or no email provided');
+                    // If still fails, bad luck.
+                    console.log('❌ Auto-heal failed.', retryResult);
+                    authResult = { ...result, mensajes: [...(result.mensajes || []), ...retryResult.mensajes] };
                 }
+
+            }
+        }
+
+        // 8. Persist Bill
+        await this.billRepository.upsert({
+            accessKey: invoice.info.claveAcceso,
+            documentNumber: `${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}`,
+            orderId: invoice.orderId,
+            date: now.toISOString(), // Storing as ISO String
+            documentType: 'Factura',
+            customerName: invoice.info.razonSocialComprador,
+            customerIdentification: invoice.info.identificacionComprador,
+            customerAddress: invoice.info.direccionComprador,
+            customerEmail: invoice.info.emailComprador,
+            items: details.map(d => ({
+                name: d.descripcion,
+                quantity: d.cantidad,
+                price: d.precioUnitario,
+                total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)
+            })),
+            subtotal: invoice.info.totalSinImpuestos,
+            tax: totalImpuestos,
+            total: invoice.info.importeTotal,
+            sriStatus: authResult.estado || result.estado,
+            environment: invoice.info.ambiente,
+            authorizationDate: authResult.fechaAutorizacion
+        });
+
+        // 9. Update Order
+        await this.orderRepository.update(invoice.orderId, { billed: true });
+
+        // 10. Send Email
+        // Skip email for Consumidor Final or invalid email addresses
+        const isConsumidorFinal = client.identification === '9999999999999';
+        const isValidEmail = client.email &&
+            !client.email.includes('consumidor@final') &&
+            !client.email.includes('noemail') &&
+            client.email.includes('@') &&
+            client.email.includes('.');
+
+        if (authResult.estado === 'AUTORIZADO' && !isConsumidorFinal && isValidEmail) {
+            console.log(`[GenerateInvoice] Sending email to ${client.email}`);
+            if (authResult.fechaAutorizacion) invoice.authorizationDate = authResult.fechaAutorizacion;
+            const pdfBuffer = await this.pdfService.generateInvoicePDF(invoice);
+            await this.emailService.sendInvoiceEmail(client.email, invoice, pdfBuffer, signedXml);
+        } else {
+            if (isConsumidorFinal) {
+                console.log('[GenerateInvoice] Skipping email - Consumidor Final detected');
+            } else if (!isValidEmail) {
+                console.log('[GenerateInvoice] Skipping email - Invalid or generic email address');
+            } else {
+                console.log('[GenerateInvoice] Skipping email - Invoice not authorized or no email provided');
             }
         }
 
