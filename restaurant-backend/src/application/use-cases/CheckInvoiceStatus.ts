@@ -206,14 +206,101 @@ export class CheckInvoiceStatus {
         });
 
         // 3. Send Email
-        if (updatedBill && updatedBill.customerEmail) {
-            const config = await this.configRepository.get();
-            // Minimal reconstruction for PDF (Reusing logic or extracting to service would be better, but keeping inline for safety)
-            // ... PDF Logic ...
-            // For now, assuming PDF Service handles retrieval or we pass minimal data
-            // We'll skip complex PDF reconstruction properly here to avoid duplication bugs, 
-            // relying on the fact that if it's authorized, the user can download the PDF from frontend.
-            // Or we can implement a simple email notification.
+        // Validate Email conditions before doing heavy lifting
+        const isConsumidorFinal = bill.customerIdentification === '9999999999999';
+        const clientEmail = bill.customerEmail || '';
+        const isValidEmail = clientEmail &&
+            !clientEmail.includes('consumidor@final') &&
+            !clientEmail.includes('noemail') &&
+            clientEmail.includes('@');
+
+        if (!isConsumidorFinal && isValidEmail) {
+            try {
+                console.log(`[CheckInvoiceStatus] Preparing to send email to ${clientEmail}...`);
+
+                // Reconstruct Data for PDF/XML Generation
+                const config = await this.configRepository.get();
+                const info = config || {} as any;
+                const [estab, ptoEmi, secuencial] = bill.documentNumber.split('-');
+
+                const details = bill.items.map((item: any, index: number) => {
+                    const rawTotalSinImpuesto = item.price * item.quantity;
+                    const totalSinImpuesto = parseFloat(rawTotalSinImpuesto.toFixed(2));
+                    const taxValue = parseFloat((totalSinImpuesto * 0.15).toFixed(2));
+
+                    return {
+                        codigoPrincipal: item.id || `ITEM-${index + 1}`,
+                        descripcion: item.name,
+                        cantidad: item.quantity,
+                        precioUnitario: item.price,
+                        descuento: 0,
+                        precioTotalSinImpuesto: totalSinImpuesto,
+                        impuestos: [{
+                            codigo: '2',
+                            codigoPorcentaje: '4',
+                            tarifa: 15,
+                            baseImponible: totalSinImpuesto,
+                            valor: taxValue
+                        }]
+                    };
+                });
+
+                const invoiceObj: any = {
+                    info: {
+                        ambiente: isProd ? '2' : '1',
+                        tipoEmision: '1',
+                        razonSocial: info.businessName || process.env.BUSINESS_NAME,
+                        nombreComercial: info.name || process.env.COMMERCIAL_NAME,
+                        ruc: info.ruc,
+                        claveAcceso: bill.accessKey,
+                        codDoc: '01',
+                        estab: estab,
+                        ptoEmi: ptoEmi,
+                        secuencial: secuencial,
+                        dirMatriz: info.address || process.env.DIR_MATRIZ,
+                        dirEstablecimiento: info.address || process.env.DIR_ESTABLECIMIENTO,
+                        fechaEmision: bill.date instanceof Date ? bill.date.toLocaleDateString('es-EC').split('T')[0] : new Date(bill.date).toLocaleDateString('es-EC').split('T')[0], // Fallback formatting
+                        obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
+                        tipoIdentificacionComprador: this.getIdentificacionType(bill.customerIdentification),
+                        razonSocialComprador: bill.customerName,
+                        identificacionComprador: bill.customerIdentification,
+                        direccionComprador: bill.customerAddress,
+                        totalSinImpuestos: bill.subtotal,
+                        totalDescuento: 0,
+                        totalImpuestos: [],
+                        importeTotal: bill.total,
+                        moneda: 'DOLAR',
+                        formaPago: '01',
+                        emailComprador: clientEmail,
+                        authorizationDate: authResult.fechaAutorizacion // Crucial for PDF
+                    },
+                    detalles: details
+                };
+
+                // Quick Date Fix for XML Generation check
+                if (invoiceObj.info.fechaEmision.includes('-')) {
+                    // Ensure DD/MM/YYYY
+                    const d = new Date(bill.date);
+                    invoiceObj.info.fechaEmision = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+                }
+
+                // Regenerate XML & Sign (Required for email attachment)
+                const xml = this.sriService.generateInvoiceXML(invoiceObj);
+                const signedXml = await this.sriService.signXML(xml);
+
+                // Generate PDF
+                const pdfBuffer = await this.pdfService.generateInvoicePDF(invoiceObj);
+
+                // Send
+                await this.emailService.sendInvoiceEmail(clientEmail, invoiceObj, pdfBuffer, signedXml);
+                console.log(`[CheckInvoiceStatus] Email sent successfully to ${clientEmail}`);
+
+            } catch (emailError) {
+                console.error('[CheckInvoiceStatus] Failed to send email during recovery:', emailError);
+                // Non-blocking error
+            }
+        } else {
+            console.log('[CheckInvoiceStatus] Skipping email (Consumidor Final or Invalid Email).');
         }
 
         return { success: true, authorization: authResult };
