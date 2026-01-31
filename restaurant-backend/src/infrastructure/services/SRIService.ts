@@ -181,16 +181,7 @@ export class SRIService {
     </infoAdicional>
 </factura>`;
 
-        // Save unsigned XML for comparison
-        const debugDir = path.join(process.cwd(), 'debug-xml');
-        if (!fs.existsSync(debugDir)) {
-            fs.mkdirSync(debugDir, { recursive: true });
-        }
 
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const debugFilePath = path.join(debugDir, `invoice_unsigned_${timestamp}.xml`);
-        fs.writeFileSync(debugFilePath, xml.trim(), 'utf8');
-        console.log(`[SRIService] Unsigned invoice XML saved to: ${debugFilePath}`);
 
         return xml.trim();
     }
@@ -225,18 +216,7 @@ export class SRIService {
 
             console.log('[SRIService] XML signed successfully');
 
-            // Save complete signed XML to file for debugging
-            const debugDir = path.join(process.cwd(), 'debug-xml');
-            if (!fs.existsSync(debugDir)) {
-                fs.mkdirSync(debugDir, { recursive: true });
-            }
 
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const docType = xmlContent.includes('<factura') ? 'invoice' : 'creditnote';
-            const debugFilePath = path.join(debugDir, `${docType}_signed_${timestamp}.xml`);
-
-            fs.writeFileSync(debugFilePath, signedXml, 'utf8');
-            console.log(`[SRIService] Signed XML saved to: ${debugFilePath}`);
 
             console.log('==============================================');
             console.log('DEBUG: Signed XML (first 500 chars):');
@@ -531,20 +511,9 @@ export class SRIService {
     </infoAdicional>
 </notaCredito>`;
 
-        // Save unsigned XML for comparison
-        const debugDir = path.join(process.cwd(), 'debug-xml');
-        if (!fs.existsSync(debugDir)) {
-            fs.mkdirSync(debugDir, { recursive: true });
-        }
-
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const debugFilePath = path.join(debugDir, `creditnote_unsigned_${timestamp}.xml`);
-        fs.writeFileSync(debugFilePath, xml.trim(), 'utf8');
-
         console.log('==============================================');
         console.log('DEBUG: Generated Credit Note XML:');
         console.log(xml);
-        console.log(`[SRIService] Unsigned XML saved to: ${debugFilePath}`);
         console.log('==============================================');
 
         return xml.trim();
