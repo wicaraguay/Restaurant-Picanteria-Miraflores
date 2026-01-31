@@ -62,7 +62,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         try {
             const result = await authService.login(username, password);
 
-            if (result.success && result.user) {
+            if (result && result.user) {
                 setCurrentUser(result.user);
                 setToken(authService.loadSession()?.token || null);
                 return true;
