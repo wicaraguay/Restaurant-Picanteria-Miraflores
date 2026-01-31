@@ -37,21 +37,22 @@ export class MongoBillRepository extends BaseRepository<Bill> implements IBillRe
             doc.authorizationDate,
             doc.xmlUrl,
             doc.pdfUrl,
+            doc.hasCreditNote,
             doc.createdAt
         );
     }
 
     async upsert(bill: Partial<Bill>): Promise<Bill> {
         let doc;
-        if (bill.accessKey) {
-            doc = await this.model.findOneAndUpdate(
-                { accessKey: bill.accessKey },
+        if (bill.id) {
+            doc = await this.model.findByIdAndUpdate(
+                bill.id,
                 { $set: bill },
                 { new: true, upsert: true }
             );
-        } else if (bill.id) {
-            doc = await this.model.findByIdAndUpdate(
-                bill.id,
+        } else if (bill.accessKey) {
+            doc = await this.model.findOneAndUpdate(
+                { accessKey: bill.accessKey },
                 { $set: bill },
                 { new: true, upsert: true }
             );
@@ -60,6 +61,11 @@ export class MongoBillRepository extends BaseRepository<Bill> implements IBillRe
         }
 
         if (!doc) throw new Error('Failed to upsert bill');
+        return this.mapToEntity(doc);
+    }
+    async findByAccessKey(accessKey: string): Promise<Bill | null> {
+        const doc = await this.model.findOne({ accessKey });
+        if (!doc) return null;
         return this.mapToEntity(doc);
     }
 }

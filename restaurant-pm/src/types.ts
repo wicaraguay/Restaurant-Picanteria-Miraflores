@@ -229,6 +229,7 @@ export interface RestaurantConfig {
     regime: 'General' | 'RIMPE - Negocio Popular' | 'RIMPE - Emprendedor';
     // Secuenciales
     currentSequenceFactura: number;
+    currentSequenceNotaCredito: number;
     currentSequenceNotaVenta: number;
     // Impuestos
     taxRate?: number; // Porcentaje (e.g., 15 for 15%)

@@ -23,7 +23,11 @@ export class ResetBillingSystem {
 
         try {
             // 1. Resetear secuencias en Configuración
-            // Establecemos a 0 para que la siguiente sea 1
+            // 1. Resetear secuencias en Configuración
+            // MODIFICACIÓN: Resetear secuencias a 0 (A PEDIDO DE USUARIO).
+            // ADVERTENCIA: En PRUEBAS esto fallará si el RUC ya emitió facturas.
+            // En PRODUCCIÓN (cliente nuevo) funcionará perfecto para iniciar en 001.
+
             await RestaurantConfigModel.updateOne(
                 { _id: 'restaurant-config' },
                 {
@@ -34,7 +38,7 @@ export class ResetBillingSystem {
                     }
                 }
             );
-            logger.info('✅ Secuencias de facturación reiniciadas a 0');
+            logger.info('✅ Secuencias de facturación reiniciadas a 0 (Full Reset)');
 
             // 2. Eliminar todas las facturas
             const billsResult = await BillModel.deleteMany({});

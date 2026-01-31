@@ -289,8 +289,8 @@ const BillingHistory: React.FC = () => {
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <div className="font-bold text-primary-600">${bill.total.toFixed(2)}</div>
-                                            <div className="text-[10px] text-gray-400">Sub: ${bill.subtotal.toFixed(2)}</div>
+                                            <div className="font-bold text-primary-600">${(bill.total || 0).toFixed(2)}</div>
+                                            <div className="text-[10px] text-gray-400">Sub: ${(bill.subtotal || 0).toFixed(2)}</div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center mb-1">
@@ -356,23 +356,35 @@ const BillingHistory: React.FC = () => {
 
                                                 {/* SECONDARY ACTIONS (Manage) */}
 
-                                                {/* Credit Note (Only if Authorized & Not Cancelled) */}
-                                                {bill.sriStatus === 'AUTORIZADO' && !bill.hasCreditNote && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (bill.customerIdentification === '9999999999999') {
-                                                                alert('No se puede emitir NC a Consumidor Final.');
-                                                                return;
-                                                            }
-                                                            setSelectedBillForCreditNote(bill);
-                                                        }}
-                                                        className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all"
-                                                        title="Emitir Nota de Crédito"
-                                                    >
-                                                        <FileTextIcon className="w-4 h-4" />
-                                                    </button>
-                                                )}
+                                                {/* Credit Note (Always visible, disabled if not applicable) */}
+                                                <button
+                                                    disabled={
+                                                        bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ||
+                                                        bill.hasCreditNote ||
+                                                        bill.customerIdentification?.trim() === '9999999999999'
+                                                    }
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedBillForCreditNote(bill);
+                                                    }}
+                                                    className={`p-2 rounded-xl transition-all ${bill.sriStatus?.trim().toUpperCase() === 'AUTORIZADO' &&
+                                                        !bill.hasCreditNote &&
+                                                        bill.customerIdentification?.trim() !== '9999999999999'
+                                                        ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 cursor-pointer'
+                                                        : 'text-gray-200 dark:text-gray-700 cursor-not-allowed opacity-50'
+                                                        }`}
+                                                    title={
+                                                        bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO'
+                                                            ? "Solo facturas AUTORIZADAS pueden tener Nota de Crédito"
+                                                            : bill.hasCreditNote
+                                                                ? "Ya tiene Nota de Crédito"
+                                                                : bill.customerIdentification?.trim() === '9999999999999'
+                                                                    ? "No se puede emitir Nota de Crédito a Consumidor Final"
+                                                                    : "Emitir Nota de Crédito"
+                                                    }
+                                                >
+                                                    <FileTextIcon className="w-4 h-4" />
+                                                </button>
 
                                                 {/* Delete */}
                                                 <button

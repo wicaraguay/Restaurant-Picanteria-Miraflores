@@ -22,6 +22,7 @@ export interface IBillRepository {
     findAll(): Promise<Bill[]>;
     findPaginated(page: number, limit: number, filter?: any, sort?: any): Promise<PaginatedResult<Bill>>;
     findById(id: string): Promise<Bill | null>;
+    findByAccessKey(accessKey: string): Promise<Bill | null>;
     delete(id: string): Promise<boolean>;
     upsert(bill: Partial<Bill>): Promise<Bill>;
 }

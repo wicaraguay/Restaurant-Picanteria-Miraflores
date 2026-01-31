@@ -69,39 +69,49 @@ export class SRIService {
     /**
      * Genera el XML en formato string a partir del modelo de Factura
      */
-    public generateInvoiceXML(invoice: Invoice): string {
+    /**
+     * Genera el XML en formato string a partir del modelo de Factura
+     * @param existingAccessKey - (Optional) Use this key instead of generating a new one (for resending/retrying)
+     */
+    public generateInvoiceXML(invoice: Invoice, existingAccessKey?: string): string {
         console.log('Generating XML for invoice', invoice.info.secuencial);
 
-        // 1. Generate Access Key (Clave de Acceso)
-        // Format Date: dd/mm/yyyy -> ddMMyyyy
-        const dateParts = invoice.info.fechaEmision.split('/');
-        // Ensure padding if necessary (though localeDateString usually does it, safer to be sure)
-        const day = dateParts[0].padStart(2, '0');
-        const month = dateParts[1].padStart(2, '0');
-        const year = dateParts[2];
-        const fechaSimple = `${day}${month}${year}`;
+        let claveAcceso = existingAccessKey;
 
-        // Generate random 8-digit numeric code (CRITICAL for unique access keys)
-        // Each invoice must have a different random code to avoid SRI collisions
-        const codigoNumerico = Math.floor(10000000 + Math.random() * 90000000).toString();
+        if (!claveAcceso) {
+            // 1. Generate Access Key (Clave de Acceso)
+            // Format Date: dd/mm/yyyy -> ddMMyyyy
+            const dateParts = invoice.info.fechaEmision.split('/');
+            // Ensure padding if necessary (though localeDateString usually does it, safer to be sure)
+            const day = dateParts[0].padStart(2, '0');
+            const month = dateParts[1].padStart(2, '0');
+            const year = dateParts[2];
+            const fechaSimple = `${day}${month}${year}`;
 
-        const keyPayload =
-            fechaSimple +
-            '01' + // CodDoc (Factura)
-            invoice.info.ruc +
-            invoice.info.ambiente +
-            invoice.info.estab +
-            invoice.info.ptoEmi +
-            invoice.info.secuencial +
-            codigoNumerico +
-            '1'; // Tipo Emision (Normal)
+            // Generate random 8-digit numeric code (CRITICAL for unique access keys)
+            // Each invoice must have a different random code to avoid SRI collisions
+            const codigoNumerico = Math.floor(10000000 + Math.random() * 90000000).toString();
 
-        const digitoVerificador = this.calculateMod11(keyPayload);
-        const claveAcceso = keyPayload + digitoVerificador;
+            const keyPayload =
+                fechaSimple +
+                '01' + // CodDoc (Factura)
+                invoice.info.ruc +
+                invoice.info.ambiente +
+                invoice.info.estab +
+                invoice.info.ptoEmi +
+                invoice.info.secuencial +
+                codigoNumerico +
+                '1'; // Tipo Emision (Normal)
 
-        // Save generated key to invoice
+            const digitoVerificador = this.calculateMod11(keyPayload);
+            claveAcceso = keyPayload + digitoVerificador;
+        } else {
+            console.log('[SRIService] Using EXISTING Access Key for regeneration:', claveAcceso);
+        }
+
+        // Save key to invoice
         invoice.info.claveAcceso = claveAcceso;
-        console.log('Generated Access Key:', claveAcceso);
+        console.log('Generated/Used Access Key:', claveAcceso);
 
         // Mock XML structure for now (Reused from previous implementation)
         const xml = `
@@ -196,33 +206,44 @@ export class SRIService {
 
             const signaturePath = process.env.SRI_SIGNATURE_PATH;
             const signaturePassword = process.env.SRI_SIGNATURE_PASSWORD;
+            // 1. Try to load from Base64 (Preferred for Cloud/Render)
+            const p12Base64 = process.env.SRI_SIGNATURE_BASE64;
 
-            if (!signaturePath || !signaturePassword) {
-                throw new Error('SRI Signature configuration missing (.env)');
+            if ((!signaturePath && !p12Base64) || !signaturePassword) {
+                throw new Error('SRI Signature configuration missing. You must provide either SRI_SIGNATURE_PATH or SRI_SIGNATURE_BASE64, and SRI_SIGNATURE_PASSWORD.');
             }
 
-            let p12Path = path.resolve(process.cwd(), signaturePath);
+            let p12Buffer: Buffer;
 
-            // Smart Fallback for Render/Cloud Environments
-            // If the configured path (relative) doesn't exist, check the standard /etc/secrets/ directory used by Render Secret Files
-            if (!fs.existsSync(p12Path)) {
-                const filename = path.basename(signaturePath);
-                const renderSecretPath = path.join('/etc/secrets', filename);
+            if (p12Base64) {
+                console.log('[SRIService] Loading P12 from Environment Variable (Base64)...');
+                p12Buffer = Buffer.from(p12Base64, 'base64');
+            } else {
+                // 2. Fallback to File System if Base64 is missing
+                if (!signaturePath) throw new Error('SRI_SIGNATURE_PATH is missing'); // Should not happen due to initial check
 
-                if (fs.existsSync(renderSecretPath)) {
-                    console.log(`[SRIService] Configured path (${p12Path}) not found. Using Render Secret at: ${renderSecretPath}`);
-                    p12Path = renderSecretPath;
-                } else {
-                    // Only throw if NEITHER exists
-                    throw new Error(`Signature file not found at: ${p12Path} OR ${renderSecretPath} (Ensure the file is uploaded to Render Secret Files)`);
+                let p12Path = path.resolve(process.cwd(), signaturePath);
+
+                // Smart Fallback for Render/Cloud Environments
+                if (!fs.existsSync(p12Path)) {
+                    const filename = path.basename(signaturePath!);
+                    const renderSecretPath = path.join('/etc/secrets', filename);
+
+                    if (fs.existsSync(renderSecretPath)) {
+                        console.log(`[SRIService] Configured path (${p12Path}) not found. Using Render Secret at: ${renderSecretPath}`);
+                        p12Path = renderSecretPath;
+                    } else {
+                        // Only throw if NEITHER exists
+                        throw new Error(`Signature file not found at: ${p12Path} OR ${renderSecretPath} (Ensure the file is uploaded to Render Secret Files OR set SRI_SIGNATURE_BASE64)`);
+                    }
                 }
-            }
 
-            const p12Buffer = fs.readFileSync(p12Path);
-            console.log(`[SRIService] P12 file loaded from ${p12Path}. Size: ${p12Buffer.length} bytes`);
+                p12Buffer = fs.readFileSync(p12Path);
+                console.log(`[SRIService] P12 file loaded from ${p12Path}. Size: ${p12Buffer.length} bytes`);
+            }
 
             if (p12Buffer.length === 0) {
-                throw new Error(`The P12 file at ${p12Path} is empty (0 bytes)! Please re-upload it.`);
+                throw new Error('The loaded P12 certificate is empty (0 bytes)!');
             }
 
             // Use appropriate signer based on document type
@@ -312,6 +333,14 @@ export class SRIService {
                 if (mensajeMatch) mensajes.push(mensajeMatch[1]);
             }
 
+            // 5. Check for common errors in messages to provide better feedback
+            if (mensajes.length > 0) {
+                const combinedMessages = mensajes.join(' ');
+                if (combinedMessages.includes('ERROR SECUENCIAL REGISTRADO')) {
+                    throw new Error('Error de Secuencia: El número de factura ya existe en el SRI. Por favor, actualice el secuencial en la configuración o use el script de arreglo.');
+                }
+            }
+
             return {
                 estado: estado, // RECIBIDA or DEVUELTA
                 rawResponse: responseBody,
@@ -323,6 +352,10 @@ export class SRIService {
             // Check if it's an axios error with response
             if (error.response) {
                 console.error('SRI Error Data:', error.response.data);
+            }
+            // Propagate specific errors (like the unexpected one we just threw)
+            if (error.message.includes('Error de Secuencia')) {
+                throw error;
             }
             throw new Error('Failed to connect to SRI Web Service');
         }
@@ -598,6 +631,14 @@ export class SRIService {
                 console.log('Full SRI Response (Debug):', responseBody);
                 const mensajeMatch = responseBody.match(/<mensaje>(.*?)<\/mensaje>/);
                 if (mensajeMatch) mensajes.push(mensajeMatch[1]);
+            }
+
+            // Check for common errors in messages
+            if (mensajes.length > 0) {
+                const combinedMessages = mensajes.join(' ');
+                if (combinedMessages.includes('ERROR SECUENCIAL REGISTRADO')) {
+                    throw new Error('Error de Secuencia: El número de NOTA DE CRÉDITO ya existe en el SRI. Por favor, actualice el secuencial en la configuración.');
+                }
             }
 
             return {

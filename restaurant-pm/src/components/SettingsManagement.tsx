@@ -793,6 +793,59 @@ const SettingsManagement: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Secuencias de Facturación (Avanzado) */}
+                        <div className="mt-6 p-4 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-100 dark:border-orange-800/30">
+                            <h4 className="text-sm font-bold text-orange-800 dark:text-orange-400 mb-2 flex items-center gap-2">
+                                <span className="text-lg">⚠️</span> Configuración de Secuenciales (Avanzado)
+                            </h4>
+                            <p className="text-xs text-orange-700 dark:text-orange-300 mb-4 leading-relaxed">
+                                Modifique estos valores <strong>SOLO</strong> si necesita sincronizar el sistema con una facturación física o electrónica anterior.
+                                El número ingresado será el <strong>ÚLTIMO</strong> emitido (el sistema usará el siguiente: n+1).
+                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="seqFactura" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Secuencia Actual Facturas
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-gray-400 font-mono text-sm">{billingConfig.establishment}-{billingConfig.emissionPoint}-</span>
+                                        <input
+                                            type="number"
+                                            id="seqFactura"
+                                            value={billingConfig.currentSequenceFactura}
+                                            onChange={(e) => setBillingConfig({ ...billingConfig, currentSequenceFactura: parseInt(e.target.value) || 0 })}
+                                            className={`${inputClass} font-mono`}
+                                            min="0"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Siguiente a emitir: <strong>{(billingConfig.currentSequenceFactura || 0) + 1}</strong>
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label htmlFor="seqNC" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Secuencia Actual Notas de Crédito
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-gray-400 font-mono text-sm">{billingConfig.establishment}-{billingConfig.emissionPoint}-</span>
+                                        <input
+                                            type="number"
+                                            id="seqNC"
+                                            value={billingConfig.currentSequenceNotaCredito || 0}
+                                            onChange={(e) => setBillingConfig({ ...billingConfig, currentSequenceNotaCredito: parseInt(e.target.value) || 0 })}
+                                            className={`${inputClass} font-mono`}
+                                            min="0"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Siguiente a emitir: <strong>{(billingConfig.currentSequenceNotaCredito || 0) + 1}</strong>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="flex justify-end pt-2">
                             <button type="submit" className="bg-green-600 text-white px-6 py-2.5 rounded-lg hover:bg-green-700 text-sm font-bold shadow-sm transition-all transform hover:scale-[1.02]">
                                 Guardar Datos Facturación
