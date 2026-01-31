@@ -47,5 +47,6 @@ export const defaultRestaurantConfig: RestaurantConfig = {
         // Secuenciales
         currentSequenceFactura: 1,
         currentSequenceNotaVenta: 1,
+        currentSequenceNotaCredito: 1,
     },
 };
