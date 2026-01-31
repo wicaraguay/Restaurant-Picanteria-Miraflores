@@ -201,9 +201,21 @@ export class SRIService {
                 throw new Error('SRI Signature configuration missing (.env)');
             }
 
-            const p12Path = path.resolve(process.cwd(), signaturePath);
+            let p12Path = path.resolve(process.cwd(), signaturePath);
+
+            // Smart Fallback for Render/Cloud Environments
+            // If the configured path (relative) doesn't exist, check the standard /etc/secrets/ directory used by Render Secret Files
             if (!fs.existsSync(p12Path)) {
-                throw new Error(`Signature file not found at: ${p12Path}`);
+                const filename = path.basename(signaturePath);
+                const renderSecretPath = path.join('/etc/secrets', filename);
+
+                if (fs.existsSync(renderSecretPath)) {
+                    console.log(`[SRIService] Configured path (${p12Path}) not found. Using Render Secret at: ${renderSecretPath}`);
+                    p12Path = renderSecretPath;
+                } else {
+                    // Only throw if NEITHER exists
+                    throw new Error(`Signature file not found at: ${p12Path} OR ${renderSecretPath} (Ensure the file is uploaded to Render Secret Files)`);
+                }
             }
 
             const p12Buffer = fs.readFileSync(p12Path);
