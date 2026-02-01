@@ -111,9 +111,11 @@ export class CheckInvoiceStatus {
                             dirMatriz: info.address,
                             dirEstablecimiento: info.address,
                             fechaEmision: ((dateStr) => {
-                                const dObj = new Date(dateStr);
+                                // CRITICAL FIX: When RE-SENDING, we must use the CURRENT DATE (Today)
+                                // If we use the old date, SRI rejects with "Transmisión NO en tiempo real"
+                                const now = new Date();
                                 const options: Intl.DateTimeFormatOptions = { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' };
-                                const parts = new Intl.DateTimeFormat('es-EC', options).formatToParts(dObj);
+                                const parts = new Intl.DateTimeFormat('es-EC', options).formatToParts(now);
                                 const d = parts.find(p => p.type === 'day')?.value;
                                 const m = parts.find(p => p.type === 'month')?.value;
                                 const y = parts.find(p => p.type === 'year')?.value;
@@ -147,6 +149,7 @@ export class CheckInvoiceStatus {
                     await this.billRepository.upsert({
                         id: fullBill.id,
                         accessKey: invoiceToResend.info.claveAcceso,
+                        date: new Date().toISOString(), // CRITICAL: Sync DB date with new Invoice Date
                         sriStatus: 'PENDING_RETRY'
                     });
                     // Update local ref
