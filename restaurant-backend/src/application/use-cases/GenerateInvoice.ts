@@ -138,8 +138,8 @@ export class GenerateInvoice {
         if (result.estado === 'RECIBIDA' || isAlreadyRegistered) {
             // Polling Logic for Authorization (SRI 2026 Resilience)
             // If SRI says "Already Registered" or "Processing", we must wait and check authorization consistently.
-            // We will attempt to authorize/check status up to 20 times with 3s delays (Total ~60s).
-            const maxAttempts = 20;
+            // We will attempt to authorize/check status up to 5 times with 3s delays (Total ~15s).
+            const maxAttempts = 5;
             let attempts = 0;
 
             console.log(`[GenerateInvoice] Starting Authorization Polling (Max ${maxAttempts} attempts)`);
