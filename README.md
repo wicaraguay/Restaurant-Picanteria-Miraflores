@@ -31,26 +31,6 @@ This project serves as a case study in **AI-Native Engineering**. It was develop
 
 The backend follows **Hexagonal Architecture** to ensure testability and flexibility:
 
-```mermaid
-graph TD
-    Client[React Clients] --> API[API Adapter (Controllers)]
-    
-    subgraph "Core Domain (Business Logic)"
-        UC[Use Cases] --> Domain[Entities & Rules]
-    end
-    
-    API --> UC
-    
-    subgraph "Infrastructure Adapters"
-        UC --> RepoAdapter[Mongo Repository]
-        UC --> SRIAdapter[SRI SOAP Service]
-        UC --> EmailAdapter[SMTP Service]
-    end
-    
-    RepoAdapter --> DB[(MongoDB)]
-    SRIAdapter --> Gov[SRI Government API]
-```
-
 ### Tech Stack
 
 - **Frontend**: React 18, Vite, Tailwind CSS, Recharts (Data Visualization).
@@ -102,7 +82,6 @@ graph TD
 
 <br><br>
 
-# 🇪🇸 Versión en Español
 
 # 🍽️ Restaurant PM - Sistema de Gestión y Facturación Electrónica
 
