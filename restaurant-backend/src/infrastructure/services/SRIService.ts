@@ -349,15 +349,60 @@ export class SRIService {
 
         } catch (error: any) {
             console.error('Error sending to SRI:', error.message);
+
             // Check if it's an axios error with response
             if (error.response) {
                 console.error('SRI Error Data:', error.response.data);
+
+                // IMPROVED ERROR HANDLING: Distinguish between SRI server errors and connectivity issues
+                if (error.response.status === 500) {
+                    // SRI Server Error (Internal Server Error)
+                    const errorData = error.response.data;
+
+                    // Check if it's a database error from SRI
+                    if (errorData && (
+                        errorData.includes('GenericJDBCException') ||
+                        errorData.includes('could not execute statement') ||
+                        errorData.includes('soap:Server')
+                    )) {
+                        throw new Error(
+                            '⚠️ El servicio del SRI está experimentando problemas internos (Error 500). ' +
+                            'Esto no es un problema de tu aplicación. Por favor, intenta nuevamente en 15-30 minutos. ' +
+                            'Si el problema persiste, verifica el estado del SRI en https://www.sri.gob.ec'
+                        );
+                    }
+
+                    // Generic 500 error
+                    throw new Error(
+                        '⚠️ El servidor del SRI está temporalmente no disponible (Error 500). ' +
+                        'Por favor, intenta nuevamente en unos minutos.'
+                    );
+                }
+
+                // Other HTTP errors (400, 401, 403, etc.)
+                throw new Error(
+                    `Error del SRI (HTTP ${error.response.status}): ${error.message}. ` +
+                    'Verifica tu configuración o contacta con soporte técnico del SRI.'
+                );
             }
+
             // Propagate specific errors (like the unexpected one we just threw)
             if (error.message.includes('Error de Secuencia')) {
                 throw error;
             }
-            throw new Error('Failed to connect to SRI Web Service');
+
+            // Network/Connectivity errors (no response from server)
+            if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+                throw new Error(
+                    '🔌 No se pudo conectar al servicio del SRI. ' +
+                    'Verifica tu conexión a internet o que el SRI no esté en mantenimiento.'
+                );
+            }
+
+            // Generic fallback
+            throw new Error(
+                'Failed to connect to SRI Web Service: ' + error.message
+            );
         }
     }
 
@@ -649,10 +694,46 @@ export class SRIService {
 
         } catch (error: any) {
             console.error('Error sending Credit Note to SRI:', error.message);
+
             if (error.response) {
                 console.error('SRI Error Data:', error.response.data);
+
+                // IMPROVED ERROR HANDLING: Same as invoice sending
+                if (error.response.status === 500) {
+                    const errorData = error.response.data;
+
+                    if (errorData && (
+                        errorData.includes('GenericJDBCException') ||
+                        errorData.includes('could not execute statement') ||
+                        errorData.includes('soap:Server')
+                    )) {
+                        throw new Error(
+                            '⚠️ El servicio del SRI está experimentando problemas internos (Error 500). ' +
+                            'Esto no es un problema de tu aplicación. Por favor, intenta nuevamente en 15-30 minutos. ' +
+                            'Si el problema persiste, verifica el estado del SRI en https://www.sri.gob.ec'
+                        );
+                    }
+
+                    throw new Error(
+                        '⚠️ El servidor del SRI está temporalmente no disponible (Error 500). ' +
+                        'Por favor, intenta nuevamente en unos minutos.'
+                    );
+                }
+
+                throw new Error(
+                    `Error del SRI (HTTP ${error.response.status}): ${error.message}. ` +
+                    'Verifica tu configuración o contacta con soporte técnico del SRI.'
+                );
             }
-            throw new Error('Failed to connect to SRI Web Service for Credit Note');
+
+            if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+                throw new Error(
+                    '🔌 No se pudo conectar al servicio del SRI. ' +
+                    'Verifica tu conexión a internet o que el SRI no esté en mantenimiento.'
+                );
+            }
+
+            throw new Error('Failed to connect to SRI Web Service for Credit Note: ' + error.message);
         }
     }
 
