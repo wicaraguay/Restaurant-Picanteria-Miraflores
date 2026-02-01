@@ -306,20 +306,24 @@ export class GenerateInvoice {
      */
     private validateRealTimeTransmission(fechaEmision: string): void {
         const [day, month, year] = fechaEmision.split('/').map(Number);
-        const invoiceDate = new Date(year, month - 1, day);
-        const today = new Date();
 
-        // Reset time to midnight for date-only comparison
-        invoiceDate.setHours(0, 0, 0, 0);
-        today.setHours(0, 0, 0, 0);
+        // CRITICAL FIX: Use Ecuador Time for "Today" comparison, not Server Time (UTC)
+        // This prevents false positives when Server is in tomorrow (UTC) but Ecuador is still today
+        const now = new Date();
+        const options: Intl.DateTimeFormatOptions = { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const parts = new Intl.DateTimeFormat('es-EC', options).formatToParts(now);
 
-        const diffMs = Math.abs(today.getTime() - invoiceDate.getTime());
-        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        const ecuadorDay = parseInt(parts.find(p => p.type === 'day')?.value || '0');
+        const ecuadorMonth = parseInt(parts.find(p => p.type === 'month')?.value || '0');
+        const ecuadorYear = parseInt(parts.find(p => p.type === 'year')?.value || '0');
 
-        if (diffDays > 0) {
+        // Compare explicit Date components
+        const isSameDate = day === ecuadorDay && month === ecuadorMonth && year === ecuadorYear;
+
+        if (!isSameDate) {
             throw new Error(
-                `Transmisión NO en tiempo real: La fecha de emisión (${fechaEmision}) debe ser la fecha actual según la Resolución SRI NAC-DGERCGC25-00000017 vigente desde el 01/01/2026. ` +
-                `Las facturas deben transmitirse de forma INMEDIATA en el momento de su emisión.`
+                `Transmisión NO en tiempo real: La fecha de emisión (${fechaEmision}) debe ser la fecha actual (${ecuadorDay.toString().padStart(2, '0')}/${ecuadorMonth.toString().padStart(2, '0')}/${ecuadorYear}) según la Resolución SRI NAC-DGERCGC25-00000017. ` +
+                `Las facturas deben transmitirse de forma INMEDIATA (Zona Horaria Ecuador).`
             );
         }
     }
