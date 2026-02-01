@@ -54,7 +54,9 @@ export class CheckInvoiceStatus {
         const isNotFound = authResult.rawResponse && authResult.rawResponse.includes('<numeroComprobantes>0</numeroComprobantes>');
         const isRejected = authResult.estado === 'NO AUTORIZADO';
 
-        if (isNotFound || authResult.estado === 'UNKNOWN' || isRejected) {
+        // If it's Not Found (0 auths), Unknown, Rejected, OR 'EN PROCESO' (which usually means 0 auths found),
+        // We must Attempt Re-send/Recovery to be sure.
+        if (isNotFound || authResult.estado === 'UNKNOWN' || isRejected || authResult.estado === 'EN PROCESO') {
             console.log(`[CheckInvoiceStatus] Invoice Status: ${authResult.estado}. Attempting RECOVERY/RESEND...`);
 
             // Fetch full bill data to reconstruct XML
@@ -154,15 +156,31 @@ export class CheckInvoiceStatus {
                     console.log('[CheckInvoiceStatus] Resending to Reception...');
                     const receptionResult = await this.sriService.sendToSRI(signedXml, isProd);
 
-                    if (receptionResult.estado === 'RECIBIDA') {
-                        console.log('[CheckInvoiceStatus] Resend Successful (RECIBIDA). Checking Authorization again...');
+                    const responseStr = JSON.stringify(receptionResult);
+                    const isProcessing = receptionResult.estado === 'DEVUELTA' && responseStr.includes('CLAVE DE ACCESO EN PROCESAMIENTO');
 
+                    if (receptionResult.estado === 'RECIBIDA' || isProcessing) {
+                        if (isProcessing) {
+                            console.log('⚠️ Status is PROCESAMIENTO (DEVUELTA). Treating as RECIBIDA and polling for Authorization...');
+                        } else {
+                            console.log('[CheckInvoiceStatus] Resend Successful (RECIBIDA). Checking Authorization again...');
+                        }
+
+                        // Check Authorization logic...
                         // Check Authorization logic...
                         let newAuthResult;
                         let retryAttempts = 0;
-                        while (retryAttempts < 4) {
+                        const maxRetries = 10; // Reduced to ~30 seconds (10 * 3s)
+
+                        console.log(`[CheckInvoiceStatus] Polling for Authorization (Max ${maxRetries} attempts)...`);
+
+                        while (retryAttempts < maxRetries) {
                             retryAttempts++;
-                            await new Promise(r => setTimeout(r, 2000));
+                            await new Promise(r => setTimeout(r, 3000));
+
+                            // Log progress
+                            if (retryAttempts % 5 === 0) console.log(`[CheckInvoiceStatus] Authorization polling attempt ${retryAttempts}/${maxRetries}...`);
+
                             newAuthResult = await this.sriService.authorizeInvoice(fullBill.accessKey!, isProd);
                             if (newAuthResult && newAuthResult.estado === 'AUTORIZADO') break;
                             if (newAuthResult && newAuthResult.estado === 'NO AUTORIZADO') break;
@@ -180,7 +198,7 @@ export class CheckInvoiceStatus {
                         console.log('[CheckInvoiceStatus] Resend Failed:', receptionResult.estado);
 
                         // Check for SEQUENCE REGISTERED Error explicitly
-                        const responseStr = JSON.stringify(receptionResult);
+                        // responseStr is already defined above
                         if (responseStr.includes('ERROR SECUENCIAL REGISTRADO')) {
                             console.log('⚠️ Sequence Registered Error detected in CheckInvoiceStatus. Auto-healing...');
 
