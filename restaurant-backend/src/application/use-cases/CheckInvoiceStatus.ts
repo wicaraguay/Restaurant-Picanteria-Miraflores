@@ -156,8 +156,8 @@ export class CheckInvoiceStatus {
                             retryAttempts++;
                             await new Promise(r => setTimeout(r, 2000));
                             newAuthResult = await this.sriService.authorizeInvoice(fullBill.accessKey!, isProd);
-                            if (newAuthResult.estado === 'AUTORIZADO') break;
-                            if (newAuthResult.estado === 'NO AUTORIZADO') break;
+                            if (newAuthResult && newAuthResult.estado === 'AUTORIZADO') break;
+                            if (newAuthResult && newAuthResult.estado === 'NO AUTORIZADO') break;
                         }
 
                         // If we got a result (even denied), return it so UI updates
@@ -168,7 +168,70 @@ export class CheckInvoiceStatus {
                             // If NO AUTORIZADO/OTHERS after retry, return it
                             authResult = newAuthResult;
                         }
+                    } else if (receptionResult.estado === 'DEVUELTA') {
+                        console.log('[CheckInvoiceStatus] Resend Failed:', receptionResult.estado);
+
+                        // Check for SEQUENCE REGISTERED Error explicitly
+                        const responseStr = JSON.stringify(receptionResult);
+                        if (responseStr.includes('ERROR SECUENCIAL REGISTRADO')) {
+                            console.log('⚠️ Sequence Registered Error detected in CheckInvoiceStatus. Auto-healing...');
+
+                            // AUTO-HEAL: Increment Sequence and Retry locally
+                            const nextSequential = await this.configRepository.getNextSequential();
+                            const newSecuencial = nextSequential.toString().padStart(9, '0');
+                            console.log(`[CheckInvoiceStatus] Retrying with NEW Sequence: ${invoiceToResend.info.secuencial} -> ${newSecuencial}`);
+
+                            // Update Invoice Object
+                            invoiceToResend.info.secuencial = newSecuencial;
+
+                            // Update Document Number in DB so we don't prefer old one
+                            const [estab, ptoEmi, oldSeq] = fullBill.documentNumber.split('-');
+                            (fullBill as any).documentNumber = `${estab}-${ptoEmi}-${newSecuencial}`;
+
+                            // Regenerate XML
+                            const newXml = this.sriService.generateInvoiceXML(invoiceToResend); // key will be generated inside or passed undefined
+                            const newSignedXml = await this.sriService.signXML(newXml);
+
+                            // Extract correct access key from XML or object (SRIService updates object?)
+                            // SRIService.generateInvoiceXML usually updates info.claveAcceso or returns it.
+                            // We need the NEW access key generated.
+                            // Actually, SRIService.generateInvoiceXML calculates key if not present or passed.
+                            // Let's assume we pass undefined key to force regeneration.
+                            const finalXmlKey = invoiceToResend.info.claveAcceso;
+
+                            // Resend
+                            const retryResult = await this.sriService.sendToSRI(newSignedXml, isProd);
+
+                            if (retryResult.estado === 'RECIBIDA') {
+                                console.log('✅ Auto-heal successful. Invoice Received. Authorizing...');
+
+                                // Update DB with FINAL Key and Document Number
+                                await this.billRepository.upsert({
+                                    id: fullBill.id,
+                                    accessKey: finalXmlKey,
+                                    documentNumber: fullBill.documentNumber,
+                                    sriStatus: 'PENDING_RETRY'
+                                });
+
+                                // Authorize NEW Access Key
+                                const retryAuth = await this.sriService.authorizeInvoice(finalXmlKey, isProd);
+                                if (retryAuth && retryAuth.estado === 'AUTORIZADO') {
+                                    return await this.handleSuccess({ ...fullBill, accessKey: finalXmlKey }, retryAuth, isProd);
+                                } else {
+                                    authResult = retryAuth;
+                                }
+                            } else {
+                                // If still fails
+                                console.log('❌ Auto-heal failed.', retryResult);
+                                authResult = { ...authResult, estado: retryResult.estado, mensajes: retryResult.mensajes };
+                            }
+
+                        } else {
+                            // Other DEVUELTA error
+                            authResult = { ...authResult, estado: receptionResult.estado, mensajes: receptionResult.mensajes };
+                        }
                     } else {
+                        // Other error
                         console.log('[CheckInvoiceStatus] Resend Failed:', receptionResult.estado);
                         authResult = { ...authResult, estado: receptionResult.estado, mensajes: receptionResult.mensajes };
                     }
