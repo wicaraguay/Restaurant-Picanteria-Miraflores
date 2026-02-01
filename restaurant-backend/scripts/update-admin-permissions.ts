@@ -1,4 +1,6 @@
 
+/// <reference types="node" />
+
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { RoleModel } from '../src/infrastructure/database/schemas/RoleSchema';
@@ -14,8 +16,7 @@ const updatePermissions = async () => {
         console.log('Connected.');
 
         const roleName = 'Administrador';
-        // Cast to any to avoid TS errors with dynamic Map/Object types
-        const role = await RoleModel.findOne({ name: roleName }) as any;
+        const role = await RoleModel.findOne({ name: roleName });
 
         if (!role) {
             console.error(`Role '${roleName}' not found.`);
@@ -24,19 +25,45 @@ const updatePermissions = async () => {
 
         console.log(`Updating permissions for role: ${roleName}`);
 
-        // Add analytics permission
-        // Mongoose maps need .set, but plain objects need assignment
-        if (role.permissions && typeof role.permissions.set === 'function') {
-            role.permissions.set('analytics', true);
-        } else {
-            role.permissions['analytics'] = true;
+        // Define strict list of current permissions
+        const permissions = [
+            'dashboard',
+            'orders',
+            'menu',
+            'kitchen',
+            'hr',
+            'settings',
+            'billing'
+        ];
+
+        // Ensure permissions property exists and is a Map
+        if (!role.permissions) {
+            role.permissions = new Map();
         }
 
-        // Always mark as modified for Mixed/Map types
-        role.markModified('permissions');
+        // We know it's a Map because of the Schema definition
+        const permsMap = role.permissions as unknown as Map<string, boolean>;
 
+        // Set all active permissions to true
+        permissions.forEach(p => {
+            console.log(`Granting ${p}...`);
+            permsMap.set(p, true);
+        });
+
+        // Remove obsolete 'analytics' permission if it exists
+        if (permsMap.has('analytics')) {
+            console.log('Removing obsolete analytics permission...');
+            permsMap.set('analytics', false); // Or delete: permsMap.delete('analytics');
+            // Keeping it false might be safer if some old code checks it, but delete is cleaner.
+            // Let's just set to true 'dashboard' which covers it now.
+            permsMap.delete('analytics');
+        }
+
+        role.markModified('permissions');
         await role.save();
+
         console.log('Permissions updated successfully.');
+        console.log('Current Permissions:', Object.fromEntries(permsMap));
 
     } catch (error) {
         console.error('Error updating permissions:', error);
