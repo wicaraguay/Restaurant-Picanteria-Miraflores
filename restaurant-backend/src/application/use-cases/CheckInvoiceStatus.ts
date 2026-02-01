@@ -322,6 +322,12 @@ export class CheckInvoiceStatus {
                 // Reconstruct Data for PDF/XML Generation
                 const config = await this.configRepository.get();
                 const info = config || {} as any;
+                
+                // DEBUG: Log logo information
+                console.log('[CheckInvoiceStatus] Config fiscalLogo:', info.fiscalLogo);
+                console.log('[CheckInvoiceStatus] Config logo:', info.logo);
+                console.log('[CheckInvoiceStatus] Final logoUrl will be:', info.fiscalLogo || info.logo);
+                
                 const [estab, ptoEmi, secuencial] = bill.documentNumber.split('-');
 
                 const details = bill.items.map((item: any, index: number) => {
@@ -373,6 +379,10 @@ export class CheckInvoiceStatus {
                         moneda: 'DOLAR',
                         formaPago: '01',
                         emailComprador: clientEmail,
+                        logoUrl: info.fiscalLogo || info.logo, // CRITICAL: Include logo for email PDF
+                        emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM,
+                        telefonoComprador: bill.customerPhone || 'S/N',
+                        tasaIva: (info.billing?.taxRate || 15).toString(),
                         authorizationDate: authResult.fechaAutorizacion // Crucial for PDF
                     },
                     detalles: details

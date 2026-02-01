@@ -56,22 +56,30 @@ export class PDFService {
                 let y = 10;
 
                 // --- Logo ---
+                console.log('[PDFService Ticket] invoice.info.logoUrl:', invoice.info.logoUrl);
+                
                 if (invoice.info.logoUrl) {
                     try {
+                        console.log('[PDFService Ticket] Attempting to load logo...');
                         let logo: Buffer;
                         if (invoice.info.logoUrl.startsWith('data:')) {
+                            console.log('[PDFService Ticket] Logo is base64 encoded');
                             const base64Data = invoice.info.logoUrl.split(';base64,').pop();
                             logo = Buffer.from(base64Data || '', 'base64');
                         } else {
+                            console.log('[PDFService Ticket] Logo is URL, fetching:', invoice.info.logoUrl);
                             const response = await axios.get(invoice.info.logoUrl, { responseType: 'arraybuffer' });
                             logo = Buffer.from(response.data);
                         }
                         // Fit logo in 160px width centered (approx 70% of ticket width)
                         doc.image(logo, (226 - 160) / 2, y, { fit: [160, 100], align: 'center' });
+                        console.log('[PDFService Ticket] Logo added successfully to PDF');
                         y += 105;
                     } catch (e) {
-                        console.warn('Ticket Logo Error', e);
+                        console.error('[PDFService Ticket] Logo Error:', e);
                     }
+                } else {
+                    console.log('[PDFService Ticket] No logoUrl provided, skipping logo');
                 }
 
                 // --- Invoice Header Info ---
@@ -221,26 +229,33 @@ export class PDFService {
         // --- Logo Section (Left) ---
         let currentLeftY = topY;
 
+        console.log('[PDFService A4] invoice.info.logoUrl:', invoice.info.logoUrl);
+        
         if (invoice.info.logoUrl) {
             try {
+                console.log('[PDFService A4] Attempting to load logo...');
                 let logo: Buffer;
                 if (invoice.info.logoUrl.startsWith('data:')) {
+                    console.log('[PDFService A4] Logo is base64 encoded');
                     const base64Data = invoice.info.logoUrl.split(';base64,').pop();
                     logo = Buffer.from(base64Data || '', 'base64');
                 } else {
+                    console.log('[PDFService A4] Logo is URL, fetching:', invoice.info.logoUrl);
                     const response = await axios.get(invoice.info.logoUrl, { responseType: 'arraybuffer' });
                     logo = Buffer.from(response.data);
                 }
 
                 // Frontend: max 250x120. Approx 50% width of the page content.
                 doc.image(logo, leftMargin, currentLeftY, { fit: [250, 120] });
+                console.log('[PDFService A4] Logo added successfully to PDF');
                 currentLeftY += 130; // Height 120 + 10 margin
             } catch (error) {
-                console.warn('Failed to load logo for PDF:', error);
+                console.error('[PDFService A4] Failed to load logo for PDF:', error);
                 // Fallback text if logo fails? Or just skip.
                 currentLeftY = topY + 10;
             }
         } else {
+            console.log('[PDFService A4] No logoUrl provided, skipping logo');
             currentLeftY = topY + 10;
         }
 
