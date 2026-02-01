@@ -161,6 +161,18 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
         const nextSequential = doc.billing.currentSequenceFactura;
         logger.info('Generated new sequential number', { sequential: nextSequential });
 
+        // Invalidate cache so UI reflects the new sequence immediately
+        // Note: Using dynamic import or direct import if cyclic dependency allows, 
+        // but robustly we should clear the cache key used in ConfigController.
+        try {
+            // We need to import cacheService at top of file, or use if available. 
+            // Since this is infrastructure repo, it can import cacheService.
+            const { cacheService } = await import('../utils/CacheService');
+            await cacheService.invalidate('config:restaurant');
+        } catch (e) {
+            console.error('Failed to invalidate cache', e);
+        }
+
         return nextSequential;
     }
 
@@ -191,6 +203,13 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
 
         const nextSequential = doc.billing.currentSequenceNotaCredito;
         logger.info('Generated new sequential number for credit note', { sequential: nextSequential });
+
+        try {
+            const { cacheService } = await import('../utils/CacheService');
+            await cacheService.invalidate('config:restaurant');
+        } catch (e) {
+            console.error('Failed to invalidate cache', e);
+        }
 
         return nextSequential;
     }

@@ -206,11 +206,18 @@ export class GenerateInvoice {
                     console.log('✅ Auto-heal successful. Invoice Received. Authorizing...');
                     // Authorize NEW Access Key
                     const retryAuth = await this.sriService.authorizeInvoice(invoice.info.claveAcceso!, isProd);
-                    if (retryAuth.estado === 'AUTORIZADO') {
+                    if (retryAuth && retryAuth.estado === 'AUTORIZADO') {
                         authResult = retryAuth;
                         result.estado = 'RECIBIDA'; // Override original failure
                     } else {
-                        authResult = retryAuth;
+                        // Check if retryAuth is valid before using it
+                        if (retryAuth) {
+                            authResult = retryAuth;
+                        } else {
+                            console.error('[GenerateInvoice] Auto-heal authorization returned NULL');
+                            // Keep authResult null or set error
+                            authResult = { estado: 'ERROR_AUTH_NULL', mensajes: ['Error interno al autorizar (Respuesta nula)'] };
+                        }
                     }
                 } else {
                     // If still fails, bad luck.
