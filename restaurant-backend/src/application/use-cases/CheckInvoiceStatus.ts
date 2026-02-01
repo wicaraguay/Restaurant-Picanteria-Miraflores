@@ -28,7 +28,7 @@ export class CheckInvoiceStatus {
         // 1. Authorize with SRI (Polling for Resilience)
         let authResult;
         let attempts = 0;
-        const maxAttempts = 5;
+        const maxAttempts = 10;
 
         while (attempts < maxAttempts) {
             attempts++;
@@ -173,7 +173,7 @@ export class CheckInvoiceStatus {
                         // Check Authorization logic...
                         let newAuthResult;
                         let retryAttempts = 0;
-                        const maxRetries = 10; // Reduced to ~30 seconds (10 * 3s)
+                        const maxRetries = 20; // Increased to 20 (60s) to handle 'En Proceso' delays
 
                         console.log(`[CheckInvoiceStatus] Polling for Authorization (Max ${maxRetries} attempts)...`);
 
