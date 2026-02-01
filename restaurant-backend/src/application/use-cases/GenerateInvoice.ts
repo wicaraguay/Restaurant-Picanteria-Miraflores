@@ -248,9 +248,9 @@ export class GenerateInvoice {
             subtotal: invoice.info.totalSinImpuestos,
             tax: totalImpuestos,
             total: invoice.info.importeTotal,
-            sriStatus: authResult.estado || result.estado,
+            sriStatus: authResult?.estado || result.estado,
             environment: invoice.info.ambiente,
-            authorizationDate: authResult.fechaAutorizacion
+            authorizationDate: authResult?.fechaAutorizacion
         });
 
         // 9. Update Order
@@ -265,7 +265,7 @@ export class GenerateInvoice {
             client.email.includes('@') &&
             client.email.includes('.');
 
-        if (authResult.estado === 'AUTORIZADO' && !isConsumidorFinal && isValidEmail) {
+        if (authResult?.estado === 'AUTORIZADO' && !isConsumidorFinal && isValidEmail) {
             console.log(`[GenerateInvoice] Sending email to ${client.email}`);
             if (authResult.fechaAutorizacion) invoice.authorizationDate = authResult.fechaAutorizacion;
             const pdfBuffer = await this.pdfService.generateInvoicePDF(invoice);
