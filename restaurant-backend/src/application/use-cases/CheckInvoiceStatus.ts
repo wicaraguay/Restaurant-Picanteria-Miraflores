@@ -108,7 +108,15 @@ export class CheckInvoiceStatus {
                             secuencial: secuencial,
                             dirMatriz: info.address,
                             dirEstablecimiento: info.address,
-                            fechaEmision: fullBill.date.split('T')[0].split('-').reverse().join('/'), // YYYY-MM-DD -> DD/MM/YYYY
+                            fechaEmision: ((dateStr) => {
+                                const dObj = new Date(dateStr);
+                                const options: Intl.DateTimeFormatOptions = { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' };
+                                const parts = new Intl.DateTimeFormat('es-EC', options).formatToParts(dObj);
+                                const d = parts.find(p => p.type === 'day')?.value;
+                                const m = parts.find(p => p.type === 'month')?.value;
+                                const y = parts.find(p => p.type === 'year')?.value;
+                                return `${d}/${m}/${y}`;
+                            })(fullBill.date),
                             obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
                             tipoIdentificacionComprador: this.getIdentificacionType(fullBill.customerIdentification),
                             razonSocialComprador: fullBill.customerName,
@@ -226,6 +234,15 @@ export class CheckInvoiceStatus {
                                 authResult = { ...authResult, estado: retryResult.estado, mensajes: retryResult.mensajes };
                             }
 
+                        } else if (responseStr.includes('FECHA EMISIÓN EXTEMPORÁNEA')) {
+                            console.error('⚠️ DATE ERROR DETECTED: The invoice date is rejected by SRI.');
+                            console.error('⚠️ LIKELY CAUSE: Your Computer/Server Date (Currently 2026?) is ahead of SRI Server Date.');
+                            console.error('⚠️ SOLUTION: Please check your System Clock and set it to the correct current date.');
+                            authResult = {
+                                ...authResult,
+                                estado: 'ERROR_FECHA',
+                                mensajes: ['Error de Fecha: Verifique la hora/fecha de su computador. SRI rechazó por fecha futura/pasada.']
+                            };
                         } else {
                             // Other DEVUELTA error
                             authResult = { ...authResult, estado: receptionResult.estado, mensajes: receptionResult.mensajes };

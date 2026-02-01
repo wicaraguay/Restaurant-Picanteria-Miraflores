@@ -88,7 +88,15 @@ export class GenerateInvoice {
                 estab: info.billing?.establishment || process.env.ESTAB || '001',
                 ptoEmi: info.billing?.emissionPoint || process.env.PTO_EMI || '001',
                 secuencial: secuencial, // Using atomic sequential from database
-                fechaEmision: `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`,
+                fechaEmision: ((date) => {
+                    const options: Intl.DateTimeFormatOptions = { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' };
+                    // formatter produces "dd/mm/yyyy" in es-EC, but formatToParts is safer/explicit
+                    const parts = new Intl.DateTimeFormat('es-EC', options).formatToParts(date);
+                    const d = parts.find(p => p.type === 'day')?.value;
+                    const m = parts.find(p => p.type === 'month')?.value;
+                    const y = parts.find(p => p.type === 'year')?.value;
+                    return `${d}/${m}/${y}`;
+                })(now),
                 obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
                 tipoIdentificacionComprador: this.getIdentificacionType(client.identification),
                 razonSocialComprador: client.name,
@@ -130,8 +138,8 @@ export class GenerateInvoice {
         if (result.estado === 'RECIBIDA' || isAlreadyRegistered) {
             // Polling Logic for Authorization (SRI 2026 Resilience)
             // If SRI says "Already Registered" or "Processing", we must wait and check authorization consistently.
-            // We will attempt to authorize/check status up to 5 times with 3s delays.
-            const maxAttempts = 5;
+            // We will attempt to authorize/check status up to 10 times with 3s delays (Total ~30s).
+            const maxAttempts = 10;
             let attempts = 0;
 
             console.log(`[GenerateInvoice] Starting Authorization Polling (Max ${maxAttempts} attempts)`);
