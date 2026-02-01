@@ -17,6 +17,17 @@
 import { Order } from '../entities/Order';
 import { PaginatedResult } from '../../infrastructure/repositories/BaseRepository';
 
+export interface DashboardStatsDTO {
+    totalRevenue: number;
+    totalOrders: number;
+    averageTicket: number;
+    revenueByDay: { date: string; total: number }[];
+    ordersByStatus: { status: string; count: number }[];
+    topSellingItems: { name: string; quantity: number }[];
+    salesByCategory: { category: string; total: number }[];
+    activityByHour: { hour: number; count: number }[];
+}
+
 export interface IOrderRepository {
     create(order: Order): Promise<Order>;
     findById(id: string): Promise<Order | null>;
@@ -24,5 +35,5 @@ export interface IOrderRepository {
     findPaginated(page: number, limit: number, filter?: any, sort?: any): Promise<PaginatedResult<Order>>;
     update(id: string, order: Partial<Order>): Promise<Order | null>;
     delete(id: string): Promise<boolean>;
-    // Add specialized methods if needed, e.g. findByCustomer
+    getDashboardStats(startDate: Date, endDate: Date): Promise<DashboardStatsDTO>;
 }

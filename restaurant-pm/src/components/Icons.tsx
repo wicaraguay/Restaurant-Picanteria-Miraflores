@@ -247,3 +247,11 @@ export const ArrowRightIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <path d="m12 5 7 7-7 7" />
   </svg>
 );
+
+export const BarChartIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...iconProps} {...props}>
+    <line x1="12" y1="20" x2="12" y2="10" />
+    <line x1="18" y1="20" x2="18" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="16" />
+  </svg>
+);

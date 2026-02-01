@@ -26,6 +26,7 @@ import billRoutes from './infrastructure/web/routes/billRoutes';
 import employeeRoutes from './infrastructure/web/routes/employeeRoutes';
 import roleRoutes from './infrastructure/web/routes/roleRoutes';
 import creditNoteRoutes from './infrastructure/web/routes/creditNoteRoutes';
+import dashboardRoutes from './infrastructure/web/routes/dashboard.routes';
 import { cacheService } from './infrastructure/utils/CacheService';
 
 // dotenv configured at top level
@@ -72,6 +73,7 @@ app.use('/api/billing', billingRoutes); // Generación de XML SRI
 app.use('/api/employees', employeeRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/credit-notes', creditNoteRoutes); // Notas de crédito SRI
+app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/health', (req, res) => {
     const cacheStats = cacheService.getStats();

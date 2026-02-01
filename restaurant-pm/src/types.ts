@@ -10,7 +10,7 @@ import type { Dispatch, SetStateAction } from 'react';
 /**
  * Tipo para vistas de la aplicación
  */
-export type ViewType = 'dashboard' | 'customers' | 'orders' | 'menu' | 'kitchen' | 'hr' | 'settings' | 'billing';
+export type ViewType = 'dashboard' | 'orders' | 'menu' | 'kitchen' | 'hr' | 'settings' | 'billing';
 
 /**
  * Tipo helper para setState de React
