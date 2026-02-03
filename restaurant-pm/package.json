@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "clean": "rimraf node_modules/.vite dist",
+    "clean:build": "npm run clean && npm run build",
+    "clean:dev": "npm run clean && npm run dev",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",
@@ -35,6 +38,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "jsdom": "^23.2.0",
+    "rimraf": "^5.0.10",
     "typescript": "^5.2.2",
     "vite": "^5.0.8",
     "vitest": "^1.6.1"
