@@ -3,6 +3,7 @@ import { Bill } from '../../types';
 import { billingService } from '../../services/BillingService';
 import { useRestaurantConfig } from '../../contexts/RestaurantConfigContext';
 import { FileTextIcon, AlertCircleIcon } from '../Icons';
+import InvoiceProcessingModal, { InvoiceProcessState } from '../InvoiceProcessingModal';
 
 interface CreditNoteModalProps {
     bill: Bill;
@@ -33,28 +34,92 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
     const [error, setError] = useState<string>('');
     const { config } = useRestaurantConfig();
 
+    // Estados para el modal de procesamiento
+    const [isProcessingModalOpen, setIsProcessingModalOpen] = useState(false);
+    const [processingState, setProcessingState] = useState<InvoiceProcessState>(InvoiceProcessState.IDLE);
+    const [processingMessage, setProcessingMessage] = useState('');
+    const [processingDetails, setProcessingDetails] = useState('');
+    const [generatedNCNumber, setGeneratedNCNumber] = useState('');
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        setIsLoading(true);
+        // Abrir modal de procesamiento en lugar de solo isLoading
+        setIsProcessingModalOpen(true);
 
         try {
+            // ETAPA 1: Validación
+            setProcessingState(InvoiceProcessState.VALIDATING);
+            setProcessingMessage('Validando motivo');
+            setProcessingDetails('Verificando datos de la nota de crédito...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             const taxRate = config.billing?.taxRate || 15;
-            await billingService.generateCreditNote({
+
+            // ETAPA 2: Generación
+            setProcessingState(InvoiceProcessState.GENERATING);
+            setProcessingMessage('Generando Nota de Crédito');
+            setProcessingDetails('Creando documento XML y secuencia...');
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // ETAPA 3: Firmado
+            setProcessingState(InvoiceProcessState.SIGNING);
+            setProcessingMessage('Firmando XML');
+            setProcessingDetails('Aplicando firma electrónica al documento...');
+            await new Promise(resolve => setTimeout(resolve, 600));
+
+            // ETAPA 4: Enviando
+            setProcessingState(InvoiceProcessState.SENDING);
+            setProcessingMessage('Enviando al SRI');
+            setProcessingDetails('Transmitiendo nota de crédito...');
+
+            const result = await billingService.generateCreditNote({
                 billId: bill.id,
                 reason,
                 customDescription: customDescription || undefined,
                 taxRate
             });
 
-            alert('✅ Nota de crédito generada y enviada al SRI exitosamente');
-            onSuccess();
-            onClose();
+            // ETAPA 5: Esperando autorización
+            setProcessingState(InvoiceProcessState.WAITING_AUTHORIZATION);
+            setProcessingMessage('Esperando autorización');
+            setProcessingDetails('El SRI está procesando la solicitud...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            setGeneratedNCNumber(result.creditNoteId);
+
+            // Verificar autorización (result.authorization.estado)
+            const authStatus = result.authorization?.estado || result.sriResponse?.estado;
+
+            if (authStatus === 'AUTORIZADO') {
+                setProcessingState(InvoiceProcessState.AUTHORIZED);
+                setProcessingMessage('¡Nota de Crédito Autorizada!');
+                setProcessingDetails('El documento fue autorizado y la factura original anulada.');
+                // No cerramos automáticamente para que el usuario vea el éxito
+            } else {
+                setProcessingState(InvoiceProcessState.PENDING);
+                setProcessingMessage('Nota de Crédito Generada');
+                setProcessingDetails('El documento fue enviado pero aún está pendiente de autorización.');
+            }
+
+            // Llamamos onSuccess (que actualiza la lista) pero no cerramos el modal modal hasta que el usuario decida
+            if (onSuccess) onSuccess();
+
         } catch (err: any) {
             console.error('Error generating credit note:', err);
-            setError(err.message || 'Error al generar la nota de crédito');
+            setProcessingState(InvoiceProcessState.ERROR);
+            setProcessingMessage('Error al generar Nota de Crédito');
+            setProcessingDetails(err.message || 'Error desconocido');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleCloseProcessing = () => {
+        setIsProcessingModalOpen(false);
+        setProcessingState(InvoiceProcessState.IDLE);
+        if (processingState === InvoiceProcessState.AUTHORIZED || processingState === InvoiceProcessState.PENDING) {
+            onClose(); // Cerrar el modal principal también si terminó
         }
     };
 
@@ -183,6 +248,18 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
                     </div>
                 </form>
             </div>
+
+            {/* Modal de Procesamiento (superpuesto) */}
+            <InvoiceProcessingModal
+                isOpen={isProcessingModalOpen}
+                currentState={processingState}
+                message={processingMessage}
+                details={processingDetails}
+                invoiceNumber={generatedNCNumber} // Mostrará el número de la NC
+                onClose={handleCloseProcessing}
+                onPrint={undefined}
+                onGoToHistory={undefined} // Estamos en el modal, no navegar
+            />
         </div>
     );
 };

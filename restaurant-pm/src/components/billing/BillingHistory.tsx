@@ -554,7 +554,8 @@ const BillingHistory: React.FC = () => {
                         isOpen={!!selectedBillForCreditNote}
                         onClose={() => setSelectedBillForCreditNote(null)}
                         onSuccess={() => {
-                            setSelectedBillForCreditNote(null);
+                            // No cerramos el modal aquí para permitir que el usuario vea el resultado "Autorizado"
+                            // El cierre se maneja vía onClose o botón "Continuar" del modal interno
                             fetchBills();
                         }}
                     />
