@@ -4,6 +4,7 @@ import { Bill } from '../../types';
 import { API_BASE_URL } from '../../config/api.config';
 import { useRestaurantConfig } from '../../contexts/RestaurantConfigContext';
 import CreditNoteModal from './CreditNoteModal';
+import InvoiceProcessingModal, { InvoiceProcessState } from '../InvoiceProcessingModal';
 
 import {
     SearchIcon,
@@ -29,6 +30,13 @@ const BillingHistory: React.FC = () => {
     const [idSearch, setIdSearch] = useState('');
     const [selectedBillForCreditNote, setSelectedBillForCreditNote] = useState<Bill | null>(null);
     const { config } = useRestaurantConfig();
+
+    // Estados para el modal de procesamiento de facturas
+    const [isProcessingModalOpen, setIsProcessingModalOpen] = useState(false);
+    const [processingState, setProcessingState] = useState<InvoiceProcessState>(InvoiceProcessState.IDLE);
+    const [processingMessage, setProcessingMessage] = useState('');
+    const [processingDetails, setProcessingDetails] = useState('');
+    const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
 
     const fetchBills = async () => {
         setIsLoading(true);
@@ -71,25 +79,43 @@ const BillingHistory: React.FC = () => {
     const handleAuthorize = async (bill: Bill) => {
         if (!confirm('¿Desea generar y autorizar esta factura en el SRI?')) return;
 
+        // Abrir modal de procesamiento
+        setIsProcessingModalOpen(true);
+
         try {
-            setIsLoading(true);
+            // ETAPA 1: Validación
+            setProcessingState(InvoiceProcessState.VALIDATING);
+            setProcessingMessage('Validando datos');
+            setProcessingDetails('Verificando información del cliente y productos...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             const taxRate = config.billing?.taxRate || 15;
 
             // Reconstruct order items with tax-inclusive prices
-            // In DB, items have 'total' which is usually tax inclusive if derived from bill logic,
-            // OR we need to trust the logic.
-            // Safe bet: Use item.total / quantity as the inclusive unit price.
             const items = bill.items.map(item => ({
-                id: item.name, // Placeholder ID
+                id: item.name,
                 name: item.name,
                 quantity: item.quantity,
                 price: item.quantity > 0 ? (item.total / item.quantity) : 0
             }));
 
-            // Construct payload
-            // NOTE: orderNumber is intentionally NOT sent to backend
-            // The backend will automatically generate a unique sequential number from the database
-            // This prevents duplicate access key errors when re-sending failed invoices
+            // ETAPA 2: Generación
+            setProcessingState(InvoiceProcessState.GENERATING);
+            setProcessingMessage('Generando factura electrónica');
+            setProcessingDetails('Creando documento XML según normativa SRI...');
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // ETAPA 3: Firmado
+            setProcessingState(InvoiceProcessState.SIGNING);
+            setProcessingMessage('Firmando documento');
+            setProcessingDetails('Aplicando certificado digital...');
+            await new Promise(resolve => setTimeout(resolve, 600));
+
+            // ETAPA 4: Enviando al SRI
+            setProcessingState(InvoiceProcessState.SENDING);
+            setProcessingMessage('Enviando al SRI');
+            setProcessingDetails('Transmitiendo factura para recepción...');
+
             const orderPayload = {
                 id: bill.orderId,
                 items: items
@@ -99,24 +125,53 @@ const BillingHistory: React.FC = () => {
                 name: bill.customerName,
                 identification: bill.customerIdentification,
                 address: bill.customerAddress,
-                email: bill.customerEmail || config.fiscalEmail || 'consumidor@final.com', // Fallback
-                phone: '9999999999' // Fallback
+                email: bill.customerEmail || config.fiscalEmail || 'consumidor@final.com',
+                phone: '9999999999'
             };
 
-            await billingService.generateXML({
+            const result = await billingService.generateXML({
                 order: orderPayload,
                 client: clientPayload,
                 taxRate: taxRate,
                 logoUrl: config.fiscalLogo || config.logo
             });
 
-            await fetchBills();
-            alert('Factura enviada a autorización SRI exitosamente.');
+            if (result.success) {
+                // ETAPA 5: Esperando autorización
+                setProcessingState(InvoiceProcessState.WAITING_AUTHORIZATION);
+                setProcessingMessage('Esperando autorización SRI');
+                setProcessingDetails('El SRI está procesando la autorización...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // CORRECCIÓN: El backend devuelve la autorización en result.authorization, no en sriResponse
+                const sriStatus = result.authorization?.estado || result.sriResponse?.estado;
+                setGeneratedInvoiceNumber(result.invoiceId);
+
+                if (sriStatus === 'AUTORIZADO') {
+                    setProcessingState(InvoiceProcessState.AUTHORIZED);
+                    setProcessingMessage('¡Factura autorizada con éxito!');
+                    setProcessingDetails('La factura fue generada, recibida y autorizada por el SRI.');
+                } else {
+                    setProcessingState(InvoiceProcessState.PENDING);
+                    setProcessingMessage('Factura generada correctamente');
+                    setProcessingDetails(
+                        'La factura fue creada y enviada al SRI, pero aún está EN PROCESO de autorización. ' +
+                        'Puedes actualizar la página para verificar su estado.'
+                    );
+                }
+
+                await fetchBills();
+            } else {
+                setProcessingState(InvoiceProcessState.ERROR);
+                setProcessingMessage('Error al generar la factura');
+                setProcessingDetails(result.message || 'Hubo un problema al procesar la factura.');
+            }
         } catch (error) {
             console.error('Error authorizing bill:', error);
-            alert('Error al autorizar la factura.');
-        } finally {
-            setIsLoading(false);
+            setProcessingState(InvoiceProcessState.ERROR);
+            setProcessingMessage('Error en el proceso');
+            const errorMessage = error instanceof Error ? error.message : 'Error al autorizar la factura.';
+            setProcessingDetails(errorMessage);
         }
     };
 
@@ -179,6 +234,14 @@ const BillingHistory: React.FC = () => {
                 <AlertCircleIcon className="w-3 h-3" /> {s}
             </span>
         );
+    };
+
+    const handleCloseProcessingModal = () => {
+        setIsProcessingModalOpen(false);
+        setProcessingState(InvoiceProcessState.IDLE);
+        setProcessingMessage('');
+        setProcessingDetails('');
+        setGeneratedInvoiceNumber('');
     };
 
     return (
@@ -455,6 +518,21 @@ const BillingHistory: React.FC = () => {
                     />
                 )
             }
+
+            {/* Invoice Processing Modal */}
+            <InvoiceProcessingModal
+                isOpen={isProcessingModalOpen}
+                currentState={processingState}
+                message={processingMessage}
+                details={processingDetails}
+                invoiceNumber={generatedInvoiceNumber}
+                onClose={handleCloseProcessingModal}
+                onPrint={undefined}
+                onGoToHistory={() => {
+                    handleCloseProcessingModal();
+                    fetchBills();
+                }}
+            />
         </div >
     );
 };

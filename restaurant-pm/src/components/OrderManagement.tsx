@@ -9,6 +9,7 @@ import { OrderNumberGenerator } from '../utils/orderNumberGenerator';
 import { useRestaurantConfig } from '../contexts/RestaurantConfigContext';
 import { generateAccessKey } from '@/utils/sri';
 import { generateInvoiceHtml } from '../utils/invoiceGenerator';
+import InvoiceProcessingModal, { InvoiceProcessState } from './InvoiceProcessingModal';
 
 interface OrderManagementProps {
     orders: Order[];
@@ -559,6 +560,15 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         paymentMethod: '01' // 01 - SIN UTILIZACION DEL SISTEMA FINANCIERO
     });
 
+    // Estados para el modal de procesamiento de facturas
+    const [isProcessingModalOpen, setIsProcessingModalOpen] = useState(false);
+    const [processingState, setProcessingState] = useState<InvoiceProcessState>(InvoiceProcessState.IDLE);
+    const [processingMessage, setProcessingMessage] = useState('');
+    const [processingDetails, setProcessingDetails] = useState('');
+    const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
+    const [tempAccessKey, setTempAccessKey] = useState<string | undefined>();
+    const [tempAuthDate, setTempAuthDate] = useState<string | undefined>();
+
     const handleOpenBilling = (order: Order) => {
         setBillingOrder(order);
         // Pre-fill with available data from order or customer database (mocked here)
@@ -595,8 +605,35 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
             if (!shouldContinue) return;
         }
 
+        // Cerrar modal de billing y abrir modal de procesamiento
+        setIsBillingModalOpen(false);
+        setIsProcessingModalOpen(true);
+
         try {
-            // Updated: Call real backend API
+            // ETAPA 1: Validación
+            setProcessingState(InvoiceProcessState.VALIDATING);
+            setProcessingMessage('Validando datos');
+            setProcessingDetails('Verificando información del cliente y productos...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // ETAPA 2: Generación
+            setProcessingState(InvoiceProcessState.GENERATING);
+            setProcessingMessage('Generando factura electrónica');
+            setProcessingDetails('Creando documento XML según normativa SRI...');
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // ETAPA 3: Firmado
+            setProcessingState(InvoiceProcessState.SIGNING);
+            setProcessingMessage('Firmando documento');
+            setProcessingDetails('Aplicando certificado digital...');
+            await new Promise(resolve => setTimeout(resolve, 600));
+
+            // ETAPA 4: Enviando al SRI
+            setProcessingState(InvoiceProcessState.SENDING);
+            setProcessingMessage('Enviando al SRI');
+            setProcessingDetails('Transmitiendo factura para recepción...');
+
+            // Llamada real al backend
             console.log('Enviando a facturar:', { order: billingOrder, client: billingData });
             const result = await billingService.generateXML({
                 order: billingOrder,
@@ -606,28 +643,51 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
             });
 
             if (result.success) {
-                // If SRI Authorization returned data, use it for printing
+                // ETAPA 5: Esperando autorización
+                setProcessingState(InvoiceProcessState.WAITING_AUTHORIZATION);
+                setProcessingMessage('Esperando autorización SRI');
+                setProcessingDetails('El SRI está procesando la autorización...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
                 const realAccessKey = result.accessKey;
-                const authDate = result.sriResponse?.fechaAutorizacion || result.sriResponse?.authResult?.fechaAutorizacion;
+                // CORRECCIÓN: El backend devuelve la autorización en result.authorization, no en sriResponse
+                const authDate = result.authorization?.fechaAutorizacion || result.sriResponse?.fechaAutorizacion;
+                const sriStatus = result.authorization?.estado || result.sriResponse?.estado;
 
-                if (window.confirm(`✅ Factura SRI Generada con éxito!\nSecuencial: ${result.invoiceId}\n\n¿Deseas imprimir el comprobante (RIDE) ahora mismo?`)) {
-                    handlePrintInvoice(realAccessKey, authDate);
+                setTempAccessKey(realAccessKey);
+                setTempAuthDate(authDate);
+                setGeneratedInvoiceNumber(result.invoiceId);
+
+                // Verificar si fue autorizada
+                if (sriStatus === 'AUTORIZADO') {
+                    // ÉXITO TOTAL
+                    setProcessingState(InvoiceProcessState.AUTHORIZED);
+                    setProcessingMessage('¡Factura autorizada con éxito!');
+                    setProcessingDetails('La factura fue generada, recibida y autorizada por el SRI.');
+                } else {
+                    // GENERADA PERO PENDIENTE DE AUTORIZACIÓN
+                    setProcessingState(InvoiceProcessState.PENDING);
+                    setProcessingMessage('Factura generada correctamente');
+                    setProcessingDetails(
+                        'La factura fue creada y enviada al SRI, pero aún está EN PROCESO de autorización. ' +
+                        'Puedes verificar su estado en el Historial de Facturas.'
+                    );
                 }
-
-
 
                 // Refresh config to update the sequence number for the next invoice
                 await refreshConfig();
-
-                setIsBillingModalOpen(false);
             } else {
-                alert('Hubo un problema al generar la factura.');
+                // Error en la generación
+                setProcessingState(InvoiceProcessState.ERROR);
+                setProcessingMessage('Error al generar la factura');
+                setProcessingDetails(result.message || 'Hubo un problema al procesar la factura.');
             }
         } catch (error) {
             console.error('Billing error', error);
-            // Show specific backend error message which contains the "Avise Chevere"
+            setProcessingState(InvoiceProcessState.ERROR);
+            setProcessingMessage('Error en el proceso');
             const errorMessage = error instanceof Error ? error.message : 'Error al procesar la factura con el servidor.';
-            alert(errorMessage);
+            setProcessingDetails(errorMessage);
         }
     };
 
@@ -646,6 +706,28 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         printWindow.document.close();
     };
 
+    const handleCloseProcessingModal = () => {
+        setIsProcessingModalOpen(false);
+        setProcessingState(InvoiceProcessState.IDLE);
+        setProcessingMessage('');
+        setProcessingDetails('');
+        setGeneratedInvoiceNumber('');
+        setTempAccessKey(undefined);
+        setTempAuthDate(undefined);
+    };
+
+    const handlePrintFromProcessingModal = () => {
+        handlePrintInvoice(tempAccessKey, tempAuthDate);
+        handleCloseProcessingModal();
+    };
+
+    const handleGoToHistory = () => {
+        // Aquí puedes agregar navegación al historial de facturas
+        // Por ahora simplemente cerramos el modal y el usuario puede navegar manualmente
+        handleCloseProcessingModal();
+        alert('Por favor, dirígete a la sección "Historial de Facturas" para verificar el estado de la factura.');
+    };
+
     const filteredOrders = (Array.isArray(orders) ? orders : []).filter(order => {
         if (activeTab === 'active') {
             return order.status === OrderStatus.New || order.status === OrderStatus.Ready;
@@ -659,6 +741,18 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     return (
         <div>
             <OrderFormModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveOrder} order={editingOrder} menuItems={menuItems} />
+
+            {/* Invoice Processing Modal */}
+            <InvoiceProcessingModal
+                isOpen={isProcessingModalOpen}
+                currentState={processingState}
+                message={processingMessage}
+                details={processingDetails}
+                invoiceNumber={generatedInvoiceNumber}
+                onClose={handleCloseProcessingModal}
+                onPrint={handlePrintFromProcessingModal}
+                onGoToHistory={handleGoToHistory}
+            />
 
             {/* Billing Modal Integration */}
             {isBillingModalOpen && billingOrder && (
