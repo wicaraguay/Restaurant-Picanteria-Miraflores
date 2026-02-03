@@ -157,15 +157,74 @@ export class GenerateCreditNote {
             }
         };
 
-        // 6. Generate XML
+        // 6. Generate XML and Send to SRI with Auto-Retry for Duplicate Sequential
         console.log('[GenerateCreditNote] Generating XML...');
-        const xml = this.sriService.generateCreditNoteXML(creditNote);
-        const signedXml = await this.sriService.signXML(xml);
         const isProd = process.env.SRI_ENV === '2';
 
-        // 7. Send to SRI
-        console.log('[GenerateCreditNote] Sending to SRI...');
-        const result = await this.sriService.sendCreditNoteToSRI(signedXml, isProd);
+        // Retry logic: If SRI rejects due to duplicate sequential, get new one and retry
+        const MAX_ATTEMPTS = 3;
+        let attempts = 0;
+        let result: any;
+        let currentSequential = secuencial;
+        let currentAccessKey = '';
+
+        while (attempts < MAX_ATTEMPTS) {
+            attempts++;
+            console.log(`[GenerateCreditNote] Attempt ${attempts}/${MAX_ATTEMPTS} - Using sequential: ${currentSequential}`);
+
+            try {
+                // Update credit note with current sequential
+                creditNote.info.secuencial = currentSequential;
+
+                // Generate XML
+                const xml = this.sriService.generateCreditNoteXML(creditNote);
+                currentAccessKey = creditNote.info.claveAcceso!; // Access key is generated in generateCreditNoteXML
+
+                // Sign XML
+                const signedXml = await this.sriService.signXML(xml);
+
+                // Send to SRI
+                console.log('[GenerateCreditNote] Sending to SRI...');
+                result = await this.sriService.sendCreditNoteToSRI(signedXml, isProd);
+
+                // SUCCESS: Break out of retry loop
+                console.log('[GenerateCreditNote] Successfully sent to SRI');
+                break;
+
+            } catch (error: any) {
+                console.error(`[GenerateCreditNote] Attempt ${attempts} failed:`, error.message);
+
+                // Check if it's a duplicate sequential error
+                const isDuplicateSequentialError =
+                    error.message.includes('Error de Secuencia') ||
+                    error.message.includes('ya existe en el SRI') ||
+                    error.message.includes('SECUENCIAL REGISTRADO');
+
+                if (isDuplicateSequentialError && attempts < MAX_ATTEMPTS) {
+                    console.log(`[GenerateCreditNote] 🔄 Duplicate sequential detected. Requesting new sequential and retrying...`);
+
+                    // Get new sequential from database
+                    const newSequential = await this.configRepository.getNextCreditNoteSequential();
+                    currentSequential = newSequential.toString().padStart(9, '0');
+                    console.log(`[GenerateCreditNote] ✅ New sequential obtained: ${currentSequential}`);
+
+                    // Continue to next attempt with new sequential
+                    continue;
+                } else {
+                    // Not a duplicate error OR we've exhausted attempts - propagate error
+                    if (attempts >= MAX_ATTEMPTS) {
+                        console.error('[GenerateCreditNote] ❌ Max retry attempts reached. Unable to send credit note.');
+                        throw new Error(`Failed to send credit note after ${MAX_ATTEMPTS} attempts. Last error: ${error.message}`);
+                    }
+                    throw error;
+                }
+            }
+        }
+
+        // Ensure we got a result (should always be true if we reach here, but safety check)
+        if (!result) {
+            throw new Error('Failed to send credit note to SRI - no result obtained');
+        }
 
         // 8. Handle Response & Authorization
         const responseString = JSON.stringify(result);
@@ -249,8 +308,7 @@ export class GenerateCreditNote {
             creditNoteId: creditNote.info.secuencial,
             accessKey: creditNote.info.claveAcceso,
             sriResponse: result,
-            authorization: authResult,
-            xml: xml
+            authorization: authResult
         };
     }
 
