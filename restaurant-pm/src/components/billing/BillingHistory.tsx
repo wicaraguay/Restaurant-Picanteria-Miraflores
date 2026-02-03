@@ -175,6 +175,56 @@ const BillingHistory: React.FC = () => {
         }
     };
 
+    const handleCheckStatus = async (bill: Bill) => {
+        if (!bill.accessKey) return;
+
+        // Abrir modal de procesamiento
+        setIsProcessingModalOpen(true);
+        setGeneratedInvoiceNumber(bill.documentNumber || '');
+
+        try {
+            // ETAPA: Consultando estado
+            setProcessingState(InvoiceProcessState.WAITING_AUTHORIZATION);
+            setProcessingMessage('Consultando estado en SRI');
+            setProcessingDetails('Verificando si la factura ya fue autorizada...');
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            const result = await billingService.checkStatus(bill.accessKey);
+
+            // CORRECCIÓN: Agregar result.authorization?.estado que es como lo devuelve CheckInvoiceStatus
+            const status = result.authorization?.estado || result.estado || result.authResult?.estado || result.sriResponse?.estado;
+            const authDate = result.authorization?.fechaAutorizacion || result.fechaAutorizacion || result.authResult?.fechaAutorizacion;
+
+            if (status === 'AUTORIZADO') {
+                setProcessingState(InvoiceProcessState.AUTHORIZED);
+                setProcessingMessage('¡Factura autorizada con éxito!');
+                setProcessingDetails('La factura fue generada, recibida y autorizada por el SRI.');
+                // Update local state is handled by fetchBills later
+            } else if (status === 'DEVUELTA') {
+                setProcessingState(InvoiceProcessState.ERROR);
+                setProcessingMessage('Factura DEVUELTA por SRI');
+                const errores = result.mensajes?.map((m: any) => m.mensaje).join(', ') || 'Revise los datos de la factura.';
+                setProcessingDetails(`Error: ${errores}`);
+            } else {
+                setProcessingState(InvoiceProcessState.PENDING);
+                setProcessingMessage('Factura generada correctamente');
+                setProcessingDetails(
+                    'La factura sigue EN PROCESO de autorización en el SRI. ' +
+                    'Intente verificar nuevamente en unos minutos.'
+                );
+            }
+
+            await fetchBills();
+
+        } catch (error) {
+            console.error('Error checking status:', error);
+            setProcessingState(InvoiceProcessState.ERROR);
+            setProcessingMessage('Error al consultar SRI');
+            const errorMessage = error instanceof Error ? error.message : 'No se pudo verificar el estado.';
+            setProcessingDetails(errorMessage);
+        }
+    };
+
     const handleExportCSV = () => {
         if (bills.length === 0) return;
 
@@ -374,16 +424,8 @@ const BillingHistory: React.FC = () => {
                                                             e.stopPropagation();
                                                             if (!bill.accessKey) {
                                                                 await handleAuthorize(bill);
-                                                                return;
-                                                            }
-                                                            try {
-                                                                setIsLoading(true);
-                                                                await billingService.checkStatus(bill.accessKey);
-                                                                await fetchBills();
-                                                            } catch (error) {
-                                                                console.error('Error checking status:', error);
-                                                            } finally {
-                                                                setIsLoading(false);
+                                                            } else {
+                                                                await handleCheckStatus(bill);
                                                             }
                                                         }}
                                                         className={`p-2 rounded-xl transition-all shadow-sm ${!bill.accessKey
@@ -528,10 +570,7 @@ const BillingHistory: React.FC = () => {
                 invoiceNumber={generatedInvoiceNumber}
                 onClose={handleCloseProcessingModal}
                 onPrint={undefined}
-                onGoToHistory={() => {
-                    handleCloseProcessingModal();
-                    fetchBills();
-                }}
+                onGoToHistory={undefined}
             />
         </div >
     );
