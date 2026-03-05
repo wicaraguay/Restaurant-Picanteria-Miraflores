@@ -13,7 +13,7 @@
  * @layer Utils
  */
 
-import { Role } from '../types';
+import { Role } from '../modules/hr/types/hr.types';
 
 /**
  * Mapeo de roles backend a frontend

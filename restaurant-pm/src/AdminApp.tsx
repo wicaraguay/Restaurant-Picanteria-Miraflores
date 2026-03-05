@@ -17,17 +17,22 @@
  */
 
 import React, { lazy, Suspense, useCallback, useEffect } from 'react';
-import { ViewType, MenuItem, Employee, Role } from './types';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { ViewType } from './types';
+import { Customer, Reservation } from './modules/customers/types/customer.types';
+import { Order } from './modules/orders/types/order.types';
+import { MenuItem } from './modules/menu/types/menu.types';
+import { Employee, Role } from './modules/hr/types/hr.types';
 import { api } from './api'; // Import API for polling
-import { orderService } from './services/OrderService';
-import Sidebar from './components/Sidebar';
-import { SunIcon, MoonIcon } from './components/Icons';
+import { orderService } from './modules/orders/services/OrderService';
+import Sidebar from './components/layout/Sidebar';
+import { SunIcon, MoonIcon } from './components/ui/Icons';
 import { NAV_ITEMS } from './constants';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { ErrorBoundary } from './components/fallback/ErrorBoundary';
 
 // Contexts
 import { AppStateProvider, useAppState } from './contexts/AppStateContext';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './modules/auth/contexts/AuthContext';
 import { RestaurantConfigProvider } from './contexts/RestaurantConfigContext';
 
 // Hooks
@@ -40,15 +45,16 @@ import { useNavigation } from './hooks/useNavigation';
 
 // ✅ CODE SPLITTING: Lazy load de componentes grandes
 const Dashboard = lazy(() => import('./components/Dashboard'));
+const CustomerManagement = lazy(() => import('./modules/customers/components/CustomerManagement'));
 
-const OrderManagement = lazy(() => import('./components/OrderManagement'));
-const MenuManagement = lazy(() => import('./components/MenuManagement'));
-const KitchenManagement = lazy(() => import('./components/KitchenManagement'));
-const HRManagement = lazy(() => import('./components/HRManagement'));
-const SettingsManagement = lazy(() => import('./components/SettingsManagement'));
-const Login = lazy(() => import('./components/Login'));
-const MobileBottomNav = lazy(() => import('./components/MobileBottomNav'));
-const BillingHistory = lazy(() => import('./components/billing/BillingHistory'));
+const OrderManagement = lazy(() => import('./modules/orders/components/OrderManagement'));
+const MenuManagement = lazy(() => import('./modules/menu/components/MenuManagement'));
+const KitchenManagement = lazy(() => import('./modules/kitchen/components/KitchenManagement'));
+const HRManagement = lazy(() => import('./modules/hr/components/HRManagement'));
+const SettingsManagement = lazy(() => import('./modules/settings/components/SettingsManagement'));
+const Login = lazy(() => import('./modules/auth/components/Login'));
+const MobileBottomNav = lazy(() => import('./components/layout/MobileBottomNav'));
+const BillingHistory = lazy(() => import('./modules/billing/components/BillingHistory'));
 
 /**
  * Loading fallback component
@@ -68,7 +74,7 @@ const LoadingFallback: React.FC = () => (
  */
 const AdminContent: React.FC = () => {
     const { currentUser, logout } = useAuth();
-    const { state, updateMenuItem, setMenuItems: setMenuItemsContext, setEmployees: setEmployeesContext, setRoles: setRolesContext, setOrders: setOrdersContext } = useAppState();
+    const { state, updateMenuItem, setMenuItems: setMenuItemsContext, setEmployees: setEmployeesContext, setRoles: setRolesContext, setOrders: setOrdersContext, setCustomers: setCustomersContext, setReservations: setReservationsContext } = useAppState();
     const { theme, toggleTheme } = useTheme();
     const { currentView, setCurrentView, navItems, getCurrentViewLabel } = useNavigation(currentUser);
 
@@ -133,7 +139,7 @@ const AdminContent: React.FC = () => {
     }, [state.roles, setRolesContext]);
 
     // Wrapper para setOrders
-    const updateOrders = useCallback((value: import('./types').Order[] | ((prev: import('./types').Order[]) => import('./types').Order[])) => {
+    const updateOrders = useCallback((value: Order[] | ((prev: Order[]) => Order[])) => {
         if (typeof value === 'function') {
             setOrdersContext(value(state.orders));
         } else {
@@ -141,57 +147,24 @@ const AdminContent: React.FC = () => {
         }
     }, [state.orders, setOrdersContext]);
 
-    /**
-     * Renderiza la vista actual según navegación
-     */
-    const renderView = (): React.ReactElement => {
-        switch (currentView) {
-            case 'dashboard':
-                return <Dashboard orders={state.orders} reservations={state.reservations} />;
-
-
-
-
-            case 'orders':
-                return (
-                    <OrderManagement
-                        orders={state.orders}
-                        setOrders={updateOrders}
-                        menuItems={state.menuItems}
-                    />
-                );
-
-            case 'menu':
-                return (
-                    <MenuManagement
-                        menuItems={state.menuItems}
-                        setMenuItems={setMenuItems}
-                    />
-                );
-
-            case 'kitchen':
-                return <KitchenManagement orders={state.orders} setOrders={updateOrders} />;
-
-            case 'hr':
-                return (
-                    <HRManagement
-                        employees={state.employees}
-                        setEmployees={updateEmployees}
-                        roles={state.roles}
-                        setRoles={updateRoles}
-                    />
-                );
-
-            case 'settings':
-                return <SettingsManagement />;
-
-            case 'billing':
-                return <BillingHistory />;
-
-            default:
-                return <Dashboard orders={state.orders} reservations={state.reservations} />;
+    // Wrapper para setCustomers
+    const updateCustomers = useCallback((value: Customer[] | ((prev: Customer[]) => Customer[])) => {
+        if (typeof value === 'function') {
+            setCustomersContext(value(state.customers));
+        } else {
+            setCustomersContext(value);
         }
-    };
+    }, [state.customers, setCustomersContext]);
+
+    // Wrapper para setReservations
+    const updateReservations = useCallback((value: Reservation[] | ((prev: Reservation[]) => Reservation[])) => {
+        if (typeof value === 'function') {
+            setReservationsContext(value(state.reservations));
+        } else {
+            setReservationsContext(value);
+        }
+    }, [state.reservations, setReservationsContext]);
+
 
     if (isLoading) {
         return (
@@ -229,21 +202,57 @@ const AdminContent: React.FC = () => {
                 </header>
 
                 <main className="p-4 sm:p-6 pb-24 lg:pb-8 max-w-7xl mx-auto">
-                    <Suspense fallback={<LoadingFallback />}>
-                        {renderView()}
-                    </Suspense>
+                    <ErrorBoundary>
+                        <Suspense fallback={<LoadingFallback />}>
+                            <Routes>
+                                <Route path="dashboard" element={<Dashboard orders={state.orders} reservations={state.reservations} />} />
+                                <Route path="customers" element={
+                                    <CustomerManagement
+                                        customers={state.customers}
+                                        setCustomers={updateCustomers}
+                                        reservations={state.reservations}
+                                        setReservations={updateReservations}
+                                    />
+                                } />
+                                <Route path="orders" element={
+                                    <OrderManagement
+                                        orders={state.orders}
+                                        setOrders={updateOrders}
+                                        menuItems={state.menuItems}
+                                    />
+                                } />
+                                <Route path="menu" element={
+                                    <MenuManagement
+                                        menuItems={state.menuItems}
+                                        setMenuItems={setMenuItems}
+                                    />
+                                } />
+                                <Route path="kitchen" element={<KitchenManagement orders={state.orders} setOrders={updateOrders} />} />
+                                <Route path="hr" element={
+                                    <HRManagement
+                                        employees={state.employees}
+                                        setEmployees={updateEmployees}
+                                        roles={state.roles}
+                                        setRoles={updateRoles}
+                                    />
+                                } />
+                                <Route path="settings" element={<SettingsManagement />} />
+                                <Route path="billing" element={<BillingHistory />} />
+
+                                <Route path="" element={<Navigate to="dashboard" replace />} />
+                                <Route path="*" element={<Navigate to="dashboard" replace />} />
+                            </Routes>
+                        </Suspense>
+                    </ErrorBoundary>
                 </main>
             </div>
 
-            {/* ✅ MobileBottomNav con Suspense */}
-            <Suspense fallback={null}>
-                <MobileBottomNav
-                    currentView={currentView}
-                    onViewChange={setCurrentView}
-                    navItems={navItems}
-                    onLogout={logout}
-                />
-            </Suspense>
+            <MobileBottomNav
+                currentView={currentView}
+                onViewChange={setCurrentView}
+                navItems={navItems}
+                onLogout={logout}
+            />
         </div>
     );
 };

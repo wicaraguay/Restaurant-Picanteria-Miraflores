@@ -1,5 +1,6 @@
 import React from 'react';
-import { Order, Reservation, OrderStatus } from '../types';
+import { Reservation } from '../modules/customers/types/customer.types';
+import { Order, OrderStatus } from '../modules/orders/types/order.types';
 import { AnalyticsDashboard } from './analytics/AnalyticsDashboard';
 
 interface DashboardProps {

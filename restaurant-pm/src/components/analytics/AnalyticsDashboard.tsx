@@ -4,7 +4,7 @@ import {
     LineChart, Line, PieChart, Pie, Cell
 } from 'recharts';
 import { analyticsService, DashboardStats } from '../../services/AnalyticsService';
-import { RefreshCcwIcon as RefreshIcon } from '../Icons';
+import { RefreshCcwIcon as RefreshIcon } from '../ui/Icons';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 

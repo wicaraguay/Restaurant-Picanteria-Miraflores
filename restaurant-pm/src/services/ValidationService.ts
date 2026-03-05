@@ -64,37 +64,6 @@ export class ValidationService {
         return { isValid: true };
     }
 
-    /**
-     * Valida RUC (Ecuador)
-     */
-    static validateRUC(ruc: string): ValidationResult {
-        if (!ruc) {
-            return { isValid: false, error: 'El RUC es requerido' };
-        }
-
-        // RUC debe tener 13 dígitos
-        if (!/^\d{13}$/.test(ruc)) {
-            return { isValid: false, error: 'RUC debe tener 13 dígitos' };
-        }
-
-        return { isValid: true };
-    }
-
-    /**
-     * Valida Cédula (Ecuador)
-     */
-    static validateCedula(cedula: string): ValidationResult {
-        if (!cedula) {
-            return { isValid: false, error: 'La cédula es requerida' };
-        }
-
-        // Cédula debe tener 10 dígitos
-        if (!/^\d{10}$/.test(cedula)) {
-            return { isValid: false, error: 'Cédula debe tener 10 dígitos' };
-        }
-
-        return { isValid: true };
-    }
 
     /**
      * Valida precio

@@ -48,22 +48,6 @@ describe('ValidationService', () => {
         });
     });
 
-    describe('validateRUC', () => {
-        it('should validate 13-digit RUC', () => {
-            const result = ValidationService.validateRUC('1234567890001');
-            expect(result.isValid).toBe(true);
-        });
-
-        it('should reject RUC with wrong length', () => {
-            const result = ValidationService.validateRUC('12345');
-            expect(result.isValid).toBe(false);
-        });
-
-        it('should reject non-numeric RUC', () => {
-            const result = ValidationService.validateRUC('12345678900ab');
-            expect(result.isValid).toBe(false);
-        });
-    });
 
     describe('validatePrice', () => {
         it('should validate positive prices', () => {

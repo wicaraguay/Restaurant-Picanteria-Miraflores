@@ -15,9 +15,13 @@
  * @layer Services - Factory Pattern
  */
 
-import { Customer, Order, OrderStatus, MenuItem, Employee, Role, Reservation, Bill } from '../../types';
+import { Customer, Reservation } from '../../modules/customers/types/customer.types';
+import { Bill } from '../../modules/billing/types/billing.types';
+import { Order, OrderStatus } from '../../modules/orders/types/order.types';
+import { MenuItem } from '../../modules/menu/types/menu.types';
+import { Employee, Role } from '../../modules/hr/types/hr.types';
+import { OrderNumberGenerator } from '../../modules/orders/utils/orderNumberGenerator';
 import { DAYS_OF_WEEK } from '../../constants';
-import { OrderNumberGenerator } from '../../utils/orderNumberGenerator';
 
 /**
  * Utilidad para generar fechas relativas

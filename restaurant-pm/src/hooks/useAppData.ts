@@ -17,7 +17,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { dataService } from '../services/DataService';
+import dataService from '../services/DataService';
 import { useAppState } from '../contexts/AppStateContext';
 import { useRestaurantConfig } from '../contexts/RestaurantConfigContext';
 import { logger } from '../utils/logger';

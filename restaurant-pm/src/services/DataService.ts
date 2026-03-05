@@ -19,9 +19,13 @@
 import { api } from '../api';
 import { DataFactory } from './factories/DataFactory';
 import { logger } from '../utils/logger';
-import { Customer, Order, MenuItem, Bill, RestaurantConfig } from '../types';
-import { orderService } from './OrderService';
-import { menuService } from './MenuService';
+import { RestaurantConfig } from '../types';
+import { Customer } from '../modules/customers/types/customer.types';
+import { Bill } from '../modules/billing/types/billing.types';
+import { Order } from '../modules/orders/types/order.types';
+import { MenuItem } from '../modules/menu/types/menu.types';
+import { orderService } from '../modules/orders/services/OrderService';
+import { menuService } from '../modules/menu/services/MenuService';
 
 /**
  * DataService - Singleton para gestión de datos
@@ -304,3 +308,5 @@ export class DataService {
 
 // Exportar instancia singleton
 export const dataService = DataService.getInstance();
+export default dataService;
+

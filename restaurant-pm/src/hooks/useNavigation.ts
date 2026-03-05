@@ -15,23 +15,38 @@
  * @layer Hooks - Custom Hook
  */
 
-import { useState, useMemo, useEffect } from 'react';
-import { ViewType, Role, Employee } from '../types';
-import { AuthenticatedUser } from '../services/AuthService';
+import { useMemo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ViewType } from '../types';
+import { AuthenticatedUser } from '../modules/auth';
 import { NAV_ITEMS } from '../constants';
 
 /**
- * Hook para manejo de navegación
+ * Hook para manejo de navegación basado en la URL (React Router)
  */
 export function useNavigation(currentUser: AuthenticatedUser | null) {
-    const [currentView, setCurrentView] = useState<ViewType>('dashboard');
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    /**
+     * Deriva la vista actual desde la ruta de la URL
+     * Ejemplo: /admin/orders -> orders
+     */
+    const currentView = useMemo((): ViewType => {
+        const pathParts = location.pathname.split('/');
+        // Si estamos en /admin/vistas-hijas, la parte de interés es la última
+        const viewFromPath = pathParts[pathParts.length - 1] as ViewType;
+
+        // Validar si es una vista válida, si no, dashboard
+        const isValidView = NAV_ITEMS.some(item => item.view === viewFromPath);
+        return isValidView ? viewFromPath : 'dashboard';
+    }, [location.pathname]);
 
     /**
      * Filtra items de navegación según permisos del usuario
      */
     const navItems = useMemo(() => {
         if (!currentUser || !currentUser.role) {
-            console.warn('User has no role defined:', currentUser);
             return [];
         }
 
@@ -49,13 +64,13 @@ export function useNavigation(currentUser: AuthenticatedUser | null) {
     };
 
     /**
-     * Navega a una vista si el usuario tiene permiso
+     * Navega a una vista si el usuario tiene permiso, actualizando la URL
      */
     const navigateTo = (view: ViewType): boolean => {
         if (!hasAccessTo(view)) {
             return false;
         }
-        setCurrentView(view);
+        navigate(`/admin/${view}`);
         return true;
     };
 
@@ -68,27 +83,22 @@ export function useNavigation(currentUser: AuthenticatedUser | null) {
     };
 
     /**
-     * Efecto para redirigir si el usuario no tiene acceso a la vista actual
-     * Esto soluciona el problema de ver el Dashboard sin permisos al iniciar sesión
+     * Efecto para redirigir si el usuario no tiene acceso a la ruta actual
      */
-    // @ts-ignore - Import useEffect if not already imported, currently assumes it needs to be added to imports
     useEffect(() => {
         if (!currentUser || navItems.length === 0) return;
 
-        // Verificar si la vista actual está en los items permitidos
         const isAllowed = navItems.some(item => item.view === currentView);
 
         if (!isAllowed) {
-            // Si no está permitido, redirigir al primer item disponible
             const firstAllowedView = navItems[0].view;
-            // console.log(`Redirecting from ${currentView} to ${firstAllowedView} due to lack of permission`);
-            setCurrentView(firstAllowedView);
+            navigate(`/admin/${firstAllowedView}`, { replace: true });
         }
-    }, [currentUser, currentView, navItems]);
+    }, [currentUser, currentView, navItems, navigate]);
 
     return {
         currentView,
-        setCurrentView,
+        setCurrentView: (view: ViewType) => navigateTo(view), // Mantener compatibilidad de interfaz
         navItems,
         hasAccessTo,
         navigateTo,

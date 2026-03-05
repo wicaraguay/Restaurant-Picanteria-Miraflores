@@ -16,7 +16,11 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Customer, Order, MenuItem, Bill, Reservation, Employee, Role } from '../types';
+import { Customer, Reservation } from '../modules/customers';
+import { Bill } from '../modules/billing';
+import { Order } from '../modules/orders';
+import { MenuItem } from '../modules/menu';
+import { Employee, Role } from '../modules/hr';
 import { DataFactory } from '../services/factories/DataFactory';
 
 /**

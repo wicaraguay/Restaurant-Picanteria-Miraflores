@@ -5,8 +5,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { menuService } from '../services/MenuService';
-import { MenuItem } from '../types';
+import { menuService } from '../modules/menu/services/MenuService';
+import { MenuItem } from '../modules/menu/types/menu.types';
 import { logger } from '../utils/logger';
 import { useRestaurantConfig } from '../contexts/RestaurantConfigContext';
 

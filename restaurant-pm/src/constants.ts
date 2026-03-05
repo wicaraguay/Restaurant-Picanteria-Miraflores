@@ -6,7 +6,7 @@
  */
 
 import type { ViewType } from './types';
-import { HomeIcon, UsersIcon, ClipboardListIcon, ChefHatIcon, BriefcaseIcon, BookOpenIcon, SettingsIcon, FileTextIcon, BarChartIcon } from './components/Icons';
+import { HomeIcon, UsersIcon, ClipboardListIcon, ChefHatIcon, BriefcaseIcon, BookOpenIcon, SettingsIcon, FileTextIcon, BarChartIcon } from './components/ui/Icons';
 
 /**
  * Items de navegación de la aplicación
@@ -14,6 +14,7 @@ import { HomeIcon, UsersIcon, ClipboardListIcon, ChefHatIcon, BriefcaseIcon, Boo
  */
 export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Dashboard', icon: HomeIcon, view: 'dashboard' as ViewType },
+  { id: 'customers', label: 'Gestión de Clientes', shortLabel: 'Clientes', icon: UsersIcon, view: 'customers' as ViewType },
 
 
   { id: 'orders', label: 'Gestión de Pedidos', shortLabel: 'Pedidos', icon: ClipboardListIcon, view: 'orders' as ViewType },
