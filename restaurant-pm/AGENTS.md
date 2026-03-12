@@ -98,3 +98,37 @@ Para garantizar que el proyecto mantenga su integridad arquitectónica **FSD (Fe
 5.  **Verificación Técnica:** Después de cualquier cambio estructural o implementación de código, ejecuta **SIEMPRE** `npx tsc --noEmit` para garantizar que no hay errores de tipado o importaciones rotas.
 6.  **Actualización de Artefactos:** Si el cambio es significativo, actualiza o crea el `implementation_plan.md` y `walkthrough.md` en la carpeta de la conversación para dejar rastro de la decisión técnica.
 7.  **No Duplicidad:** Antes de crear un nuevo servicio o utilidad, utiliza `grep_search` o `list_dir` para verificar si ya existe una lógica similar en otro módulo.
+
+---
+
+## 🏗️ 5. Arquitectura del Backend: Clean Architecture (Hexagonal)
+
+El backend está diseñado siguiendo los principios de **Arquitectura Limpia**, separando las preocupaciones en capas bien definidas.
+
+### 5.1 Estructura de Capas (`src/`)
+
+*   **`domain/` (Capa de Núcleo):** Contiene las entidades de negocio (`entities/`), las interfaces de repositorios (`repositories/`) y errores personalizados. Es agnóstica a la tecnología (sin dependencias de base de datos o frameworks).
+*   **`application/` (Capa de Aplicación):** Contiene los "Casos de Uso" (`use-cases/`). Es donde reside la lógica de negocio técnica (ej. `GenerateInvoice`, `CreateOrder`). Solo depende de la capa de dominio.
+*   **`infrastructure/` (Capa Externa):** Implementaciones tecnológicas concretas.
+    *   `database/`: Schemas de Mongoose y conexión a MongoDB.
+    *   `repositories/`: Implementaciones de las interfaces de dominio (ej. `MongoOrderRepository`).
+    *   `services/`: Servicios externos (SRI, PDF, Email).
+    *   `controllers/`: Controladores que reciben peticiones y ejecutan casos de uso.
+    *   `web/`: Configuración del servidor (Express), rutas y middlewares.
+
+### 5.2 Patrones de Diseño e Implementación
+
+1.  **Repository Pattern:** Todas las operaciones de datos se abstraen mediante interfaces en `domain`. Se utiliza un `BaseRepository` en `infrastructure` para centralizar el CRUD común, evitando la redundancia.
+2.  **Dependency Injection (DI):** Los casos de uso reciben sus dependencias por constructor (Inyección de Dependencias), facilitando el testing y el desacoplamiento.
+3.  **Use Case Pattern:** Cada acción importante del sistema es un archivo separado en `application/use-cases/`, lo que facilita la mantenibilidad y evita archivos "monstruo".
+
+### 5.3 Hallazgos y Reglas para el Backend
+
+1.  **Reutilización Máxima:** Antes de crear un repositorio, verifica si puedes extender `BaseRepository`.
+2.  **Control de Complejidad:** 
+    *   Casos de uso críticos como `GenerateInvoice.ts` han crecido significativamente (~360 líneas). Si superan las 400 líneas, deben descomponerse en servicios de dominio internos.
+3.  **Boilerplate vs. Realidad:** Evitar crear casos de uso que solo hacen un simple `return repository.create(data)` si no hay lógica de validación intermedia.
+4.  **Pruebas Unitarias (Pendiente Crítico):** Actualmente existe una cobertura muy baja. Todo nuevo caso de uso o implementación de repositorio **DEBE** incluir su archivo `.test.ts` en la carpeta `test/`.
+5.  **Validaciones en Tiempo Real:** Para procesos críticos (como SRI 2026), las validaciones deben ocurrir en el caso de uso antes de llamar a servicios externos.
+
+---
