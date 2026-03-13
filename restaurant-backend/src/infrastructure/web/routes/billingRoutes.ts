@@ -12,10 +12,7 @@ import { BillingController } from '../../controllers/BillingController';
 const router = express.Router();
 
 // Instantiate controller with dependencies from DI Container
-const billingController = new BillingController(
-    container.getGenerateInvoiceUseCase(),
-    container.getCheckInvoiceStatusUseCase()
-);
+const billingController = container.getBillingController();
 
 /**
  * POST /api/billing/generate-xml

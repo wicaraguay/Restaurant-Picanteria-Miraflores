@@ -5,6 +5,7 @@ import { DeleteBill } from '../../application/use-cases/DeleteBill';
 import { ResetBillingSystem } from '../../application/use-cases/ResetBillingSystem';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
+import { NotFoundError } from '../../domain/errors/CustomErrors';
 import { PDFService } from '../services/PDFService';
 import { RestaurantConfigModel } from '../database/schemas/RestaurantConfigSchema';
 
@@ -62,8 +63,7 @@ export class BillController {
             const billData = await this.getBills.executeById(id);
 
             if (!billData) {
-                res.status(404).json(ResponseFormatter.error('NOT_FOUND', 'La factura no existe en el registro.'));
-                return;
+                throw new NotFoundError('La factura no existe en el registro.', 'Bill');
             }
 
             const pdfService = new PDFService();
@@ -119,8 +119,7 @@ export class BillController {
             res.setHeader('Content-Disposition', `attachment; filename=Factura-${billData.documentNumber}.pdf`);
             res.send(pdfBuffer);
         } catch (error) {
-            logger.error('Failed to generate PDF for existing bill', error);
-            res.status(500).json(ResponseFormatter.error('PDF_GENERATION_FAILED', 'Error al generar el archivo RIDE.'));
+            next(error);
         }
     };
 
@@ -132,8 +131,7 @@ export class BillController {
             const success = await this.deleteBill.execute(id);
 
             if (!success) {
-                res.status(404).json(ResponseFormatter.error('NOT_FOUND', 'La factura no existe o no se pudo eliminar.'));
-                return;
+                throw new NotFoundError('La factura no existe o no se pudo eliminar.', 'Bill');
             }
 
             logger.info('Bill deleted successfully', { id });

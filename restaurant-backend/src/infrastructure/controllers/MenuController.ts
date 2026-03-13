@@ -5,6 +5,7 @@ import { UpdateMenu } from '../../application/use-cases/UpdateMenu';
 import { DeleteMenu } from '../../application/use-cases/DeleteMenu';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
+import { NotFoundError } from '../../domain/errors/CustomErrors';
 import { cacheService } from '../utils/CacheService';
 import { MenuItem } from '../../domain/entities/MenuItem';
 
@@ -57,9 +58,7 @@ export class MenuController {
             const updatedItem = await this.updateMenu.execute(req.params.id, req.body);
 
             if (!updatedItem) {
-                logger.warn('Menu item not found', { id: req.params.id });
-                res.status(404).json(ResponseFormatter.error('MENU_ITEM_NOT_FOUND', 'Menu item not found'));
-                return;
+                throw new NotFoundError('Menu item not found', 'MenuItem');
             }
 
             // Invalidate menu cache
@@ -78,9 +77,7 @@ export class MenuController {
             const deleted = await this.deleteMenu.execute(req.params.id);
 
             if (!deleted) {
-                logger.warn('Menu item not found', { id: req.params.id });
-                res.status(404).json(ResponseFormatter.error('MENU_ITEM_NOT_FOUND', 'Menu item not found'));
-                return;
+                throw new NotFoundError('Menu item not found', 'MenuItem');
             }
 
             // Invalidate menu cache

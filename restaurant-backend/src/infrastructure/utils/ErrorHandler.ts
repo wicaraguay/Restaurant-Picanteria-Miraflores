@@ -25,66 +25,45 @@ export class ErrorHandler {
     /**
      * Handle errors and send appropriate response
      */
-    static handle(error: Error, req: Request, res: Response): void {
-        logger.error('Error occurred', error);
+    static handle(error: any, req: Request, res: Response): void {
+        const isDevelopment = process.env.NODE_ENV === 'development';
+        
+        // Log the error with stack trace for internal auditing
+        logger.error(`[ErrorHandler] ${error.message}`, {
+            path: req.path,
+            method: req.method,
+            stack: error.stack,
+            metadata: error.metadata
+        });
 
-        // Handle custom errors
-        if (error instanceof ValidationError) {
+        // 1. Handle our CustomErrors (ValidationError, NotFoundError, etc.)
+        if (error.statusCode && error.code) {
             res.status(error.statusCode).json(
                 ResponseFormatter.error(
                     error.code,
                     error.message,
-                    error.metadata
+                    error.metadata || error.resource ? { resource: error.resource, ...error.metadata } : undefined
                 )
             );
             return;
         }
 
-        if (error instanceof NotFoundError) {
-            res.status(error.statusCode).json(
-                ResponseFormatter.error(
-                    error.code,
-                    error.message,
-                    { resource: error.resource }
-                )
-            );
+        // 2. Handle JWT Errors specifically if needed (optional but good)
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+            res.status(401).json(ResponseFormatter.error('AUTH_INVALID_TOKEN', 'Token inválido o expirado'));
             return;
         }
 
-        if (error instanceof AuthenticationError) {
-            res.status(error.statusCode).json(
-                ResponseFormatter.error(
-                    error.code,
-                    error.message
-                )
-            );
-            return;
-        }
-
-        if (error instanceof DatabaseError) {
-            res.status(error.statusCode).json(
-                ResponseFormatter.error(
-                    error.code,
-                    error.message,
-                    process.env.NODE_ENV === 'development'
-                        ? { originalError: error.originalError?.message }
-                        : undefined
-                )
-            );
-            return;
-        }
-
-        // Handle unknown errors
-        const statusCode = 500;
-        const message = error.message;
+        // 3. Fallback for all other unexpected errors
+        const statusCode = error.statusCode || 500;
+        const errorCode = error.code || 'INTERNAL_SERVER_ERROR';
+        const message = isDevelopment ? error.message : 'Ha ocurrido un error inesperado en el servidor.';
 
         res.status(statusCode).json(
             ResponseFormatter.error(
-                'INTERNAL_ERROR',
+                errorCode,
                 message,
-                process.env.NODE_ENV === 'development'
-                    ? { stack: error.stack }
-                    : undefined
+                isDevelopment ? { stack: error.stack, details: error.details } : undefined
             )
         );
     }

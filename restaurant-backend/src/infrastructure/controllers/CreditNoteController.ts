@@ -4,6 +4,7 @@ import { GetCreditNotes } from '../../application/use-cases/GetCreditNotes';
 import { CheckCreditNoteStatus } from '../../application/use-cases/CheckCreditNoteStatus';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
+import { ValidationError, NotFoundError } from '../../domain/errors/CustomErrors';
 
 export class CreditNoteController {
     constructor(
@@ -17,8 +18,7 @@ export class CreditNoteController {
             const { billId, reason, customDescription, taxRate } = req.body;
 
             if (!billId || !reason) {
-                res.status(400).json(ResponseFormatter.error('VALIDATION_ERROR', 'billId y reason son requeridos'));
-                return;
+                throw new ValidationError('billId y reason son requeridos');
             }
 
             logger.info('Generating credit note', { billId, reason });
@@ -37,7 +37,6 @@ export class CreditNoteController {
 
             res.status(201).json(ResponseFormatter.success(result));
         } catch (error) {
-            logger.error('Failed to generate credit note', error);
             next(error);
         }
     };
@@ -79,8 +78,7 @@ export class CreditNoteController {
             const creditNote = await this.getCreditNotes.executeById(id);
 
             if (!creditNote) {
-                res.status(404).json(ResponseFormatter.error('NOT_FOUND', 'Nota de crédito no encontrada'));
-                return;
+                throw new NotFoundError('Nota de crédito no encontrada', 'CreditNote');
             }
 
             res.json(ResponseFormatter.success(creditNote));
@@ -94,8 +92,7 @@ export class CreditNoteController {
             const { accessKey } = req.body;
 
             if (!accessKey) {
-                res.status(400).json(ResponseFormatter.error('VALIDATION_ERROR', 'accessKey es requerido'));
-                return;
+                throw new ValidationError('accessKey es requerido');
             }
 
             logger.info('Checking credit note status', { accessKey });
@@ -109,7 +106,6 @@ export class CreditNoteController {
 
             res.json(ResponseFormatter.success(result));
         } catch (error) {
-            logger.error('Failed to check credit note status', error);
             next(error);
         }
     };

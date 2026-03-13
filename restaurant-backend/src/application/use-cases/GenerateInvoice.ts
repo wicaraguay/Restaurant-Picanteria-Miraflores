@@ -8,6 +8,8 @@ import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 import { Invoice, InvoiceDetail } from '../../domain/billing/invoice';
 import { ValidationError } from '../../domain/errors/CustomErrors';
 
+import { BillingService } from '../services/BillingService';
+
 export class GenerateInvoice {
     constructor(
         private configRepository: IRestaurantConfigRepository,
@@ -15,7 +17,8 @@ export class GenerateInvoice {
         private orderRepository: IOrderRepository,
         private sriService: SRIService,
         private pdfService: PDFService,
-        private emailService: EmailService
+        private emailService: EmailService,
+        private billingService: BillingService
     ) { }
 
     async execute(data: { order: any, client: any, taxRate?: number, logoUrl?: string }): Promise<any> {
@@ -24,36 +27,12 @@ export class GenerateInvoice {
         // Validate Email Format (User Request)
         // Ensure email has correct format to avoid sending typos (commas, extra letters)
         if (client.email) {
-            this.validateEmail(client.email);
+            this.billingService.validateEmail(client.email);
         }
 
 
         // 1. Calculate Details
-        const rateDecimal = taxRate / 100;
-        const details: InvoiceDetail[] = order.items.map((item: any, index: number) => {
-            const priceInclusive = item.price || 0;
-            const totalInclusive = priceInclusive * item.quantity;
-            const rawSubtotal = totalInclusive / (1 + rateDecimal);
-            const subtotalRounded = parseFloat(rawSubtotal.toFixed(2));
-            const taxValueRounded = parseFloat((subtotalRounded * rateDecimal).toFixed(2));
-            const unitPrice = subtotalRounded / item.quantity;
-
-            return {
-                codigoPrincipal: item.id || `ITEM-${index + 1}`,
-                descripcion: item.name,
-                cantidad: item.quantity,
-                precioUnitario: parseFloat(unitPrice.toFixed(6)),
-                descuento: 0,
-                precioTotalSinImpuesto: subtotalRounded,
-                impuestos: [{
-                    codigo: '2',
-                    codigoPorcentaje: taxRate === 15 ? '4' : (taxRate === 12 ? '2' : '0'),
-                    tarifa: taxRate,
-                    baseImponible: subtotalRounded,
-                    valor: taxValueRounded
-                }]
-            };
-        });
+        const details = this.billingService.calculateDetails(order.items, taxRate);
 
         const subtotal = details.reduce((sum, d) => sum + d.precioTotalSinImpuesto, 0);
         const totalImpuestos = details.reduce((sum, d) => sum + d.impuestos[0].valor, 0);
@@ -88,17 +67,9 @@ export class GenerateInvoice {
                 estab: info.billing?.establishment || process.env.ESTAB || '001',
                 ptoEmi: info.billing?.emissionPoint || process.env.PTO_EMI || '001',
                 secuencial: secuencial, // Using atomic sequential from database
-                fechaEmision: ((date) => {
-                    const options: Intl.DateTimeFormatOptions = { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' };
-                    // formatter produces "dd/mm/yyyy" in es-EC, but formatToParts is safer/explicit
-                    const parts = new Intl.DateTimeFormat('es-EC', options).formatToParts(date);
-                    const d = parts.find(p => p.type === 'day')?.value;
-                    const m = parts.find(p => p.type === 'month')?.value;
-                    const y = parts.find(p => p.type === 'year')?.value;
-                    return `${d}/${m}/${y}`;
-                })(now),
+                fechaEmision: this.billingService.getCurrentDateEcuador(),
                 obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
-                tipoIdentificacionComprador: this.getIdentificacionType(client.identification),
+                tipoIdentificacionComprador: this.billingService.getIdentificacionType(client.identification),
                 razonSocialComprador: client.name,
                 identificacionComprador: client.identification,
                 direccionComprador: client.address,
@@ -119,7 +90,7 @@ export class GenerateInvoice {
         // SRI 2026 Compliance: Real-Time Transmission Validation
         // Resolution NAC-DGERCGC25-00000017: Invoices must be transmitted immediately upon emission
         // The emission date must correspond to the current date
-        this.validateRealTimeTransmission(invoice.info.fechaEmision);
+        this.billingService.validateRealTimeTransmission(invoice.info.fechaEmision);
 
         // 5. Generate XML
         const xml = this.sriService.generateInvoiceXML(invoice);
@@ -136,60 +107,7 @@ export class GenerateInvoice {
 
         let authResult = null;
         if (result.estado === 'RECIBIDA' || isAlreadyRegistered) {
-            // Polling Logic for Authorization (SRI 2026 Resilience)
-            // If SRI says "Already Registered" or "Processing", we must wait and check authorization consistently.
-            // We will attempt to authorize/check status up to 5 times with 3s delays (Total ~15s).
-            const maxAttempts = 5;
-            let attempts = 0;
-
-            console.log(`[GenerateInvoice] Starting Authorization Polling (Max ${maxAttempts} attempts)`);
-
-            while (attempts < maxAttempts) {
-                attempts++;
-
-                // Wait before checking (except maybe first try if not a re-check, but safer to always wait a bit if it was just sent)
-                // If it is 'already registered', it means we just got that error, so waiting is good.
-                // If it was 'RECIBIDA', we also wait to give SRI time to process.
-                if (attempts > 0) {
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                }
-
-                console.log(`[GenerateInvoice] Authorization Attempt ${attempts}/${maxAttempts}...`);
-                authResult = await this.sriService.authorizeInvoice(invoice.info.claveAcceso!, isProd);
-
-                // 1. If Authorized, we are done!
-                if (authResult.estado === 'AUTORIZADO') {
-                    console.log('✅ Invoice Authorized successfully!');
-                    break;
-                }
-
-                // 2. If valid Rejection (DEVUELTA) and NOT "Processing", stop.
-                // Note: SRIService might return 'EN PROCESO' if query returns 0 docs.
-                if (authResult.estado === 'DEVUELTA') {
-                    // Check if it's actually just processing hidden in a message
-                    const responseStr = JSON.stringify(authResult); // Check full object
-                    if (responseStr.includes('EN PROCESAMIENTO') || responseStr.includes('CLAVE DE ACCESO EN PROCESAMIENTO')) {
-                        console.log('⚠️ Status is DEVUELTA but message says PROCESSING. Retrying...');
-                        continue;
-                    }
-                    console.log('❌ Invoice Rejected by SRI.');
-                    break;
-                }
-
-                // 3. If 'EN PROCESO' or 'UNKNOWN', continue loop
-                if (authResult.estado === 'EN PROCESO' || authResult.estado === 'UNKNOWN') {
-                    console.log(`⚠️ Status is ${authResult.estado}. Retrying...`);
-                    continue;
-                }
-
-                // If other status, break? Default to continue if not clear failure.
-            }
-
-            // Fallback if loop finishes without success
-            if (!authResult) {
-                authResult = { estado: 'TIMEOUT_POLLING', mensajes: ['El SRI tardó demasiado en responder. Intente "Verificar Status" más tarde.'] };
-            }
-
+            authResult = await this.sriService.waitForAuthorization(invoice.info.claveAcceso!, isProd);
         } else if (result.estado === 'DEVUELTA') {
             // Check for SEQUENCE REGISTERED Error explicitly
             const responseStr = JSON.stringify(result);
@@ -298,61 +216,4 @@ export class GenerateInvoice {
         };
     }
 
-    /**
-     * Validates that the invoice is being transmitted in real-time according to SRI 2026 regulations
-     * Resolution NAC-DGERCGC25-00000017: The emission date must correspond to the current date
-     * @param fechaEmision - Invoice emission date in DD/MM/YYYY format
-     * @throws Error if the date is not today (with 5 minutes tolerance for clock sync issues)
-     */
-    private validateRealTimeTransmission(fechaEmision: string): void {
-        const [day, month, year] = fechaEmision.split('/').map(Number);
-
-        // CRITICAL FIX: Use Ecuador Time for "Today" comparison, not Server Time (UTC)
-        // This prevents false positives when Server is in tomorrow (UTC) but Ecuador is still today
-        const now = new Date();
-        const options: Intl.DateTimeFormatOptions = { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' };
-        const parts = new Intl.DateTimeFormat('es-EC', options).formatToParts(now);
-
-        const ecuadorDay = parseInt(parts.find(p => p.type === 'day')?.value || '0');
-        const ecuadorMonth = parseInt(parts.find(p => p.type === 'month')?.value || '0');
-        const ecuadorYear = parseInt(parts.find(p => p.type === 'year')?.value || '0');
-
-        // Compare explicit Date components
-        const isSameDate = day === ecuadorDay && month === ecuadorMonth && year === ecuadorYear;
-
-        if (!isSameDate) {
-            throw new Error(
-                `Transmisión NO en tiempo real: La fecha de emisión (${fechaEmision}) debe ser la fecha actual (${ecuadorDay.toString().padStart(2, '0')}/${ecuadorMonth.toString().padStart(2, '0')}/${ecuadorYear}) según la Resolución SRI NAC-DGERCGC25-00000017. ` +
-                `Las facturas deben transmitirse de forma INMEDIATA (Zona Horaria Ecuador).`
-            );
-        }
-    }
-
-    private getIdentificacionType(id: string): "04" | "05" | "06" | "07" {
-        if (id === '9999999999999') return '07';
-        if (id.length === 13) return '04';
-        if (id.length === 10) return '05';
-        return '06';
-    }
-
-    /**
-     * Validates email format using regex
-     * Accepts standard email formats (user@domain.com)
-     * Rejects common typos like commas, spaces, missing @, missing domain
-     */
-    private validateEmail(email: string): void {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        // Remove whitespace for check if likely copy-paste error
-        const cleanEmail = email.trim();
-
-        if (!emailRegex.test(cleanEmail)) {
-            throw new ValidationError(`⚠️ Error de Formato: El correo "${email}" no es válido. Verifique que no tenga espacios ni caracteres especiales.`);
-        }
-
-        // Specific check for commas which are common typos (user requested)
-        if (email.includes(',')) {
-            throw new ValidationError(`⚠️ Error Común Detectado: El correo no puede tener comas (,). Por favor use punto (.) para separar dominios.`);
-        }
-    }
 }

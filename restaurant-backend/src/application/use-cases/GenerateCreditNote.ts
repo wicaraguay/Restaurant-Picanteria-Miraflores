@@ -6,6 +6,8 @@ import { ICreditNoteRepository } from '../../domain/repositories/ICreditNoteRepo
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { CreditNote, CreditNoteDetail, CREDIT_NOTE_REASONS } from '../../domain/billing/creditNote';
 
+import { BillingService } from '../services/BillingService';
+
 export class GenerateCreditNote {
     constructor(
         private configRepository: IRestaurantConfigRepository,
@@ -13,7 +15,8 @@ export class GenerateCreditNote {
         private billRepository: IBillRepository,
         private sriService: SRIService,
         private pdfService: PDFService,
-        private emailService: EmailService
+        private emailService: EmailService,
+        private billingService: BillingService
     ) { }
 
     async execute(data: {
@@ -43,14 +46,14 @@ export class GenerateCreditNote {
 
         // Validate that customer is not "Consumidor Final" according to SRI 2026 regulations
         // SRI Resolution NAC-DGERCGC25-00000017: Credit notes cannot be issued for "Consumidor Final" invoices
-        const customerIdentType = this.getIdentificacionType(originalBill.customerIdentification);
+        const customerIdentType = this.billingService.getIdentificacionType(originalBill.customerIdentification);
         if (originalBill.customerIdentification === '9999999999999' || customerIdentType === '07') {
             throw new Error('No se puede emitir una nota de crédito para facturas de "CONSUMIDOR FINAL" según las normativas del SRI vigentes desde 2026 (Resolución NAC-DGERCGC25-00000017).');
         }
 
         // Validate 7-day deadline for credit notes (SRI 2026 requirement)
         // Resolution NAC-DGERCGC25-00000017: Credit notes can only be issued until the 7th of the month following emission
-        const billDate = this.parseSRIDate(originalBill.date);
+        const billDate = this.billingService.parseSRIDate(originalBill.date);
         const billMonth = billDate.getMonth();
         const billYear = billDate.getFullYear();
 
@@ -70,31 +73,7 @@ export class GenerateCreditNote {
         console.log(`[GenerateCreditNote] Bill validated: ${originalBill.documentNumber}`);
 
         // 2. Calculate Details (same items as original bill, but as credit)
-        const rateDecimal = taxRate / 100;
-        const details: CreditNoteDetail[] = originalBill.items.map((item: any, index: number) => {
-            const priceInclusive = item.total / item.quantity || 0;
-            const totalInclusive = priceInclusive * item.quantity;
-            const rawSubtotal = totalInclusive / (1 + rateDecimal);
-            const subtotalRounded = parseFloat(rawSubtotal.toFixed(2));
-            const taxValueRounded = parseFloat((subtotalRounded * rateDecimal).toFixed(2));
-            const unitPrice = subtotalRounded / item.quantity;
-
-            return {
-                codigoPrincipal: `ITEM-${index + 1}`,
-                descripcion: item.name,
-                cantidad: item.quantity,
-                precioUnitario: parseFloat(unitPrice.toFixed(6)),
-                descuento: 0,
-                precioTotalSinImpuesto: subtotalRounded,
-                impuestos: [{
-                    codigo: '2',
-                    codigoPorcentaje: taxRate === 15 ? '4' : (taxRate === 12 ? '2' : '0'),
-                    tarifa: taxRate,
-                    baseImponible: subtotalRounded,
-                    valor: taxValueRounded
-                }]
-            };
-        });
+        const details = this.billingService.calculateDetails(originalBill.items, taxRate);
 
         const subtotal = details.reduce((sum, d) => sum + d.precioTotalSinImpuesto, 0);
         const totalImpuestos = details.reduce((sum, d) => sum + d.impuestos[0].valor, 0);
@@ -131,15 +110,15 @@ export class GenerateCreditNote {
                 estab: info.billing?.establishment || process.env.ESTAB || '001',
                 ptoEmi: info.billing?.emissionPoint || process.env.PTO_EMI || '001',
                 secuencial: secuencial,
-                fechaEmision: `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`,
+                fechaEmision: this.billingService.getCurrentDateEcuador(),
 
                 // Document Modified (Original Invoice)
                 codDocModificado: '01',
                 numDocModificado: originalBill.documentNumber,
-                fechaEmisionDocSustento: this.formatDateToSRI(originalBill.date),
+                fechaEmisionDocSustento: this.billingService.formatDateToSRI(originalBill.date),
 
                 obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
-                tipoIdentificacionComprador: this.getIdentificacionType(originalBill.customerIdentification),
+                tipoIdentificacionComprador: this.billingService.getIdentificacionType(originalBill.customerIdentification),
                 razonSocialComprador: originalBill.customerName,
                 identificacionComprador: originalBill.customerIdentification,
 
@@ -312,50 +291,4 @@ export class GenerateCreditNote {
         };
     }
 
-    private formatDateToSRI(dateStr: string): string {
-        // If already in DD/MM/YYYY format, return as is
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-            return dateStr;
-        }
-
-        // Try to parse as Date (handles ISO, timestamp, etc.)
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) {
-            // If invalid, return current date as fallback
-            console.warn(`[GenerateCreditNote] Invalid date: ${dateStr}, using current date`);
-            const now = new Date();
-            return `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
-        }
-
-        // Convert to DD/MM/YYYY
-        return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-    }
-
-    /**
-     * Parses a date from different formats to Date object
-     * Supports: ISO string, DD/MM/YYYY, timestamp
-     */
-    private parseSRIDate(dateStr: string): Date {
-        // If already in DD/MM/YYYY format
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-            const [day, month, year] = dateStr.split('/').map(Number);
-            return new Date(year, month - 1, day);
-        }
-
-        // Try to parse as ISO string or timestamp
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) {
-            console.warn(`[GenerateCreditNote] Invalid date format: ${dateStr}, using current date`);
-            return new Date();
-        }
-
-        return date;
-    }
-
-    private getIdentificacionType(id: string): "04" | "05" | "06" | "07" {
-        if (id === '9999999999999') return '07';
-        if (id.length === 13) return '04';
-        if (id.length === 10) return '05';
-        return '06';
-    }
 }

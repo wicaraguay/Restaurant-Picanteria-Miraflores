@@ -6,6 +6,7 @@ import { DeleteRole } from '../../application/use-cases/DeleteRole';
 import { IRoleRepository } from '../../domain/repositories/IRoleRepository';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
+import { NotFoundError } from '../../domain/errors/CustomErrors';
 
 export class RoleController {
     constructor(
@@ -33,9 +34,7 @@ export class RoleController {
             const role = await this.roleRepository.findById(req.params.id);
 
             if (!role) {
-                logger.warn('Role not found', { id: req.params.id });
-                res.status(404).json(ResponseFormatter.error('ROLE_NOT_FOUND', 'Role not found'));
-                return;
+                throw new NotFoundError('Role not found', 'Role');
             }
 
             logger.info('Role fetched successfully', { id: req.params.id });

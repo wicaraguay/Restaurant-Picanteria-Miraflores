@@ -3,6 +3,7 @@ import { GenerateInvoice } from '../../application/use-cases/GenerateInvoice';
 import { CheckInvoiceStatus } from '../../application/use-cases/CheckInvoiceStatus';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
+import { ValidationError } from '../../domain/errors/CustomErrors';
 
 export class BillingController {
     constructor(
@@ -16,9 +17,7 @@ export class BillingController {
             const { order, client, taxRate = 15, logoUrl } = req.body;
 
             if (!order || !client) {
-                logger.warn('⚠️ Missing data in billing request');
-                res.status(400).json({ error: 'Order and Client data are required' });
-                return;
+                throw new ValidationError('Order and Client data are required');
             }
 
             const result = await this.generateInvoice.execute({ order, client, taxRate, logoUrl });
@@ -26,7 +25,6 @@ export class BillingController {
             logger.info('✅ Billing process completed successfully.');
             res.json(result);
         } catch (error) {
-            logger.error('Billing error:', error);
             next(error);
         }
     };
@@ -37,8 +35,7 @@ export class BillingController {
             const isProd = process.env.SRI_ENV === '2';
 
             if (!accessKey) {
-                res.status(400).json({ error: 'Access Key is required' });
-                return;
+                throw new ValidationError('Access Key is required');
             }
 
             logger.info(`Checking status for Access Key: ${accessKey}`);
@@ -48,8 +45,7 @@ export class BillingController {
             logger.info('✅ Status check process completed successfully.');
             res.json(result);
         } catch (error) {
-            logger.error('Error checking SRI status:', error);
-            res.status(500).json({ error: 'Failed to check status' });
+            next(error);
         }
     };
 }

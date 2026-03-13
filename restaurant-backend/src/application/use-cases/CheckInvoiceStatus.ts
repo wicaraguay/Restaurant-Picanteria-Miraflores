@@ -6,6 +6,8 @@ import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaura
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 
+import { BillingService } from '../services/BillingService';
+
 export class CheckInvoiceStatus {
     constructor(
         private configRepository: IRestaurantConfigRepository,
@@ -13,7 +15,8 @@ export class CheckInvoiceStatus {
         private orderRepository: IOrderRepository,
         private sriService: SRIService,
         private pdfService: PDFService,
-        private emailService: EmailService
+        private emailService: EmailService,
+        private billingService: BillingService
     ) { }
 
     async execute(accessKey: string, isProd: boolean): Promise<any> {
@@ -25,24 +28,8 @@ export class CheckInvoiceStatus {
             return { success: false, error: 'Factura no encontrada en base de datos local.' };
         }
 
-        // 1. Authorize with SRI (Polling for Resilience)
-        let authResult;
-        let attempts = 0;
-        const maxAttempts = 5;
-
-        while (attempts < maxAttempts) {
-            attempts++;
-            if (attempts > 1) await new Promise(r => setTimeout(r, 2000)); // 2s delay for updates
-
-            console.log(`[CheckInvoiceStatus] Attempt ${attempts}/${maxAttempts}...`);
-            authResult = await this.sriService.authorizeInvoice(accessKey, isProd);
-
-            if (authResult.estado === 'AUTORIZADO') break;
-            if (authResult.estado === 'DEVUELTA') break; // Unless checking specifically for processing msg?
-
-            // If EN PROCESO, continue
-            if (authResult.estado !== 'EN PROCESO' && authResult.estado !== 'UNKNOWN') break;
-        }
+        // 1. Authorize with SRI (Using Centralized Polling)
+        const authResult = await this.sriService.waitForAuthorization(accessKey, isProd);
 
         if (authResult.estado === 'AUTORIZADO') {
             return await this.handleSuccess(billInDb, authResult, isProd);
@@ -70,31 +57,7 @@ export class CheckInvoiceStatus {
                     const [estab, ptoEmi, secuencial] = fullBill.documentNumber.split('-');
 
                     // Reconstruct Details (Logic mirrors GenerateInvoice)
-                    const details = fullBill.items.map((item: any, index: number) => {
-                        // Reverse calculation to get unit price and tax base
-                        // Stored: price (unit price?), total (row total)
-
-                        // CRITICAL: Rounding to 2 decimals for SRI validation
-                        const rawTotalSinImpuesto = item.price * item.quantity;
-                        const totalSinImpuesto = parseFloat(rawTotalSinImpuesto.toFixed(2));
-                        const taxValue = parseFloat((totalSinImpuesto * 0.15).toFixed(2)); // Default 15%
-
-                        return {
-                            codigoPrincipal: item.id || `ITEM-${index + 1}`,
-                            descripcion: item.name,
-                            cantidad: item.quantity,
-                            precioUnitario: item.price, // Stored as unit price (up to 6 decimals ok)
-                            descuento: 0,
-                            precioTotalSinImpuesto: totalSinImpuesto,
-                            impuestos: [{
-                                codigo: '2',
-                                codigoPorcentaje: '4', // Default 15% (TODO: Store tax code in DB)
-                                tarifa: 15,
-                                baseImponible: totalSinImpuesto,
-                                valor: taxValue
-                            }]
-                        };
-                    });
+                    const details = this.billingService.calculateDetails(fullBill.items);
 
                     const invoiceToResend: any = {
                         info: {
@@ -110,19 +73,9 @@ export class CheckInvoiceStatus {
                             secuencial: secuencial,
                             dirMatriz: info.address,
                             dirEstablecimiento: info.address,
-                            fechaEmision: ((dateStr) => {
-                                // CRITICAL FIX: When RE-SENDING, we must use the CURRENT DATE (Today)
-                                // If we use the old date, SRI rejects with "Transmisión NO en tiempo real"
-                                const now = new Date();
-                                const options: Intl.DateTimeFormatOptions = { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' };
-                                const parts = new Intl.DateTimeFormat('es-EC', options).formatToParts(now);
-                                const d = parts.find(p => p.type === 'day')?.value;
-                                const m = parts.find(p => p.type === 'month')?.value;
-                                const y = parts.find(p => p.type === 'year')?.value;
-                                return `${d}/${m}/${y}`;
-                            })(fullBill.date),
+                            fechaEmision: this.billingService.getCurrentDateEcuador(),
                             obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
-                            tipoIdentificacionComprador: this.getIdentificacionType(fullBill.customerIdentification),
+                            tipoIdentificacionComprador: this.billingService.getIdentificacionType(fullBill.customerIdentification),
                             razonSocialComprador: fullBill.customerName,
                             identificacionComprador: fullBill.customerIdentification,
                             direccionComprador: fullBill.customerAddress,
@@ -138,8 +91,6 @@ export class CheckInvoiceStatus {
                     };
 
                     // Generate XML using EXISTING Access Key
-                    // CRITICAL: Always generate a NEW Access Key when resending to avoid "En Procesamiento" locks or "Already Processed" errors with old/bad XML.
-                    // This preserves the Secuencial (Invoice #) but gives a fresh Technical Key.
                     const useNewKey = true;
                     const xml = this.sriService.generateInvoiceXML(invoiceToResend, useNewKey ? undefined : fullBill.accessKey);
                     const signedXml = await this.sriService.signXML(xml);
@@ -163,115 +114,33 @@ export class CheckInvoiceStatus {
                     const isProcessing = receptionResult.estado === 'DEVUELTA' && responseStr.includes('CLAVE DE ACCESO EN PROCESAMIENTO');
 
                     if (receptionResult.estado === 'RECIBIDA' || isProcessing) {
-                        if (isProcessing) {
-                            console.log('⚠️ Status is PROCESAMIENTO (DEVUELTA). Treating as RECIBIDA and polling for Authorization...');
-                        } else {
-                            console.log('[CheckInvoiceStatus] Resend Successful (RECIBIDA). Checking Authorization again...');
+                        const newAuthResult = await this.sriService.waitForAuthorization(fullBill.accessKey!, isProd);
+                        if (newAuthResult && newAuthResult.estado === 'AUTORIZADO') {
+                            return await this.handleSuccess(fullBill, newAuthResult, isProd);
                         }
+                    } else if (receptionResult.estado === 'DEVUELTA' && responseStr.includes('ERROR SECUENCIAL REGISTRADO')) {
+                        console.log('⚠️ Sequence Registered Error detected. Auto-healing...');
+                        const nextSequential = await this.configRepository.getNextSequential();
+                        const newSecuencial = nextSequential.toString().padStart(9, '0');
+                        invoiceToResend.info.secuencial = newSecuencial;
 
-                        // Check Authorization logic...
-                        // Check Authorization logic...
-                        let newAuthResult;
-                        let retryAttempts = 0;
-                        const maxRetries = 5;
+                        const newXml = this.sriService.generateInvoiceXML(invoiceToResend);
+                        const newSignedXml = await this.sriService.signXML(newXml);
+                        const finalXmlKey = invoiceToResend.info.claveAcceso;
 
-                        console.log(`[CheckInvoiceStatus] Polling for Authorization (Max ${maxRetries} attempts)...`);
-
-                        while (retryAttempts < maxRetries) {
-                            retryAttempts++;
-                            await new Promise(r => setTimeout(r, 3000));
-
-                            // Log progress
-                            if (retryAttempts % 5 === 0) console.log(`[CheckInvoiceStatus] Authorization polling attempt ${retryAttempts}/${maxRetries}...`);
-
-                            newAuthResult = await this.sriService.authorizeInvoice(fullBill.accessKey!, isProd);
-                            if (newAuthResult && newAuthResult.estado === 'AUTORIZADO') break;
-                            if (newAuthResult && newAuthResult.estado === 'NO AUTORIZADO') break;
-                        }
-
-                        // If we got a result (even denied), return it so UI updates
-                        if (newAuthResult) {
-                            if (newAuthResult.estado === 'AUTORIZADO') {
-                                return await this.handleSuccess(fullBill, newAuthResult, isProd);
+                        const retryResult = await this.sriService.sendToSRI(newSignedXml, isProd);
+                        if (retryResult.estado === 'RECIBIDA') {
+                            await this.billRepository.upsert({
+                                id: fullBill.id,
+                                accessKey: finalXmlKey,
+                                documentNumber: `${estab}-${ptoEmi}-${newSecuencial}`,
+                                sriStatus: 'PENDING_RETRY'
+                            });
+                            const retryAuth = await this.sriService.waitForAuthorization(finalXmlKey!, isProd);
+                            if (retryAuth?.estado === 'AUTORIZADO') {
+                                return await this.handleSuccess({ ...fullBill, accessKey: finalXmlKey }, retryAuth, isProd);
                             }
-                            // If NO AUTORIZADO/OTHERS after retry, return it
-                            authResult = newAuthResult;
                         }
-                    } else if (receptionResult.estado === 'DEVUELTA') {
-                        console.log('[CheckInvoiceStatus] Resend Failed:', receptionResult.estado);
-
-                        // Check for SEQUENCE REGISTERED Error explicitly
-                        // responseStr is already defined above
-                        if (responseStr.includes('ERROR SECUENCIAL REGISTRADO')) {
-                            console.log('⚠️ Sequence Registered Error detected in CheckInvoiceStatus. Auto-healing...');
-
-                            // AUTO-HEAL: Increment Sequence and Retry locally
-                            const nextSequential = await this.configRepository.getNextSequential();
-                            const newSecuencial = nextSequential.toString().padStart(9, '0');
-                            console.log(`[CheckInvoiceStatus] Retrying with NEW Sequence: ${invoiceToResend.info.secuencial} -> ${newSecuencial}`);
-
-                            // Update Invoice Object
-                            invoiceToResend.info.secuencial = newSecuencial;
-
-                            // Update Document Number in DB so we don't prefer old one
-                            const [estab, ptoEmi, oldSeq] = fullBill.documentNumber.split('-');
-                            (fullBill as any).documentNumber = `${estab}-${ptoEmi}-${newSecuencial}`;
-
-                            // Regenerate XML
-                            const newXml = this.sriService.generateInvoiceXML(invoiceToResend); // key will be generated inside or passed undefined
-                            const newSignedXml = await this.sriService.signXML(newXml);
-
-                            // Extract correct access key from XML or object (SRIService updates object?)
-                            // SRIService.generateInvoiceXML usually updates info.claveAcceso or returns it.
-                            // We need the NEW access key generated.
-                            // Actually, SRIService.generateInvoiceXML calculates key if not present or passed.
-                            // Let's assume we pass undefined key to force regeneration.
-                            const finalXmlKey = invoiceToResend.info.claveAcceso;
-
-                            // Resend
-                            const retryResult = await this.sriService.sendToSRI(newSignedXml, isProd);
-
-                            if (retryResult.estado === 'RECIBIDA') {
-                                console.log('✅ Auto-heal successful. Invoice Received. Authorizing...');
-
-                                // Update DB with FINAL Key and Document Number
-                                await this.billRepository.upsert({
-                                    id: fullBill.id,
-                                    accessKey: finalXmlKey,
-                                    documentNumber: fullBill.documentNumber,
-                                    sriStatus: 'PENDING_RETRY'
-                                });
-
-                                // Authorize NEW Access Key
-                                const retryAuth = await this.sriService.authorizeInvoice(finalXmlKey, isProd);
-                                if (retryAuth && retryAuth.estado === 'AUTORIZADO') {
-                                    return await this.handleSuccess({ ...fullBill, accessKey: finalXmlKey }, retryAuth, isProd);
-                                } else {
-                                    authResult = retryAuth;
-                                }
-                            } else {
-                                // If still fails
-                                console.log('❌ Auto-heal failed.', retryResult);
-                                authResult = { ...authResult, estado: retryResult.estado, mensajes: retryResult.mensajes };
-                            }
-
-                        } else if (responseStr.includes('FECHA EMISIÓN EXTEMPORÁNEA')) {
-                            console.error('⚠️ DATE ERROR DETECTED: The invoice date is rejected by SRI.');
-                            console.error('⚠️ LIKELY CAUSE: Your Computer/Server Date (Currently 2026?) is ahead of SRI Server Date.');
-                            console.error('⚠️ SOLUTION: Please check your System Clock and set it to the correct current date.');
-                            authResult = {
-                                ...authResult,
-                                estado: 'ERROR_FECHA',
-                                mensajes: ['Error de Fecha: Verifique la hora/fecha de su computador. SRI rechazó por fecha futura/pasada.']
-                            };
-                        } else {
-                            // Other DEVUELTA error
-                            authResult = { ...authResult, estado: receptionResult.estado, mensajes: receptionResult.mensajes };
-                        }
-                    } else {
-                        // Other error
-                        console.log('[CheckInvoiceStatus] Resend Failed:', receptionResult.estado);
-                        authResult = { ...authResult, estado: receptionResult.estado, mensajes: receptionResult.mensajes };
                     }
 
                 } catch (resendError) {
@@ -287,13 +156,6 @@ export class CheckInvoiceStatus {
         };
     }
 
-    private getIdentificacionType(id: string): "04" | "05" | "06" | "07" {
-        if (!id) return '06';
-        if (id === '9999999999999') return '07';
-        if (id.length === 13) return '04';
-        if (id.length === 10) return '05';
-        return '06';
-    }
 
     private async handleSuccess(bill: any, authResult: any, isProd: boolean) {
         // 2. Update Bill in DB
@@ -330,27 +192,7 @@ export class CheckInvoiceStatus {
                 
                 const [estab, ptoEmi, secuencial] = bill.documentNumber.split('-');
 
-                const details = bill.items.map((item: any, index: number) => {
-                    const rawTotalSinImpuesto = item.price * item.quantity;
-                    const totalSinImpuesto = parseFloat(rawTotalSinImpuesto.toFixed(2));
-                    const taxValue = parseFloat((totalSinImpuesto * 0.15).toFixed(2));
-
-                    return {
-                        codigoPrincipal: item.id || `ITEM-${index + 1}`,
-                        descripcion: item.name,
-                        cantidad: item.quantity,
-                        precioUnitario: item.price,
-                        descuento: 0,
-                        precioTotalSinImpuesto: totalSinImpuesto,
-                        impuestos: [{
-                            codigo: '2',
-                            codigoPorcentaje: '4',
-                            tarifa: 15,
-                            baseImponible: totalSinImpuesto,
-                            valor: taxValue
-                        }]
-                    };
-                });
+                const details = this.billingService.calculateDetails(bill.items);
 
                 const invoiceObj: any = {
                     info: {
@@ -366,9 +208,9 @@ export class CheckInvoiceStatus {
                         secuencial: secuencial,
                         dirMatriz: info.address || process.env.DIR_MATRIZ,
                         dirEstablecimiento: info.address || process.env.DIR_ESTABLECIMIENTO,
-                        fechaEmision: bill.date instanceof Date ? bill.date.toLocaleDateString('es-EC').split('T')[0] : new Date(bill.date).toLocaleDateString('es-EC').split('T')[0], // Fallback formatting
+                        fechaEmision: this.billingService.formatDateToSRI(bill.date), 
                         obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
-                        tipoIdentificacionComprador: this.getIdentificacionType(bill.customerIdentification),
+                        tipoIdentificacionComprador: this.billingService.getIdentificacionType(bill.customerIdentification),
                         razonSocialComprador: bill.customerName,
                         identificacionComprador: bill.customerIdentification,
                         direccionComprador: bill.customerAddress,
@@ -379,7 +221,7 @@ export class CheckInvoiceStatus {
                         moneda: 'DOLAR',
                         formaPago: '01',
                         emailComprador: clientEmail,
-                        logoUrl: info.fiscalLogo || info.logo, // CRITICAL: Include logo for email PDF
+                        logoUrl: info.fiscalLogo || info.logo,
                         emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM,
                         telefonoComprador: bill.customerPhone || 'S/N',
                         tasaIva: (info.billing?.taxRate || 15).toString(),

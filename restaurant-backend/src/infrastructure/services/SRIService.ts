@@ -406,6 +406,54 @@ export class SRIService {
         }
     }
 
+
+    /**
+     * Polls the SRI Authorization service until the document is authorized or a terminal state is reached.
+     * @param accessKey Clave de acceso to check
+     * @param isProduction Whether to use production or test environment
+     * @param maxAttempts Maximum number of polling attempts (default 5)
+     * @param delay Delay between attempts in ms (default 3000)
+     */
+    public async waitForAuthorization(accessKey: string, isProduction: boolean = false, maxAttempts: number = 5, delay: number = 3000): Promise<any> {
+        let authResult;
+        let attempts = 0;
+
+        console.log(`[SRIService] Starting Authorization Polling for ${accessKey} (Max ${maxAttempts} attempts)`);
+
+        while (attempts < maxAttempts) {
+            attempts++;
+            if (attempts > 1) {
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+
+            console.log(`[SRIService] Authorization Attempt ${attempts}/${maxAttempts}...`);
+            authResult = await this.authorizeInvoice(accessKey, isProduction);
+
+            if (authResult.estado === 'AUTORIZADO') {
+                console.log('✅ Document Authorized successfully!');
+                return authResult;
+            }
+
+            if (authResult.estado === 'DEVUELTA') {
+                // Check if it's actually just processing hidden in a message
+                const responseStr = JSON.stringify(authResult);
+                if (responseStr.includes('EN PROCESAMIENTO') || responseStr.includes('CLAVE DE ACCESO EN PROCESAMIENTO')) {
+                    console.log('⚠️ Status is DEVUELTA but message says PROCESSING. Retrying...');
+                    continue;
+                }
+                console.log('❌ Document Rejected by SRI.');
+                return authResult;
+            }
+
+            if (authResult.estado === 'UNKNOWN' || authResult.estado === 'EN PROCESO') {
+                console.log(`⚠️ Status is ${authResult.estado}. Retrying...`);
+                continue;
+            }
+        }
+
+        return authResult || { estado: 'TIMEOUT', mensajes: ['El SRI tardó demasiado en responder.'] };
+    }
+
     /**
      * Consulta la Autorización del comprobante al SRI
      */
