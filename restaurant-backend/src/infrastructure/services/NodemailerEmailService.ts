@@ -63,7 +63,16 @@ export class NodemailerEmailService implements IEmailService {
     }
 
     private generateHtml(invoice: Invoice): string {
-        const logoUrl = invoice.info.logoUrl || '';
+        let logoUrl = invoice.info.logoUrl || '';
+
+        // Email clients often block Base64 logos or show them as attachments.
+        // We prioritize a public HTTP URL for better visibility in the email body.
+        const publicLogo = process.env.BUSINESS_LOGO_URL;
+        if (logoUrl.startsWith('data:') && publicLogo) {
+            console.log('[NodemailerEmailService] Base64 logo detected, using public BUSINESS_LOGO_URL for email content.');
+            logoUrl = publicLogo;
+        }
+
         const d = invoice.creationDate || new Date();
         const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
 
@@ -72,7 +81,7 @@ export class NodemailerEmailService implements IEmailService {
                 <!-- Header with Logo -->
                 <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
                     ${logoUrl
-                ? `<img src="${logoUrl}" alt="Logo" style="max-height: 80px; max-width: 200px; display: block; margin: 0 auto 10px auto;">`
+                ? `<img src="${logoUrl}" alt="${invoice.info.nombreComercial}" style="max-height: 80px; max-width: 200px; display: block; margin: 0 auto 10px auto;">`
                 : ''
             }
                     <h1 style="margin: 0; color: #111827; font-size: 22px; font-weight: bold; text-transform: uppercase;">${invoice.info.nombreComercial}</h1>

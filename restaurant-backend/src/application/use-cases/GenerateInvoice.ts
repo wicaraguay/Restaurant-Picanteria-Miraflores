@@ -41,7 +41,7 @@ export class GenerateInvoice {
         // 2. Get Config
         const config = await this.configRepository.get();
         const info = config || {} as any; // Fallback handled in logic or entity
-        
+
         console.log('[GenerateInvoice] Config from DB:', !!config, 'Logo field:', info.logo ? 'EXISTS' : 'MISSING', 'Fiscal Logo field:', info.fiscalLogo ? 'EXISTS' : 'MISSING');
         if (info.logo) console.log('[GenerateInvoice] Logo starts with:', info.logo.substring(0, 30));
 

@@ -61,14 +61,23 @@ export class ResendEmailService implements IEmailService {
     }
 
     private generateHtml(invoice: Invoice): string {
-        const logoUrl = invoice.info.logoUrl || '';
+        let logoUrl = invoice.info.logoUrl || '';
+        
+        // Email clients often block Base64 logos or show them as attachments.
+        // We prioritize a public HTTP URL for better visibility in the email body.
+        const publicLogo = process.env.BUSINESS_LOGO_URL;
+        if (logoUrl.startsWith('data:') && publicLogo) {
+            console.log('[ResendEmailService] Base64 logo detected, using public BUSINESS_LOGO_URL for email content.');
+            logoUrl = publicLogo;
+        }
+
         const d = invoice.creationDate || new Date();
         const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
 
         return `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; padding: 20px;">
                 <div style="text-align: center; border-bottom: 1px solid #eee; padding-bottom: 20px;">
-                    ${logoUrl ? `<img src="${logoUrl}" alt="Logo" height="80" border="0" style="max-height: 80px; height: 80px; display: block; margin: 0 auto 10px auto;">` : ''}
+                    ${logoUrl ? `<img src="${logoUrl}" alt="${invoice.info.nombreComercial}" height="80" border="0" style="max-height: 80px; height: 80px; display: block; margin: 0 auto 10px auto;">` : ''}
                     <h1 style="margin: 0; font-size: 20px;">${invoice.info.nombreComercial}</h1>
                 </div>
                 <div style="padding: 20px 0;">

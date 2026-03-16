@@ -28,16 +28,16 @@ export class BillingService {
      */
     public calculateDetails(items: any[], taxRate: number = 15): BillingDetail[] {
         const rateDecimal = taxRate / 100;
-        
+
         return items.map((item: any, index: number) => {
             // Price can be inclusive or exclusive depending on the context
             // In GenerateInvoice, price is inclusive
             // In CheckInvoiceStatus, price is unit price (exclusive)
-            
+
             const quantity = item.quantity || 1;
             let subtotalRounded: number;
             let unitPrice: number;
-            
+
             if (item.total !== undefined && item.total !== null) {
                 // Calculation for inclusive price (from order)
                 const totalInclusive = item.total;
@@ -97,7 +97,7 @@ export class BillingService {
      */
     public validateEmail(email: string): void {
         if (!email) return;
-        
+
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const cleanEmail = email.trim();
 
@@ -115,7 +115,7 @@ export class BillingService {
      */
     public formatDateToSRI(date: string | Date): string {
         const d = date instanceof Date ? date : new Date(date);
-        
+
         if (isNaN(d.getTime())) {
             const now = new Date();
             return `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
@@ -145,7 +145,7 @@ export class BillingService {
      */
     public parseSRIDate(dateStr: string): Date {
         if (!dateStr) return new Date();
-        
+
         // If already in DD/MM/YYYY format
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
             const [day, month, year] = dateStr.split('/').map(Number);
@@ -194,7 +194,7 @@ export class BillingService {
      */
     public getLogoUrl(config: Partial<RestaurantConfig> | null, providedLogoUrl?: string): string {
         console.log('[BillingService] Resolving logo. DB Logo:', config?.logo ? 'PRESENT' : 'MISSING', 'DB Fiscal:', config?.fiscalLogo ? 'PRESENT' : 'MISSING', 'Provided:', providedLogoUrl ? 'PRESENT' : 'MISSING');
-        
+
         const resolved = config?.logo || config?.fiscalLogo || providedLogoUrl || process.env.BUSINESS_LOGO_URL || '';
         console.log('[BillingService] Resolved Logo URL (first 50 chars):', resolved.substring(0, 50));
         return resolved;
