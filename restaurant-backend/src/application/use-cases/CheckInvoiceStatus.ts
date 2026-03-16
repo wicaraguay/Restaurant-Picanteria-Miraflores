@@ -185,10 +185,7 @@ export class CheckInvoiceStatus {
                 const config = await this.configRepository.get();
                 const info = config || {} as any;
                 
-                // DEBUG: Log logo information
-                console.log('[CheckInvoiceStatus] Config fiscalLogo:', info.fiscalLogo);
-                console.log('[CheckInvoiceStatus] Config logo:', info.logo);
-                console.log('[CheckInvoiceStatus] Final logoUrl will be:', info.fiscalLogo || info.logo);
+                console.log('[CheckInvoiceStatus] Final logoUrl will be:', this.billingService.getLogoUrl(info));
                 
                 const [estab, ptoEmi, secuencial] = bill.documentNumber.split('-');
 
@@ -221,7 +218,7 @@ export class CheckInvoiceStatus {
                         moneda: 'DOLAR',
                         formaPago: '01',
                         emailComprador: clientEmail,
-                        logoUrl: info.fiscalLogo || info.logo,
+                        logoUrl: this.billingService.getLogoUrl(info),
                         emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM,
                         telefonoComprador: bill.customerPhone || 'S/N',
                         tasaIva: (info.billing?.taxRate || 15).toString(),

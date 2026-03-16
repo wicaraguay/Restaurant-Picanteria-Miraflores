@@ -1,5 +1,5 @@
-
 import { ValidationError } from '../../domain/errors/CustomErrors';
+import { RestaurantConfig } from '../../domain/entities/RestaurantConfig';
 
 export interface TaxDetail {
     codigo: string;
@@ -186,5 +186,13 @@ export class BillingService {
                 `Transmisión NO en tiempo real: La fecha de emisión (${fechaEmision}) debe ser la fecha actual (${ecuadorDay.toString().padStart(2, '0')}/${ecuadorMonth.toString().padStart(2, '0')}/${ecuadorYear}) según la Resolución SRI NAC-DGERCGC25-00000017.`
             );
         }
+    }
+
+    /**
+     * Centralized method to retrieve the business logo URL based on priority.
+     * Priority: fiscalLogo > logo > explicitly provided logoUrl > Environment Variable
+     */
+    public getLogoUrl(config: Partial<RestaurantConfig> | null, providedLogoUrl?: string): string {
+        return config?.fiscalLogo || config?.logo || providedLogoUrl || process.env.BUSINESS_LOGO_URL || '';
     }
 }

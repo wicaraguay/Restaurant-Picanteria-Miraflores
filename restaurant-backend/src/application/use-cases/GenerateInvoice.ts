@@ -80,7 +80,7 @@ export class GenerateInvoice {
                 moneda: 'DOLAR',
                 emailComprador: client.email,
                 formaPago: client.paymentMethod || '01',
-                logoUrl: info.fiscalLogo || info.logo || logoUrl || process.env.BUSINESS_LOGO_URL,
+                logoUrl: this.billingService.getLogoUrl(info, logoUrl),
                 tasaIva: taxRate.toString(),
                 telefonoComprador: client.phone,
                 emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM || 'info@restaurant.com'

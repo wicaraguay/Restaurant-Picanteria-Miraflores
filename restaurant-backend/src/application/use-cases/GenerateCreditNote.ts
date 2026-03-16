@@ -131,7 +131,7 @@ export class GenerateCreditNote {
                 moneda: 'DOLAR',
 
                 emailComprador: originalBill.customerEmail,
-                logoUrl: info.fiscalLogo || info.logo,
+                logoUrl: this.billingService.getLogoUrl(info),
                 emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM || 'info@restaurant.com'
             }
         };
