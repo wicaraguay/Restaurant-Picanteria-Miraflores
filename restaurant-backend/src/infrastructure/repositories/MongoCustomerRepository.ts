@@ -15,6 +15,11 @@ export class MongoCustomerRepository extends BaseRepository<Customer> implements
         super(CustomerModel, 'Customer');
     }
 
+    async findByIdentification(identification: string): Promise<Customer | null> {
+        const doc = await CustomerModel.findOne({ identification }).exec();
+        return doc ? this.mapToEntity(doc) : null;
+    }
+
     protected mapToEntity(doc: any): Customer {
         return {
             id: doc.id || doc._id.toString(),

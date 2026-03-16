@@ -44,6 +44,7 @@ import { GetMenu } from '../../application/use-cases/GetMenu';
 import { CreateMenu } from '../../application/use-cases/CreateMenu';
 import { UpdateMenu } from '../../application/use-cases/UpdateMenu';
 import { DeleteMenu } from '../../application/use-cases/DeleteMenu';
+import { LookupCustomer } from '../../application/use-cases/LookupCustomer';
 import { GenerateInvoice } from '../../application/use-cases/GenerateInvoice';
 import { CheckInvoiceStatus } from '../../application/use-cases/CheckInvoiceStatus';
 import { Login } from '../../application/use-cases/Login';
@@ -134,6 +135,7 @@ export class DIContainer {
     public getDeleteMenuUseCase(): DeleteMenu { return this.orderModule.getDeleteMenuUseCase(); }
     public getCreateCustomerUseCase(): CreateCustomer { return this.orderModule.getCreateCustomerUseCase(); }
     public getGetCustomersUseCase(): GetCustomers { return this.orderModule.getGetCustomersUseCase(); }
+    public getLookupCustomerUseCase(): LookupCustomer { return this.orderModule.getLookupCustomerUseCase(); }
     public getGetRestaurantConfigUseCase(): GetRestaurantConfig { return this.orderModule.getGetRestaurantConfigUseCase(); }
     public getUpdateRestaurantConfigUseCase(): UpdateRestaurantConfig { return this.orderModule.getUpdateRestaurantConfigUseCase(); }
 

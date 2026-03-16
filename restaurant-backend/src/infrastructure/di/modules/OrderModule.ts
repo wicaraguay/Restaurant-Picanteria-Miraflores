@@ -10,8 +10,11 @@ import { UpdateMenu } from '../../../application/use-cases/UpdateMenu';
 import { DeleteMenu } from '../../../application/use-cases/DeleteMenu';
 import { CreateCustomer } from '../../../application/use-cases/CreateCustomer';
 import { GetCustomers } from '../../../application/use-cases/GetCustomers';
+import { UpdateCustomer } from '../../../application/use-cases/UpdateCustomer';
+import { DeleteCustomer } from '../../../application/use-cases/DeleteCustomer';
 import { GetRestaurantConfig } from '../../../application/use-cases/GetRestaurantConfig';
 import { UpdateRestaurantConfig } from '../../../application/use-cases/UpdateRestaurantConfig';
+import { LookupCustomer } from '../../../application/use-cases/LookupCustomer';
 import { OrderController } from '../../controllers/OrderController';
 import { CustomerController } from '../../controllers/CustomerController';
 import { logger } from '../../utils/Logger';
@@ -27,6 +30,9 @@ export class OrderModule {
     private deleteMenuUseCase?: DeleteMenu;
     private createCustomerUseCase?: CreateCustomer;
     private getCustomersUseCase?: GetCustomers;
+    private updateCustomerUseCase?: UpdateCustomer;
+    private deleteCustomerUseCase?: DeleteCustomer;
+    private lookupCustomerUseCase?: LookupCustomer;
     private getRestaurantConfigUseCase?: GetRestaurantConfig;
     private updateRestaurantConfigUseCase?: UpdateRestaurantConfig;
     private orderController?: OrderController;
@@ -114,6 +120,30 @@ export class OrderModule {
         return this.getCustomersUseCase;
     }
 
+    public getUpdateCustomerUseCase(): UpdateCustomer {
+        if (!this.updateCustomerUseCase) {
+            this.updateCustomerUseCase = new UpdateCustomer(this.repoModule.getCustomerRepository());
+            logger.debug('UpdateCustomer use case instantiated');
+        }
+        return this.updateCustomerUseCase;
+    }
+
+    public getDeleteCustomerUseCase(): DeleteCustomer {
+        if (!this.deleteCustomerUseCase) {
+            this.deleteCustomerUseCase = new DeleteCustomer(this.repoModule.getCustomerRepository());
+            logger.debug('DeleteCustomer use case instantiated');
+        }
+        return this.deleteCustomerUseCase;
+    }
+
+    public getLookupCustomerUseCase(): LookupCustomer {
+        if (!this.lookupCustomerUseCase) {
+            this.lookupCustomerUseCase = new LookupCustomer(this.repoModule.getCustomerRepository());
+            logger.debug('LookupCustomer use case instantiated');
+        }
+        return this.lookupCustomerUseCase;
+    }
+
     public getGetRestaurantConfigUseCase(): GetRestaurantConfig {
         if (!this.getRestaurantConfigUseCase) {
             this.getRestaurantConfigUseCase = new GetRestaurantConfig(this.repoModule.getRestaurantConfigRepository());
@@ -147,7 +177,10 @@ export class OrderModule {
         if (!this.customerController) {
             this.customerController = new CustomerController(
                 this.getCreateCustomerUseCase(),
-                this.getGetCustomersUseCase()
+                this.getGetCustomersUseCase(),
+                this.getLookupCustomerUseCase(),
+                this.getUpdateCustomerUseCase(),
+                this.getDeleteCustomerUseCase()
             );
             logger.debug('CustomerController instantiated');
         }
@@ -165,6 +198,9 @@ export class OrderModule {
         this.deleteMenuUseCase = undefined;
         this.createCustomerUseCase = undefined;
         this.getCustomersUseCase = undefined;
+        this.updateCustomerUseCase = undefined;
+        this.deleteCustomerUseCase = undefined;
+        this.lookupCustomerUseCase = undefined;
         this.getRestaurantConfigUseCase = undefined;
         this.updateRestaurantConfigUseCase = undefined;
         this.orderController = undefined;

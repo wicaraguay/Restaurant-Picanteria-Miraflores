@@ -11,6 +11,8 @@ import { PlusIcon, EditIcon, TrashIcon } from '../../../components/ui/Icons';
 import Card from '../../../components/ui/Card';
 import { CustomerFormModal } from './CustomerFormModal';
 import { ReservationFormModal } from './ReservationFormModal';
+import { dataService } from '../../../services/DataService';
+import { ErrorHandler } from '../../../utils/errorHandler';
 
 interface CustomerManagementProps {
     customers: Customer[];
@@ -24,6 +26,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
     const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
     const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
 
     // Customer CRUD
     const handleOpenCustomerForm = (customer: Customer | null = null) => {
@@ -31,21 +34,36 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
         setIsCustomerModalOpen(true);
     };
 
-    const handleSaveCustomer = (customerData: Omit<Customer, 'id'>) => {
-        if (editingCustomer) {
-            setCustomers(prev => prev.map(c => c.id === editingCustomer.id ? { ...customerData, id: editingCustomer.id } : c));
-        } else {
-            setCustomers(prev => [...prev, { ...customerData, id: Date.now().toString() }]);
+    const handleSaveCustomer = async (customerData: Omit<Customer, 'id'>) => {
+        setIsSaving(true);
+        try {
+            if (editingCustomer) {
+                const updated = await dataService.updateCustomer(editingCustomer.id, customerData);
+                setCustomers(prev => prev.map(c => c.id === editingCustomer.id ? updated : c));
+            } else {
+                const created = await dataService.createCustomer(customerData);
+                setCustomers(prev => [...prev, created]);
+            }
+            setIsCustomerModalOpen(false);
+        } catch (error) {
+            ErrorHandler.handle(error, 'Error al guardar el cliente');
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    const handleDeleteCustomer = (id: string) => {
+    const handleDeleteCustomer = async (id: string) => {
         if (window.confirm('¿Seguro que quieres eliminar este cliente?')) {
-            setCustomers(prev => prev.filter(c => c.id !== id));
+            try {
+                await dataService.deleteCustomer(id);
+                setCustomers(prev => prev.filter(c => c.id !== id));
+            } catch (error) {
+                ErrorHandler.handle(error, 'Error al eliminar el cliente');
+            }
         }
     };
 
-    // Reservation CRUD
+    // Reservation CRUD (Same as before but keeping it descriptive)
     const handleOpenReservationForm = (reservation: Reservation | null = null) => {
         setEditingReservation(reservation);
         setIsReservationModalOpen(true);
@@ -75,6 +93,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
                     <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
                         <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-dark-700 dark:text-gray-400">
                             <tr>
+                                <th scope="col" className="px-6 py-3">Identificación</th>
                                 <th scope="col" className="px-6 py-3">Nombre</th>
                                 <th scope="col" className="px-6 py-3">Puntos</th>
                                 <th scope="col" className="px-6 py-3 text-right">Acciones</th>
@@ -83,6 +102,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
                         <tbody>
                             {customers.map(c => (
                                 <tr key={c.id} className="bg-white dark:bg-dark-800 border-b dark:border-dark-700">
+                                    <td className="px-6 py-4 font-mono text-xs">{c.identification || '---'}</td>
                                     <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{c.name}</td>
                                     <td className="px-6 py-4">
                                         <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">{c.loyaltyPoints} pts</span>
@@ -105,7 +125,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
                             <div className="flex justify-between items-start mb-2">
                                 <div>
                                     <h3 className="font-bold text-gray-900 dark:text-white">{c.name}</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{c.email}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{c.identification || c.email}</p>
                                 </div>
                                 <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full dark:bg-blue-900 dark:text-blue-300">
                                     {c.loyaltyPoints} pts

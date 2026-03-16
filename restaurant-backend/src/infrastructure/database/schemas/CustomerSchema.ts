@@ -23,7 +23,7 @@ export interface CustomerDocument extends Document {
     phone: string;
     loyaltyPoints: number;
     lastVisit: Date;
-    identification?: string;
+    identification?: string; // RUC or CI
     address?: string;
     // id is virtual
 }
@@ -45,5 +45,6 @@ CustomerSchema.index({ phone: 1 }); // For searching by phone
 CustomerSchema.index({ name: 1 }); // For searching by name
 CustomerSchema.index({ lastVisit: -1 }); // For sorting by last visit
 CustomerSchema.index({ loyaltyPoints: -1 }); // For sorting by loyalty points
+CustomerSchema.index({ identification: 1 }); // For fast lookup by RUC/CI
 
 export const CustomerModel = mongoose.model<CustomerDocument>('Customer', CustomerSchema);

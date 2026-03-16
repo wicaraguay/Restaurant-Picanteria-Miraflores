@@ -1,13 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import { CreateCustomer } from '../../application/use-cases/CreateCustomer';
 import { GetCustomers } from '../../application/use-cases/GetCustomers';
+import { LookupCustomer } from '../../application/use-cases/LookupCustomer';
+import { UpdateCustomer } from '../../application/use-cases/UpdateCustomer';
+import { DeleteCustomer } from '../../application/use-cases/DeleteCustomer';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
 
 export class CustomerController {
     constructor(
         private createCustomer: CreateCustomer,
-        private getCustomers: GetCustomers
+        private getCustomers: GetCustomers,
+        private lookupCustomer: LookupCustomer,
+        private updateCustomer: UpdateCustomer,
+        private deleteCustomer: DeleteCustomer
     ) { }
 
     public create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -45,6 +51,47 @@ export class CustomerController {
                 total: result.pagination.total
             });
             res.json(ResponseFormatter.success(result));
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    public lookup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { identification } = req.params;
+            logger.info('Looking up customer by identification', { identification });
+            
+            const customer = await this.lookupCustomer.execute(identification);
+            
+            if (!customer) {
+                res.status(404).json(ResponseFormatter.error('NOT_FOUND', 'Cliente no encontrado en la base de datos local'));
+                return;
+            }
+
+            res.json(ResponseFormatter.success(customer));
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    public update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.params;
+            logger.info('Updating customer', { id, updates: req.body });
+            const customer = await this.updateCustomer.execute(id, req.body);
+            res.json(ResponseFormatter.success(customer));
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    public delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.params;
+            logger.info('Deleting customer', { id });
+            await this.deleteCustomer.execute(id);
+            // Return success with null data to indicate it's done
+            res.json(ResponseFormatter.success(null));
         } catch (error) {
             next(error);
         }

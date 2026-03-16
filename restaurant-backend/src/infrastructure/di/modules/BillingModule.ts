@@ -15,6 +15,7 @@ import { PDFService } from '../../services/PDFService';
 import { IEmailService } from '../../../application/interfaces/IEmailService';
 import { ResendEmailService } from '../../services/ResendEmailService';
 import { BillingService } from '../../../application/services/BillingService';
+import { ICustomerRepository } from '../../../domain/repositories/ICustomerRepository';
 import { BillingController } from '../../controllers/BillingController';
 import { logger } from '../../utils/Logger';
 
@@ -78,7 +79,8 @@ export class BillingModule {
                 this.getSRIService(),
                 this.getPDFService(),
                 this.getEmailService(),
-                this.getBillingService()
+                this.getBillingService(),
+                this.repoModule.getCustomerRepository()
             );
             logger.debug('GenerateInvoice use case instantiated');
         }

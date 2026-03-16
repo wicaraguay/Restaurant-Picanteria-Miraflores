@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../../../api';
 import { orderService } from '../services/OrderService';
 import { billingService } from '../../billing/services/BillingService';
@@ -23,6 +23,7 @@ const inputClass = "w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 te
 
 import { OrderCard } from './OrderCard';
 import { OrderFormModal } from './OrderFormModal';
+import POSView from './POSView';
 
 // --- Main Order Management Component ---
 const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, menuItems }) => {
@@ -30,10 +31,11 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
     const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+    const [viewMode, setViewMode] = useState<'dashboard' | 'pos'>('dashboard');
 
     const handleOpenModal = (order: Order | null) => {
         setEditingOrder(order);
-        setIsModalOpen(true);
+        setViewMode('pos');
     };
 
     const handleCloseModal = () => {
@@ -102,6 +104,10 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         paymentMethod: '01' // 01 - SIN UTILIZACION DEL SISTEMA FINANCIERO
     });
 
+    // Estados para la búsqueda local de clientes
+    const [searchingIdentity, setSearchingIdentity] = useState(false);
+    const [lookupError, setLookupError] = useState<string | null>(null);
+
     // Estados para el modal de procesamiento de facturas
     const [isProcessingModalOpen, setIsProcessingModalOpen] = useState(false);
     const [processingState, setProcessingState] = useState<InvoiceProcessState>(InvoiceProcessState.IDLE);
@@ -113,9 +119,8 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
     const handleOpenBilling = (order: Order) => {
         setBillingOrder(order);
-        // Pre-fill with available data from order or customer database (mocked here)
         setBillingData({
-            identification: '', // In real app, fetch from customer profile
+            identification: '',
             name: order.customerName,
             email: '',
             address: '',
@@ -123,7 +128,37 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
             paymentMethod: '01'
         });
         setIsBillingModalOpen(true);
+        setLookupError(null);
     };
+
+    // Efecto para búsqueda automática de cliente por identificación
+    useEffect(() => {
+        const ident = billingData.identification;
+        if (ident.length >= 10 && ident !== '9999999999999') {
+            const timeoutId = setTimeout(async () => {
+                setSearchingIdentity(true);
+                setLookupError(null);
+                try {
+                    const customer = await api.customers.lookupByIdentification(ident);
+                    if (customer) {
+                        setBillingData(prev => ({
+                            ...prev,
+                            name: customer.name || prev.name,
+                            email: customer.email || prev.email,
+                            address: customer.address || prev.address,
+                            phone: customer.phone || prev.phone
+                        }));
+                    }
+                } catch (error: any) {
+                    console.log('Customer not found in local DB or error:', error.message);
+                    // Silently fail if not found, let user fill manually
+                } finally {
+                    setSearchingIdentity(false);
+                }
+            }, 600); // 600ms debounce
+            return () => clearTimeout(timeoutId);
+        }
+    }, [billingData.identification]);
 
     const handleProcessBilling = async () => {
         // Email is now optional - validate only identification and name
@@ -279,36 +314,88 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     });
 
 
-
     return (
-        <div>
-            <OrderFormModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveOrder} order={editingOrder} menuItems={menuItems} />
+        <div className="flex flex-col h-full">
+            {/* Common Header / Selector */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-6">
+                <div className="flex flex-col">
+                    <h1 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Operaciones</h1>
+                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                        CENTRAL DE CONTROL RESTAURANTE
+                    </p>
+                </div>
 
-            {/* Invoice Processing Modal */}
-            <InvoiceProcessingModal
-                isOpen={isProcessingModalOpen}
-                currentState={processingState}
-                message={processingMessage}
-                details={processingDetails}
-                invoiceNumber={generatedInvoiceNumber}
-                onClose={handleCloseProcessingModal}
-                onPrint={handlePrintFromProcessingModal}
-                onGoToHistory={handleGoToHistory}
-            />
+                <div className="flex items-center gap-4">
+                    <div className="flex bg-gray-100 dark:bg-dark-800 p-1 rounded-xl shadow-inner border border-gray-200 dark:border-dark-700">
+                        <button
+                            onClick={() => { setViewMode('dashboard'); setEditingOrder(null); }}
+                            className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${viewMode === 'dashboard' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-md ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                        >
+                            TABLERO
+                        </button>
+                        <button
+                            onClick={() => setViewMode('pos')}
+                            className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${viewMode === 'pos' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-md ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                        >
+                            SISTEMA POS
+                        </button>
+                    </div>
 
-            {/* Billing Modal Integration */}
+                    {viewMode === 'dashboard' && (
+                        <>
+                            <div className="h-8 w-[1px] bg-gray-200 dark:bg-dark-700 mx-2 hidden sm:block"></div>
+                            <div className="flex bg-gray-100 dark:bg-dark-800 p-1 rounded-xl">
+                                <button
+                                    onClick={() => setActiveTab('active')}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'active' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-400'}`}
+                                >
+                                    EN CURSO
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('history')}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'history' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-400'}`}
+                                >
+                                    HISTORIAL
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {viewMode === 'dashboard' && (
+                    <button 
+                        onClick={() => handleOpenModal(null)} 
+                        className="flex items-center bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-sm hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/25 active:scale-95 group"
+                    >
+                        <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" /> 
+                        NUEVO PEDIDO
+                    </button>
+                )}
+            </div>
+
+            {/* Content Rendering */}
+            {viewMode === 'pos' ? (
+                <POSView 
+                    menuItems={menuItems} 
+                    onSave={handleSaveOrder} 
+                    onCancel={() => {
+                        setViewMode('dashboard');
+                        setEditingOrder(null);
+                    }}
+                    initialOrder={editingOrder}
+                />
+            ) : (
+                <>
             {isBillingModalOpen && billingOrder && (
                 <Modal isOpen={isBillingModalOpen} onClose={() => setIsBillingModalOpen(false)} title="Emitir Factura Electrónica (SRI)" maxWidth="max-w-4xl">
                     <div className="flex flex-col md:flex-row gap-6 p-2">
                         {/* Left Column: Invoice Preview (Visual Representation) */}
-                        {/* Invoice Preview Box */}
                         <div className="flex-1 bg-white dark:bg-dark-900 border border-gray-200 dark:border-dark-700 shadow-sm rounded-sm p-6 text-xs text-gray-800 dark:text-gray-300 font-mono relative overflow-hidden">
-                            {/* Watermark/Background effect for Preview */}
                             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-[100px] text-gray-100 dark:text-dark-800 -rotate-45 pointer-events-none font-sans font-bold opacity-50">
                                 VISTA PREVIA
                             </div>
 
-                            {/* Header Section */}
                             <div className="relative mb-6 flex justify-between items-start border-b border-gray-300 dark:border-dark-600 pb-4">
                                 <div>
                                     {config.fiscalLogo || config.logo ? (
@@ -327,115 +414,54 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                                     <p>{config.address || 'Dirección Matriz, Ciudad, Ecuador'}</p>
                                     <p>RUC: {config.ruc || '9999999999001'}</p>
                                     <p>{config.fiscalEmail || config.email || 'correo@ejemplo.com'}</p>
-                                    {config.contribuyenteEspecial && (
-                                        <p className="font-bold">Contribuyente Especial Nro: {config.contribuyenteEspecial}</p>
-                                    )}
                                     <p>Obligado a llevar contabilidad: {config.obligadoContabilidad ? 'SI' : 'NO'}</p>
                                 </div>
                                 <div className="text-right">
                                     <h3 className="font-bold text-sm">FACTURA</h3>
                                     <p className="font-mono text-lg font-bold text-red-600 dark:text-red-400">No. {config.billing?.establishment || '001'}-{config.billing?.emissionPoint || '001'}-{((config.billing?.currentSequenceFactura || 0) + 1).toString().padStart(9, '0')}</p>
                                     <p><span className="font-bold">FECHA EMISIÓN:</span> {new Date().toLocaleDateString('es-EC')}</p>
-
-                                    <div className="mt-2 flex flex-col items-end gap-1">
-                                        <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border border-green-200 dark:border-green-800">
-                                            Ambiente: {config.billing?.environment === '2' ? 'PRODUCCIÓN' : 'PRUEBAS'}
-                                        </span>
-                                        <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                                            Emisión: NORMAL
-                                        </span>
-                                    </div>
                                 </div>
                             </div>
 
-                            {/* Client Section (Preview) */}
-                            <div className="relative mb-4 border border-gray-800 dark:border-gray-500 rounded p-3 bg-transparent">
-
+                            <div className="relative mb-4 border border-gray-800 dark:border-gray-500 rounded p-3 bg-transparent text-[10px]">
                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                                    <div><span className="font-bold">Cliente:</span> {typeof billingData.name === 'string' ? billingData.name : JSON.stringify(billingData.name) || 'ANÓNIMO'}</div>
-                                    <div><span className="font-bold max-w-[200px] truncate">RUC/CI:</span> {typeof billingData.identification === 'string' ? billingData.identification : String(billingData.identification || '9999999999999')}</div>
-                                    <div><span className="font-bold">Fecha Emisión:</span> {new Date().toLocaleDateString('es-EC')}</div>
-                                    <div className="col-span-2"><span className="font-bold">Dirección:</span> {typeof billingData.address === 'string' ? billingData.address : String(billingData.address || 'S/N')}</div>
-                                    <div><span className="font-bold">Teléfono:</span> {typeof billingData.phone === 'string' ? billingData.phone : String(billingData.phone || 'S/N')}</div>
-                                    <div className="flex flex-col">
-                                        <span className="font-bold">Forma de Pago:</span>
-                                        <span className="text-[10px] break-words">
-                                            {String(billingData.paymentMethod) === '01' ? '01 - SIN UTILIZACION DEL SISTEMA FINANCIERO' :
-                                                String(billingData.paymentMethod) === '20' ? '20 - OTROS CON UTILIZACION DEL SISTEMA FINANCIERO' :
-                                                    String(billingData.paymentMethod) === '19' ? '19 - TARJETA DE CREDITO' :
-                                                        '01 - SIN UTILIZACION DEL SISTEMA FINANCIERO'}
-                                        </span>
-                                    </div>
+                                    <div><span className="font-bold">Cliente:</span> {billingData.name || 'ANÓNIMO'}</div>
+                                    <div><span className="font-bold">RUC/CI:</span> {billingData.identification || '9999999999999'}</div>
+                                    <div className="col-span-2"><span className="font-bold">Dirección:</span> {billingData.address || 'S/N'}</div>
                                 </div>
                             </div>
 
-                            {/* Order Items Detail */}
                             <div className="relative">
                                 <div className="border border-gray-200 dark:border-dark-700 rounded-sm overflow-hidden mb-4">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-gray-100 dark:bg-dark-800 text-left font-bold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-dark-700">
+                                    <table className="w-full text-[10px]">
+                                        <thead className="bg-gray-100 dark:bg-dark-800 text-left font-bold border-b border-gray-200 dark:border-dark-700">
                                             <tr>
                                                 <th className="px-2 py-1">Cant</th>
                                                 <th className="px-2 py-1">Descripción</th>
-                                                <th className="px-2 py-1 text-right">P. Unit</th>
                                                 <th className="px-2 py-1 text-right">Total</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-dark-800">
                                             {billingOrder.items.map((item, idx) => (
-                                                <tr key={idx} className="bg-white dark:bg-dark-900">
+                                                <tr key={idx}>
                                                     <td className="px-2 py-1">{item.quantity}</td>
                                                     <td className="px-2 py-1">{item.name}</td>
-                                                    <td className="px-2 py-1 text-right">${(item.price || 0).toFixed(2)}</td>
-                                                    <td className="px-2 py-1 text-right font-medium">
-                                                        ${((item.price || 0) * item.quantity).toFixed(2)}
-                                                    </td>
+                                                    <td className="px-2 py-1 text-right">${((item.price || 0) * item.quantity).toFixed(2)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
-
-                                {/* Totals Block */}
                                 <div className="flex justify-end">
-                                    <div className="w-1/2 border border-gray-200 dark:border-dark-700 rounded-sm overflow-hidden">
-                                        {(() => {
-                                            const currentTaxRate = config.billing?.taxRate || 15;
-                                            const total = billingOrder.items.reduce((s, i) => s + (i.price || 0) * i.quantity, 0);
-                                            const subtotal = total / (1 + (currentTaxRate / 100));
-                                            const tax = total - subtotal;
-
-                                            return (
-                                                <table className="w-full text-xs">
-                                                    <tbody className="divide-y divide-gray-100 dark:divide-dark-800">
-                                                        <tr>
-                                                            <td className="px-2 py-1 font-bold bg-gray-50 dark:bg-dark-800">SUBTOTAL 15%</td>
-                                                            <td className="px-2 py-1 text-right">${subtotal.toFixed(2)}</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td className="px-2 py-1 font-bold bg-gray-50 dark:bg-dark-800">SUBTOTAL 0%</td>
-                                                            <td className="px-2 py-1 text-right">$0.00</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td className="px-2 py-1 font-bold bg-gray-50 dark:bg-dark-800">DESCUENTO</td>
-                                                            <td className="px-2 py-1 text-right">$0.00</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td className="px-2 py-1 font-bold bg-gray-50 dark:bg-dark-800">IVA {currentTaxRate}%</td>
-                                                            <td className="px-2 py-1 text-right">${tax.toFixed(2)}</td>
-                                                        </tr>
-                                                        <tr>
-                                                            <td className="px-2 py-1 font-bold bg-gray-50 dark:bg-dark-800">PROPINA</td>
-                                                            <td className="px-2 py-1 text-right">$0.00</td>
-                                                        </tr>
-                                                        <tr className="border-t-2 border-gray-300 dark:border-dark-600">
-                                                            <td className="px-2 py-1 font-bold bg-gray-100 dark:bg-dark-700 text-sm">VALOR TOTAL</td>
-                                                            <td className="px-2 py-1 text-right font-bold text-sm">${total.toFixed(2)}</td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            );
-                                        })()}
+                                    <div className="w-1/2 border border-gray-200 dark:border-dark-700 rounded-sm">
+                                        <table className="w-full text-[10px]">
+                                            <tbody>
+                                                <tr>
+                                                    <td className="px-2 py-1 font-bold bg-gray-50 dark:bg-dark-800">TOTAL</td>
+                                                    <td className="px-2 py-1 text-right font-bold">${billingOrder.items.reduce((s, i) => s + (i.price || 0) * i.quantity, 0).toFixed(2)}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
@@ -444,8 +470,6 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                         {/* Right Column: Client Data Form */}
                         <div className="md:w-1/3 space-y-4 border-l dark:border-dark-700 md:pl-6">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Datos del Cliente</h3>
-
-                            {/* Consumidor Final Shortcut */}
                             <button
                                 onClick={() => setBillingData({
                                     identification: '9999999999999',
@@ -455,115 +479,56 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                                     phone: '9999999999',
                                     paymentMethod: '01'
                                 })}
-                                className="w-full py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-dark-700 dark:hover:bg-dark-600 text-xs font-semibold text-gray-600 dark:text-gray-300 rounded border border-gray-300 dark:border-dark-600 transition-colors mb-2"
+                                className="w-full py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-dark-700 dark:hover:bg-dark-600 text-xs font-semibold text-gray-600 dark:text-gray-300 rounded border border-gray-300 dark:border-dark-600 transition-colors"
                             >
                                 Usar "Consumidor Final"
                             </button>
 
-                            {/* Warning for CF > $50 */}
-                            {billingData.identification === '9999999999999' && (billingOrder.items.reduce((s, i) => s + (i.price || 0) * i.quantity, 0) > 50) && (
-                                <div className="bg-yellow-50 text-yellow-800 text-xs p-2 rounded border border-yellow-200 mb-3 flex gap-2 items-start">
-                                    <span>⚠️</span>
-                                    <span>
-                                        <strong>Normativa SRI:</strong> Facturas a Consumidor Final no deben superar los $50.00. Se recomienda ingresar datos reales.
-                                    </span>
-                                </div>
-                            )}
-
                             <div className="space-y-3">
                                 <div>
-                                    <div className="flex justify-between items-center mb-1">
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">RUC/CI</label>
-                                        <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">
-                                            {billingData.identification === '9999999999999' ? 'Consumidor Final' :
-                                                billingData.identification.length === 10 ? 'Cédula' :
-                                                    billingData.identification.length === 13 ? 'RUC' : 'Pasaporte/Otro'}
-                                        </span>
-                                    </div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Identificación</label>
                                     <input
                                         type="text"
                                         value={billingData.identification}
-                                        onChange={e => {
-                                            const val = e.target.value.replace(/[^0-9]/g, '');
-                                            setBillingData({ ...billingData, identification: val })
-                                        }}
-                                        maxLength={13}
+                                        onChange={e => setBillingData({ ...billingData, identification: e.target.value })}
                                         className={inputClass}
-                                        placeholder="0999999999001"
-                                        autoFocus
+                                        placeholder="RUC / Cédula"
                                     />
+                                    {searchingIdentity && <p className="text-[10px] text-blue-500 mt-1 animate-pulse">Buscando datos...</p>}
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">CLIENTE</label>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Nombre / Razón Social</label>
                                     <input
                                         type="text"
                                         value={billingData.name}
                                         onChange={e => setBillingData({ ...billingData, name: e.target.value.toUpperCase() })}
                                         className={inputClass}
-                                        placeholder="NOMBRE DEL CLIENTE"
+                                        placeholder="Nombre del cliente"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
-                                        Correo Electrónico <span className="text-gray-400 normal-case font-normal">(opcional)</span>
-                                    </label>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Email</label>
                                     <input
                                         type="email"
                                         value={billingData.email}
                                         onChange={e => setBillingData({ ...billingData, email: e.target.value })}
                                         className={inputClass}
-                                        placeholder="cliente@email.com (puede dejarlo vacío)"
+                                        placeholder="cliente@email.com"
                                     />
-                                    <p className="text-[10px] text-gray-400 mt-0.5">💡 Si no ingresa email, podrá imprimir la factura para entregar físicamente.</p>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Dirección</label>
-                                    <textarea
-                                        value={billingData.address}
-                                        onChange={e => setBillingData({ ...billingData, address: e.target.value })}
-                                        className={inputClass}
-                                        rows={2}
-                                        placeholder="Dirección del cliente"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Teléfono</label>
-                                        <input
-                                            type="tel"
-                                            value={billingData.phone}
-                                            onChange={e => setBillingData({ ...billingData, phone: e.target.value })}
-                                            className={inputClass}
-                                            placeholder="0999999999"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Forma Pago</label>
-                                        <select
-                                            value={billingData.paymentMethod}
-                                            onChange={e => setBillingData({ ...billingData, paymentMethod: e.target.value })}
-                                            className={inputClass}
-                                        >
-                                            <option value="01">01 - SIN UTILIZACION DEL SISTEMA FINANCIERO</option>
-                                            <option value="20">20 - OTROS CON UTILIZACION DEL SISTEMA FINANCIERO</option>
-                                            <option value="19">19 - TARJETA DE CREDITO</option>
-                                        </select>
-                                    </div>
                                 </div>
                             </div>
 
-                            <div className="pt-4 flex flex-col gap-2">
+                            <div className="pt-4 space-y-2">
                                 <button
                                     onClick={handleProcessBilling}
                                     disabled={!billingData.identification || !billingData.name}
-                                    className="w-full py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold shadow-lg shadow-blue-500/30 flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg active:scale-95"
                                 >
-                                    <span>📩</span> Emitir Documento
+                                    Emitir Factura
                                 </button>
-
                                 <button
                                     onClick={() => setIsBillingModalOpen(false)}
-                                    className="w-full py-2 text-gray-500 hover:text-gray-700 font-medium text-sm"
+                                    className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm"
                                 >
                                     Cancelar
                                 </button>
@@ -572,29 +537,22 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                     </div>
                 </Modal>
             )}
+            <OrderFormModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveOrder} order={editingOrder} menuItems={menuItems} />
 
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                <h1 className="text-3xl font-bold dark:text-light-background">Gestión de Pedidos</h1>
+            {/* Invoice Processing Modal */}
+            <InvoiceProcessingModal
+                isOpen={isProcessingModalOpen}
+                currentState={processingState}
+                message={processingMessage}
+                details={processingDetails}
+                invoiceNumber={generatedInvoiceNumber}
+                onClose={handleCloseProcessingModal}
+                onPrint={handlePrintFromProcessingModal}
+                onGoToHistory={handleGoToHistory}
+            />
 
-                <div className="flex bg-gray-100 dark:bg-dark-800 p-1 rounded-lg">
-                    <button
-                        onClick={() => setActiveTab('active')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'active' ? 'bg-white dark:bg-dark-600 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
-                    >
-                        En Curso
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('history')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-white dark:bg-dark-600 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
-                    >
-                        Historial
-                    </button>
-                </div>
-
-                <button onClick={() => handleOpenModal(null)} className="flex items-center bg-blue-600 text-white px-3 py-2 text-sm rounded-lg hover:bg-blue-700 transition-colors shadow-sm"><PlusIcon className="w-5 h-5 mr-1" /> Añadir Pedido</button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {/* Billing Modal Integration */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-8">
                 {filteredOrders.length === 0 ? (
                     <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
                         {activeTab === 'active' ? 'No hay pedidos en curso.' : 'No hay historial de pedidos completados.'}
@@ -614,6 +572,8 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                         ))
                 )}
             </div>
+                </>
+            )}
         </div>
     );
 };

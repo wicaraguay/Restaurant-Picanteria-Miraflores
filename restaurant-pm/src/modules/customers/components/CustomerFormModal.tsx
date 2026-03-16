@@ -25,8 +25,10 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
             name: formData.get('name') as string,
             email: formData.get('email') as string,
             phone: formData.get('phone') as string,
+            identification: formData.get('identification') as string,
+            address: formData.get('address') as string,
             loyaltyPoints: parseInt(formData.get('loyaltyPoints') as string) || 0,
-            lastVisit: new Date().toISOString().split('T')[0],
+            lastVisit: new Date().toISOString(),
         };
         onSave(customerData);
         onClose();
@@ -35,11 +37,16 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Cliente' : 'Añadir Cliente'}>
             <form onSubmit={handleSubmit} className="space-y-4">
-                <input type="text" name="name" placeholder="Nombre" defaultValue={customer?.name || ''} required className={inputClass} />
+                <input type="text" name="name" placeholder="Nombre completo" defaultValue={customer?.name || ''} required className={inputClass} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <input type="text" name="identification" placeholder="Cédula / RUC" defaultValue={customer?.identification || ''} className={inputClass} />
+                    <input type="tel" name="phone" placeholder="Teléfono" defaultValue={customer?.phone || ''} className={inputClass} />
+                </div>
                 <input type="email" name="email" placeholder="Email" defaultValue={customer?.email || ''} required className={inputClass} />
-                <input type="tel" name="phone" placeholder="Teléfono" defaultValue={customer?.phone || ''} required className={inputClass} />
+                <input type="text" name="address" placeholder="Dirección" defaultValue={customer?.address || ''} className={inputClass} />
+                
                 <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium dark:text-gray-300">Puntos:</label>
+                    <label className="text-sm font-medium dark:text-gray-300">Puntos de Lealtad:</label>
                     <input type="number" name="loyaltyPoints" placeholder="0" defaultValue={customer?.loyaltyPoints || 0} required className={`w-24 ${inputClass}`} />
                 </div>
                 <div className="flex justify-end pt-4 gap-2">

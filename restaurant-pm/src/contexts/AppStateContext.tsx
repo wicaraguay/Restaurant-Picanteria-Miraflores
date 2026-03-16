@@ -77,15 +77,14 @@ const AppStateContext = createContext<AppStateContextType | undefined>(undefined
  * Estado inicial usando DataFactory
  */
 const getInitialState = (): AppState => {
-    const defaultData = DataFactory.createAllDefaultData();
     return {
-        customers: defaultData.customers,
-        orders: defaultData.orders,
-        menuItems: defaultData.menuItems,
-        bills: defaultData.bills,
-        reservations: defaultData.reservations,
-        employees: defaultData.employees,
-        roles: defaultData.roles
+        customers: [],
+        orders: [],
+        menuItems: [],
+        bills: [],
+        reservations: [],
+        employees: [],
+        roles: []
     };
 };
 

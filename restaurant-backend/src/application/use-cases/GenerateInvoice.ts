@@ -5,6 +5,7 @@ import { IEmailService } from '../interfaces/IEmailService';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
+import { ICustomerRepository } from '../../domain/repositories/ICustomerRepository';
 import { Invoice, InvoiceDetail } from '../../domain/billing/invoice';
 import { ValidationError } from '../../domain/errors/CustomErrors';
 
@@ -18,7 +19,8 @@ export class GenerateInvoice {
         private sriService: SRIService,
         private pdfService: PDFService,
         private emailService: IEmailService,
-        private billingService: BillingService
+        private billingService: BillingService,
+        private customerRepository: ICustomerRepository
     ) { }
 
     async execute(data: { order: any, client: any, taxRate?: number, logoUrl?: string }): Promise<any> {
@@ -94,6 +96,14 @@ export class GenerateInvoice {
         // Resolution NAC-DGERCGC25-00000017: Invoices must be transmitted immediately upon emission
         // The emission date must correspond to the current date
         this.billingService.validateRealTimeTransmission(invoice.info.fechaEmision);
+
+        // Pre-calculate user flags for learning and email logic
+        const isConsumidorFinal = client.identification === '9999999999999';
+        const isValidEmail = client.email &&
+            !client.email.includes('consumidor@final') &&
+            !client.email.includes('noemail') &&
+            client.email.includes('@') &&
+            client.email.includes('.');
 
         // 5. Generate XML
         const xml = this.sriService.generateInvoiceXML(invoice);
@@ -185,15 +195,42 @@ export class GenerateInvoice {
         // 9. Update Order
         await this.orderRepository.update(invoice.orderId, { billed: true });
 
-        // 10. Send Email
-        // Skip email for Consumidor Final or invalid email addresses
-        const isConsumidorFinal = client.identification === '9999999999999';
-        const isValidEmail = client.email &&
-            !client.email.includes('consumidor@final') &&
-            !client.email.includes('noemail') &&
-            client.email.includes('@') &&
-            client.email.includes('.');
+        // 10. Auto-learn Customer Data (Real-time Learning)
+        if (client.identification && !isConsumidorFinal) {
+            try {
+                const existingCustomer = await this.customerRepository.findByIdentification(client.identification);
+                if (existingCustomer) {
+                    // Update existing customer info if changed
+                    await this.customerRepository.update(existingCustomer.id, {
+                        name: client.name,
+                        email: client.email || existingCustomer.email,
+                        address: client.address || existingCustomer.address,
+                        phone: client.phone || existingCustomer.phone,
+                        lastVisit: now
+                    });
+                    console.log(`[GenerateInvoice] Updated customer info for: ${client.identification}`);
+                } else {
+                    // Create new customer
+                    await this.customerRepository.create({
+                        id: '', // Handled by repository
+                        name: client.name,
+                        identification: client.identification,
+                        email: client.email || '',
+                        address: client.address || '',
+                        phone: client.phone || '',
+                        loyaltyPoints: 0,
+                        lastVisit: now
+                    });
+                    console.log(`[GenerateInvoice] Created NEW customer entry for: ${client.identification}`);
+                }
+            } catch (error) {
+                console.error('[GenerateInvoice] Failed to auto-learn customer data:', error);
+                // Don't fail the whole invoice process if customer learning fails
+            }
+        }
 
+        // 11. Send Email
+        // Skip email for Consumidor Final or invalid email addresses
         if (authResult?.estado === 'AUTORIZADO' && !isConsumidorFinal && isValidEmail) {
             console.log(`[GenerateInvoice] Sending email to ${client.email}`);
             if (authResult.fechaAutorizacion) invoice.authorizationDate = authResult.fechaAutorizacion;

@@ -23,6 +23,7 @@ export interface ICustomerRepository {
     findById(id: string): Promise<Customer | null>;
     findAll(): Promise<Customer[]>;
     findPaginated(page: number, limit: number, filter?: any, sort?: any): Promise<PaginatedResult<Customer>>;
+    findByIdentification(identification: string): Promise<Customer | null>;
     update(id: string, customer: Partial<Customer>): Promise<Customer | null>;
     delete(id: string): Promise<boolean>;
 }

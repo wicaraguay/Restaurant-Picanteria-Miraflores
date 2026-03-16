@@ -101,20 +101,29 @@ export class DataService {
         try {
             logger.debug('Fetching customers from API');
             const response = await api.customers.getAll();
-            // Handle paginated response
-            const data = Array.isArray(response) ? response : response.data || [];
+            
+            // Handle new API response format { success: true, data: { data: Customer[], pagination: ... } }
+            // or the simplified { success: true, data: Customer[] }
+            let data: Customer[] = [];
+            
+            if (response && response.data) {
+                data = Array.isArray(response.data) ? response.data : (response.data.data || []);
+            } else {
+                data = Array.isArray(response) ? response : [];
+            }
+
             this.saveToCache(cacheKey, data);
             return data;
         } catch (error) {
-            logger.warn('Failed to fetch customers, using fallback', error);
-            return DataFactory.createDefaultCustomers();
+            logger.warn('Failed to fetch customers, returning empty array', error);
+            return [];
         }
     }
 
     /**
      * Crea un nuevo cliente
      */
-    public async createCustomer(customer: Customer): Promise<Customer> {
+    public async createCustomer(customer: Omit<Customer, 'id'>): Promise<Customer> {
         try {
             logger.info('Creating customer', { name: customer.name });
             const created = await api.customers.create(customer);
@@ -122,6 +131,35 @@ export class DataService {
             return created;
         } catch (error) {
             logger.error('Failed to create customer', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Actualiza un cliente existente
+     */
+    public async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
+        try {
+            logger.info('Updating customer', { id, name: updates.name });
+            const updated = await api.customers.update(id, updates);
+            this.clearCache();
+            return updated;
+        } catch (error) {
+            logger.error('Failed to update customer', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Elimina un cliente
+     */
+    public async deleteCustomer(id: string): Promise<void> {
+        try {
+            logger.info('Deleting customer', { id });
+            await api.customers.delete(id);
+            this.clearCache();
+        } catch (error) {
+            logger.error('Failed to delete customer', error);
             throw error;
         }
     }
@@ -142,8 +180,8 @@ export class DataService {
             this.saveToCache(cacheKey, data);
             return data;
         } catch (error) {
-            logger.warn('Failed to fetch orders, using fallback', error);
-            return DataFactory.createDefaultOrders();
+            logger.warn('Failed to fetch orders, returning empty array', error);
+            return [];
         }
     }
 
@@ -205,8 +243,8 @@ export class DataService {
             this.saveToCache(cacheKey, data);
             return data;
         } catch (error) {
-            logger.warn('Failed to fetch menu, using fallback', error);
-            return DataFactory.createDefaultMenuItems();
+            logger.warn('Failed to fetch menu, returning empty array', error);
+            return [];
         }
     }
 
@@ -226,8 +264,8 @@ export class DataService {
             this.saveToCache(cacheKey, data);
             return data;
         } catch (error) {
-            logger.warn('Failed to fetch bills, using fallback', error);
-            return DataFactory.createDefaultBills();
+            logger.warn('Failed to fetch bills, returning empty array', error);
+            return [];
         }
     }
 

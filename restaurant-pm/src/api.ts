@@ -300,6 +300,15 @@ export class ApiService {
         create: async (data: any): Promise<any> => {
             return this.post(API_ENDPOINTS.CUSTOMERS.BASE, data);
         },
+        update: async (id: string, data: any): Promise<any> => {
+            return this.put(API_ENDPOINTS.CUSTOMERS.BY_ID(id), data);
+        },
+        delete: async (id: string): Promise<any> => {
+            return this.delete(API_ENDPOINTS.CUSTOMERS.BY_ID(id));
+        },
+        lookupByIdentification: async (identification: string): Promise<any> => {
+            return this.get(`${API_ENDPOINTS.CUSTOMERS.BASE}/lookup/${identification}`);
+        },
     };
 
     /**
