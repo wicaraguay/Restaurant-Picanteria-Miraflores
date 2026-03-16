@@ -114,9 +114,10 @@ export class NodemailerEmailService implements IEmailService {
                 </div>
 
                 <!-- Footer -->
-                <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px;">
-                    <p style="margin: 0;">Gracias por elegirnos.</p>
-                    <p style="margin: 5px 0 0 0;">${invoice.info.razonSocial}</p>
+                <div style="background-color: #f9fafb; padding: 25px; text-align: center; border-top: 1px solid #e5e7eb; color: #4b5563;">
+                    <p style="margin: 0; font-weight: bold; font-size: 14px;">Gracias por elegirnos.</p>
+                    <p style="margin: 8px 0 0 0; color: #111827; font-size: 16px; font-weight: 600;">${invoice.info.nombreComercial || invoice.info.razonSocial}</p>
+                    <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 11px;">${invoice.info.razonSocial}</p>
                 </div>
             </div>
         `;

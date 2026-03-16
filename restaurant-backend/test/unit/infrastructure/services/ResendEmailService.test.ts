@@ -38,5 +38,7 @@ describe('ResendEmailService', () => {
         const callArgs = sendMock.mock.calls[0][0];
         expect(callArgs.to).toContain('test@email.com');
         expect(callArgs.subject).toContain('001-001-001');
+        expect(callArgs.html).toContain('T'); // nombreComercial
+        expect(callArgs.html).toContain('S'); // razonSocial
     });
 });

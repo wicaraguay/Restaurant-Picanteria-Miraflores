@@ -89,9 +89,10 @@ export class ResendEmailService implements IEmailService {
                         <p><strong>Total:</strong> $${invoice.info.importeTotal.toFixed(2)}</p>
                     </div>
                 </div>
-                <div style="text-align: center; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 20px;">
-                    <p>Gracias por su preferencia.</p>
-                    <p>${invoice.info.razonSocial}</p>
+                <div style="text-align: center; font-size: 13px; color: #555; border-top: 1px solid #eee; padding-top: 20px;">
+                    <p style="margin: 0; font-weight: bold; color: #333;">Gracias por su preferencia.</p>
+                    <p style="margin: 5px 0 0 0; font-size: 15px;">${invoice.info.nombreComercial || invoice.info.razonSocial}</p>
+                    <p style="margin: 5px 0 0 0; font-size: 11px; color: #888;">${invoice.info.razonSocial}</p>
                 </div>
             </div>
         `;

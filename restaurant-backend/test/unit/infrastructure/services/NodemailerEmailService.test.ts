@@ -37,5 +37,7 @@ describe('NodemailerEmailService', () => {
         
         const callArgs = mockTransporter.sendMail.mock.calls[0][0];
         expect(callArgs.to).toBe('test@email.com');
+        expect(callArgs.html).toContain('T'); // nombreComercial
+        expect(callArgs.html).toContain('S'); // razonSocial
     });
 });
