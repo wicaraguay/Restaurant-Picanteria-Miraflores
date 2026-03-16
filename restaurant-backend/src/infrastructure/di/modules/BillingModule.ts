@@ -12,7 +12,8 @@ import { ResetBillingSystem } from '../../../application/use-cases/ResetBillingS
 
 import { SRIService } from '../../services/SRIService';
 import { PDFService } from '../../services/PDFService';
-import { EmailService } from '../../services/EmailService';
+import { IEmailService } from '../../../application/interfaces/IEmailService';
+import { ResendEmailService } from '../../services/ResendEmailService';
 import { BillingService } from '../../../application/services/BillingService';
 import { BillingController } from '../../controllers/BillingController';
 import { logger } from '../../utils/Logger';
@@ -20,7 +21,7 @@ import { logger } from '../../utils/Logger';
 export class BillingModule {
     private sriService?: SRIService;
     private pdfService?: PDFService;
-    private emailService?: EmailService;
+    private emailService?: IEmailService;
     private billingService?: BillingService;
     
     private generateInvoiceUseCase?: GenerateInvoice;
@@ -52,10 +53,10 @@ export class BillingModule {
         return this.pdfService;
     }
 
-    public getEmailService(): EmailService {
+    public getEmailService(): IEmailService {
         if (!this.emailService) {
-            this.emailService = new EmailService();
-            logger.debug('EmailService instantiated');
+            this.emailService = new ResendEmailService();
+            logger.debug('ResendEmailService instantiated');
         }
         return this.emailService;
     }

@@ -1,7 +1,7 @@
 
 import { SRIService } from '../../infrastructure/services/SRIService';
 import { PDFService } from '../../infrastructure/services/PDFService';
-import { EmailService } from '../../infrastructure/services/EmailService';
+import { IEmailService } from '../interfaces/IEmailService';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
@@ -17,7 +17,7 @@ export class GenerateInvoice {
         private orderRepository: IOrderRepository,
         private sriService: SRIService,
         private pdfService: PDFService,
-        private emailService: EmailService,
+        private emailService: IEmailService,
         private billingService: BillingService
     ) { }
 
@@ -80,7 +80,7 @@ export class GenerateInvoice {
                 moneda: 'DOLAR',
                 emailComprador: client.email,
                 formaPago: client.paymentMethod || '01',
-                logoUrl: info.fiscalLogo || info.logo || logoUrl,
+                logoUrl: info.fiscalLogo || info.logo || logoUrl || process.env.BUSINESS_LOGO_URL,
                 tasaIva: taxRate.toString(),
                 telefonoComprador: client.phone,
                 emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM || 'info@restaurant.com'

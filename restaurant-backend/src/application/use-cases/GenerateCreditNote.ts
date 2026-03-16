@@ -1,6 +1,6 @@
 import { SRIService } from '../../infrastructure/services/SRIService';
 import { PDFService } from '../../infrastructure/services/PDFService';
-import { EmailService } from '../../infrastructure/services/EmailService';
+import { IEmailService } from '../interfaces/IEmailService';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { ICreditNoteRepository } from '../../domain/repositories/ICreditNoteRepository';
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
@@ -15,7 +15,7 @@ export class GenerateCreditNote {
         private billRepository: IBillRepository,
         private sriService: SRIService,
         private pdfService: PDFService,
-        private emailService: EmailService,
+        private emailService: IEmailService,
         private billingService: BillingService
     ) { }
 

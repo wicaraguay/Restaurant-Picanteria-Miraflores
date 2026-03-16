@@ -25,7 +25,7 @@ import { ICreditNoteRepository } from '../../domain/repositories/ICreditNoteRepo
 // Infrastructure Services
 import { SRIService } from '../services/SRIService';
 import { PDFService } from '../services/PDFService';
-import { EmailService } from '../services/EmailService';
+import { IEmailService } from '../../application/interfaces/IEmailService';
 import { BillingService } from '../../application/services/BillingService';
 
 // Controllers
@@ -104,7 +104,7 @@ export class DIContainer {
     // --- Services ---
     public getSRIService(): SRIService { return this.billingModule.getSRIService(); }
     public getPDFService(): PDFService { return this.billingModule.getPDFService(); }
-    public getEmailService(): EmailService { return this.billingModule.getEmailService(); }
+    public getEmailService(): IEmailService { return this.billingModule.getEmailService(); }
     public getBillingService(): BillingService { return this.billingModule.getBillingService(); }
 
     // --- Use Cases ---

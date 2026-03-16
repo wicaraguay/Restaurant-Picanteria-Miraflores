@@ -1,7 +1,7 @@
 
 import { SRIService } from '../../infrastructure/services/SRIService';
 import { PDFService } from '../../infrastructure/services/PDFService';
-import { EmailService } from '../../infrastructure/services/EmailService';
+import { IEmailService } from '../interfaces/IEmailService';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
@@ -15,7 +15,7 @@ export class CheckInvoiceStatus {
         private orderRepository: IOrderRepository,
         private sriService: SRIService,
         private pdfService: PDFService,
-        private emailService: EmailService,
+        private emailService: IEmailService,
         private billingService: BillingService
     ) { }
 
