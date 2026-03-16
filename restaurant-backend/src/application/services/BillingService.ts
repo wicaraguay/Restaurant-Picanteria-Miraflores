@@ -193,6 +193,10 @@ export class BillingService {
      * Priority: fiscalLogo > logo > explicitly provided logoUrl > Environment Variable
      */
     public getLogoUrl(config: Partial<RestaurantConfig> | null, providedLogoUrl?: string): string {
-        return config?.fiscalLogo || config?.logo || providedLogoUrl || process.env.BUSINESS_LOGO_URL || '';
+        console.log('[BillingService] Resolving logo. DB Logo:', config?.logo ? 'PRESENT' : 'MISSING', 'DB Fiscal:', config?.fiscalLogo ? 'PRESENT' : 'MISSING', 'Provided:', providedLogoUrl ? 'PRESENT' : 'MISSING');
+        
+        const resolved = config?.logo || config?.fiscalLogo || providedLogoUrl || process.env.BUSINESS_LOGO_URL || '';
+        console.log('[BillingService] Resolved Logo URL (first 50 chars):', resolved.substring(0, 50));
+        return resolved;
     }
 }

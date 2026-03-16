@@ -181,10 +181,12 @@ export class CheckInvoiceStatus {
             try {
                 console.log(`[CheckInvoiceStatus] Preparing to send email to ${clientEmail}...`);
 
-                // Reconstruct Data for PDF/XML Generation
                 const config = await this.configRepository.get();
                 const info = config || {} as any;
                 
+                console.log('[CheckInvoiceStatus] Config from DB:', !!config);
+                console.log('[CheckInvoiceStatus] Logo field:', info.logo ? 'EXISTS' : 'MISSING', 'Fiscal Logo field:', info.fiscalLogo ? 'EXISTS' : 'MISSING');
+                if (info.logo) console.log('[CheckInvoiceStatus] Logo starts with:', info.logo.substring(0, 30));
                 console.log('[CheckInvoiceStatus] Final logoUrl will be:', this.billingService.getLogoUrl(info));
                 
                 const [estab, ptoEmi, secuencial] = bill.documentNumber.split('-');

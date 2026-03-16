@@ -18,7 +18,8 @@ const billController = new BillController(
     container.getCreateBillUseCase(),
     container.getGetBillsUseCase(),
     container.getDeleteBillUseCase(),
-    container.getResetBillingSystemUseCase()
+    container.getResetBillingSystemUseCase(),
+    container.getBillingService()
 );
 
 /**

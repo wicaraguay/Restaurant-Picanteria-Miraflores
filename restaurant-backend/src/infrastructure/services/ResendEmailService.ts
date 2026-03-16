@@ -61,7 +61,7 @@ export class ResendEmailService implements IEmailService {
     }
 
     private generateHtml(invoice: Invoice): string {
-        const logoUrl = invoice.info.logoUrl && !invoice.info.logoUrl.startsWith('data:') ? invoice.info.logoUrl : '';
+        const logoUrl = invoice.info.logoUrl || '';
         const d = invoice.creationDate || new Date();
         const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
 

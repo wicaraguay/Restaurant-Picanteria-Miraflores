@@ -9,12 +9,15 @@ import { NotFoundError } from '../../domain/errors/CustomErrors';
 import { PDFService } from '../services/PDFService';
 import { RestaurantConfigModel } from '../database/schemas/RestaurantConfigSchema';
 
+import { BillingService } from '../../application/services/BillingService';
+
 export class BillController {
     constructor(
         private createBill: CreateBill,
         private getBills: GetBills,
         private deleteBill: DeleteBill,
         private resetBillingSystem: ResetBillingSystem,
+        private billingService: BillingService
     ) { }
 
     public getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -108,7 +111,7 @@ export class BillController {
                     formaPago: '01',
                     telefonoComprador: 'S/N',
                     emailMatriz: config?.fiscalEmail || config?.email || process.env.SMTP_FROM,
-                    logoUrl: config?.fiscalLogo || config?.logo
+                    logoUrl: this.billingService.getLogoUrl(config)
                 }
             };
 
