@@ -2,10 +2,6 @@
 
 .pos-container {
     --pos-primary: #3b82f6;
-    --pos-glass: rgba(255, 255, 255, 0.7);
-    --pos-glass-dark: rgba(31, 41, 55, 0.7);
-    --pos-border: rgba(255, 255, 255, 0.3);
-    --pos-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 }
 
 /* Adaptive height: use dynamic viewport height for modern mobile support */
@@ -21,90 +17,9 @@
 
 .dark .pos-container {
     --pos-glass: rgba(17, 24, 39, 0.7);
-    --pos-border: rgba(255, 255, 255, 0.05);
 }
 
-@media (max-width: 768px) {
-    .pos-container {
-        height: auto !important;
-    }
-}
-
-/* Glassmorphism Effect */
-.pos-glass-panel {
-    background: var(--pos-glass);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid var(--pos-border);
-    box-shadow: var(--pos-shadow);
-    border-radius: 1.5rem;
-}
-
-/* Category Buttons with specific colors */
-.category-pill {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.category-pill:active {
-    transform: scale(0.95);
-}
-
-.cat-carnes { border-color: #ef4444; color: #ef4444; }
-.cat-carnes.active { background-color: #ef4444; color: white; }
-
-.cat-mariscos { border-color: #3b82f6; color: #3b82f6; }
-.cat-mariscos.active { background-color: #3b82f6; color: white; }
-
-.cat-bebidas { border-color: #06b6d4; color: #06b6d4; }
-.cat-bebidas.active { background-color: #06b6d4; color: white; }
-
-.cat-postres { border-color: #8b5cf6; color: #8b5cf6; }
-.cat-postres.active { background-color: #8b5cf6; color: white; }
-
-.cat-entradas { border-color: #10b981; color: #10b981; }
-.cat-entradas.active { background-color: #10b981; color: white; }
-
-/* Product Cards */
-.product-card {
-    transition: all 0.3s ease;
-    border: 1px solid transparent;
-}
-
-.product-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-    border-color: var(--pos-primary);
-}
-
-/* Ticket Animations */
-@keyframes slide-in-bottom {
-    from {
-        transform: translateY(20px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-.animate-ticket-item {
-    animation: slide-in-bottom 0.3s ease-out forwards;
-}
-
-/* Sticky Bottom Bar for Mobile */
-.pos-mobile-bar {
-    backdrop-filter: blur(12px);
-    background: rgba(255, 255, 255, 0.85);
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.dark .pos-mobile-bar {
-    background: rgba(17, 24, 39, 0.85);
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* Layout Utilities */
+/* Las utilidades específicas para el POS se quedan aquí */
 .pos-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));

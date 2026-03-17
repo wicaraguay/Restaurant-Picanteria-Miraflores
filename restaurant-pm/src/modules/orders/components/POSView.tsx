@@ -163,7 +163,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                 {/* Catalog Section */}
                 <div className={`flex-[3] flex flex-col min-w-0 ${showTicketMobile ? 'hidden md:flex' : 'flex'}`}>
                     {/* Search & Categories */}
-                    <div className="pos-glass-panel p-4 mb-4 space-y-4">
+                    <div className="glass-panel p-4 mb-4 space-y-4">
                         <div className="relative">
                             <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                             <input 
@@ -188,7 +188,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                     </div>
 
                     {/* Grid with improved mobile padding to clear floating button */}
-                    <div className="flex-1 overflow-y-auto pr-2 pos-scroll pb-36 md:pb-4">
+                    <div className="flex-1 overflow-y-auto pr-2 custom-scroll pb-36 md:pb-4">
                         <div className="pos-grid">
                             {filteredItems.map(item => (
                                 <button
@@ -224,7 +224,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                         ? 'fixed inset-0 z-[9999] flex bg-gray-50 dark:bg-dark-900'
                         : 'hidden md:flex'
                     }`}>
-                    <div className="pos-glass-panel h-full flex flex-col overflow-hidden bg-white dark:bg-dark-900 md:bg-white/40 md:dark:bg-dark-800/40">
+                    <div className="glass-panel h-full flex flex-col overflow-hidden bg-white dark:bg-dark-900 md:bg-white/40 md:dark:bg-dark-800/40">
                         {/* Ticket Header Mobile Toggle */}
                         <div className="md:hidden p-3 border-b dark:border-dark-700 flex items-center justify-between bg-white dark:bg-dark-900 sticky top-0 z-20">
                             <button 
@@ -285,7 +285,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                                 </div>
                             ) : (
                                 cartItems.map((item, idx) => (
-                                    <div key={idx} className="animate-ticket-item bg-white dark:bg-dark-900 p-3 rounded-2xl flex items-center gap-3 shadow-sm border border-gray-50 dark:border-dark-700">
+                                    <div key={idx} className="animate-slide-up bg-white dark:bg-dark-900 p-3 rounded-2xl flex items-center gap-3 shadow-sm border border-gray-50 dark:border-dark-700">
                                         <div className="flex-1 min-w-0">
                                             <h5 className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate">{item.name}</h5>
                                             <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-tighter">${item.price?.toFixed(2)} / UNIDAD</p>

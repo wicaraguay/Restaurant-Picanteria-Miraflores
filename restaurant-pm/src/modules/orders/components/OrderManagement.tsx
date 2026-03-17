@@ -6,7 +6,7 @@ import { SetState } from '../../../types';
 import { MenuItem } from '../../menu/types/menu.types';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
 import Modal from '../../../components/ui/Modal';
-import { PlusIcon, EditIcon, TrashIcon, SearchIcon, MinusIcon, ClipboardListIcon, PrinterIcon } from '../../../components/ui/Icons';
+import { PlusIcon, EditIcon, TrashIcon, SearchIcon, MinusIcon, ClipboardListIcon, PrinterIcon, ChevronLeftIcon } from '../../../components/ui/Icons';
 import { OrderNumberGenerator } from '../utils/orderNumberGenerator';
 import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
 import { generateAccessKey } from '../../billing/utils/sri';
@@ -116,6 +116,17 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
     const [tempAccessKey, setTempAccessKey] = useState<string | undefined>();
     const [tempAuthDate, setTempAuthDate] = useState<string | undefined>();
+    
+    // Estados para Paginación y Filtros de Historial
+    const [historySearch, setHistorySearch] = useState('');
+    const [historyDate, setHistoryDate] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const PAGE_SIZE = 12;
+
+    // Resetear página al cambiar filtros
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [historySearch, historyDate, activeTab]);
 
     const handleOpenBilling = (order: Order) => {
         setBillingOrder(order);
@@ -305,13 +316,33 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         alert('Por favor, dirígete a la sección "Historial de Facturas" para verificar el estado de la factura.');
     };
 
-    const filteredOrders = (Array.isArray(orders) ? orders : []).filter(order => {
-        if (activeTab === 'active') {
-            return order.status === OrderStatus.New || order.status === OrderStatus.Ready;
-        } else {
-            return order.status === OrderStatus.Completed;
-        }
-    });
+    const filteredOrders = (Array.isArray(orders) ? orders : [])
+        .filter(order => {
+            if (activeTab === 'active') {
+                return order.status === OrderStatus.New || order.status === OrderStatus.Ready;
+            } else {
+                // Filtros de Historial
+                const isCompleted = order.status === OrderStatus.Completed;
+                if (!isCompleted) return false;
+
+                const matchesSearch = historySearch === '' || 
+                    order.customerName.toLowerCase().includes(historySearch.toLowerCase()) ||
+                    (order.orderNumber && order.orderNumber.toString().includes(historySearch)) ||
+                    order.id.toLowerCase().includes(historySearch.toLowerCase());
+                
+                const matchesDate = historyDate === '' || 
+                    (order.createdAt && order.createdAt.startsWith(historyDate));
+
+                return matchesSearch && matchesDate;
+            }
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Paginación
+    const totalPages = Math.ceil(filteredOrders.length / PAGE_SIZE);
+    const paginatedOrders = activeTab === 'history' 
+        ? filteredOrders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+        : filteredOrders;
 
 
     return (
@@ -362,6 +393,27 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                         </>
                     )}
                 </div>
+
+                {viewMode === 'dashboard' && activeTab === 'history' && (
+                    <div className="flex flex-col sm:flex-row gap-2 flex-1 max-w-2xl">
+                        <div className="relative flex-1">
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <input 
+                                type="text"
+                                placeholder="Buscar por cliente o # pedido..."
+                                value={historySearch}
+                                onChange={e => setHistorySearch(e.target.value)}
+                                className={`${inputClass} pl-10 h-11`}
+                            />
+                        </div>
+                        <input 
+                            type="date"
+                            value={historyDate}
+                            onChange={e => setHistoryDate(e.target.value)}
+                            className={`${inputClass} w-full sm:w-auto h-11`}
+                        />
+                    </div>
+                )}
 
                 {viewMode === 'dashboard' && (
                     <button 
@@ -558,20 +610,45 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                         {activeTab === 'active' ? 'No hay pedidos en curso.' : 'No hay historial de pedidos completados.'}
                     </div>
                 ) : (
-                    filteredOrders
-                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                        .map(order => (
-                            <OrderCard
-                                key={order.id}
-                                order={order}
-                                onEdit={() => handleOpenModal(order)}
-                                onDelete={() => handleDeleteOrder(order.id)}
-                                onStatusChange={(newStatus) => handleStatusChange(order.id, newStatus)}
-                                onBilling={() => handleOpenBilling(order)}
-                            />
-                        ))
+                    paginatedOrders.map(order => (
+                        <OrderCard
+                            key={order.id}
+                            order={order}
+                            onEdit={() => handleOpenModal(order)}
+                            onDelete={() => handleDeleteOrder(order.id)}
+                            onStatusChange={(newStatus) => handleStatusChange(order.id, newStatus)}
+                            onBilling={() => handleOpenBilling(order)}
+                        />
+                    ))
                 )}
             </div>
+
+            {/* Pagination Controls (only for history) */}
+            {viewMode === 'dashboard' && activeTab === 'history' && totalPages > 1 && (
+                <div className="flex justify-center items-center gap-4 mt-12 pb-8">
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="p-2.5 rounded-xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm active:scale-90"
+                    >
+                        <ChevronLeftIcon className="w-5 h-5" />
+                    </button>
+                    
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-gray-900 dark:text-white bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-xl border border-blue-100 dark:border-blue-800">
+                            Página {currentPage} de {totalPages}
+                        </span>
+                    </div>
+
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-2.5 rounded-xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm active:scale-90"
+                    >
+                        <ChevronLeftIcon className="w-5 h-5 rotate-180" />
+                    </button>
+                </div>
+            )}
                 </>
             )}
         </div>

@@ -23,6 +23,9 @@ export interface OrderDocument extends Document {
     type: 'En Local' | 'Delivery' | 'Para Llevar';
     status: OrderStatus;
     createdAt: Date;
+    readyAt?: Date;
+    estimatedMinutes?: number;
+    estimateSetAt?: Date;
     billed?: boolean;
 }
 
@@ -37,7 +40,10 @@ const OrderSchema: Schema = new Schema({
     type: { type: String, enum: ['En Local', 'Delivery', 'Para Llevar'], required: true },
     status: { type: String, enum: Object.values(OrderStatus), default: OrderStatus.New },
     billed: { type: Boolean, default: false },
-    orderNumber: { type: String }
+    orderNumber: { type: String },
+    estimatedMinutes: { type: Number },
+    readyAt: { type: Date },
+    estimateSetAt: { type: Date }
 }, {
     timestamps: { createdAt: true, updatedAt: false } // We use createdAt from timestamps. Schema updated for prepared flag.
 });

@@ -37,6 +37,9 @@ export interface Order {
     type: 'En Local' | 'Delivery' | 'Para Llevar';
     status: OrderStatus;
     createdAt: Date;
+    readyAt?: Date | null;
+    estimatedMinutes?: number | null;
+    estimateSetAt?: Date | null;
     billed?: boolean;
     orderNumber?: string;
 }
