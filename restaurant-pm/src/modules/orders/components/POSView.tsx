@@ -187,8 +187,8 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                         </div>
                     </div>
 
-                    {/* Grid */}
-                    <div className="flex-1 overflow-y-auto pr-2 pos-scroll pb-28 md:pb-4">
+                    {/* Grid with improved mobile padding to clear floating button */}
+                    <div className="flex-1 overflow-y-auto pr-2 pos-scroll pb-36 md:pb-4">
                         <div className="pos-grid">
                             {filteredItems.map(item => (
                                 <button
@@ -236,9 +236,14 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                             </button>
                             <div className="text-center leading-tight">
                                 <h3 className="text-xs font-black text-gray-900 dark:text-white uppercase">Tu Pedido</h3>
-                                <p className="text-[10px] text-gray-400">{cartItems.reduce((s, i) => s + i.quantity, 0)} items</p>
+                                <p className="text-[10px] text-gray-400">{cartItems.reduce((s, i) => s + i.quantity, 0)} productos</p>
                             </div>
-                            <div className="w-10"></div> {/* Spacer for balance */}
+                            <button 
+                                onClick={() => setShowTicketMobile(false)}
+                                className="p-2 bg-gray-100 dark:bg-dark-800 rounded-full"
+                            >
+                                <PlusIcon className="w-5 h-5 rotate-45 text-gray-500" />
+                            </button>
                         </div>
 
                         {/* Desktop Ticket Header — hidden on mobile */}

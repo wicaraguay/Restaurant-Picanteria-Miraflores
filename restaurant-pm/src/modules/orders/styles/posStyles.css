@@ -8,9 +8,9 @@
     --pos-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 }
 
-/* Adaptive height: on mobile we need space for the bottom nav (≈64px) + some top margin */
+/* Adaptive height: use dynamic viewport height for modern mobile support */
 .pos-full-height {
-    height: calc(100vh - 220px);
+    height: calc(100dvh - 220px);
 }
 
 @media (min-width: 768px) {
@@ -133,16 +133,30 @@
 /* Cart Item Refinement for Mobile */
 @media (max-width: 640px) {
     .animate-ticket-item {
-        padding: 0.75rem !important;
-        gap: 0.5rem !important;
+        padding: 0.5rem !important;
+        gap: 0.4rem !important;
+        border-radius: 1rem !important;
     }
     
     .animate-ticket-item h5 {
-        font-size: 0.8rem !important;
+        font-size: 0.75rem !important;
     }
     
     .animate-ticket-item p {
-        font-size: 0.6rem !important;
+        font-size: 0.55rem !important;
+    }
+
+    .product-card {
+        padding: 0.5rem !important;
+        border-radius: 1.25rem !important;
+    }
+
+    .product-card h4 {
+        font-size: 0.7rem !important;
+    }
+
+    .product-card p {
+        font-size: 0.75rem !important;
     }
 }
 
