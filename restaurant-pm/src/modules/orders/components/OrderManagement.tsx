@@ -12,6 +12,7 @@ import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
 import { generateAccessKey } from '../../billing/utils/sri';
 import { generateInvoiceHtml } from '../../billing/utils/invoiceGenerator';
 import InvoiceProcessingModal, { InvoiceProcessState } from '../../billing/components/InvoiceProcessingModal';
+import { useAuth } from '../../auth/contexts/AuthContext';
 
 interface OrderManagementProps {
     orders: Order[];
@@ -27,6 +28,7 @@ import POSView from './POSView';
 
 // --- Main Order Management Component ---
 const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, menuItems }) => {
+    const { currentUser } = useAuth();
     const { config, refreshConfig } = useRestaurantConfig();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -83,9 +85,9 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         }
     };
 
-    const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    const handleStatusChange = async (orderId: string, newStatus: OrderStatus, additionalData: Partial<Order> = {}) => {
         try {
-            const updated = await orderService.update(orderId, { status: newStatus });
+            const updated = await orderService.update(orderId, { status: newStatus, ...additionalData });
             setOrders(prev => prev.map(o => o.id === orderId ? updated : o));
         } catch (error) {
             console.error('Failed to update status:', error);
@@ -264,6 +266,13 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
                 // Refresh config to update the sequence number for the next invoice
                 await refreshConfig();
+
+                // Mark order as completed after successful billing
+                const finalBillingType = billingData.identification === '9999999999999' ? 'Consumidor Final' : 'Factura';
+                await handleStatusChange(billingOrder.id, OrderStatus.Completed, { 
+                    billed: true,
+                    billingType: finalBillingType
+                });
             } else {
                 // Error en la generación
                 setProcessingState(InvoiceProcessState.ERROR);
@@ -276,6 +285,23 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
             setProcessingMessage('Error en el proceso');
             const errorMessage = error instanceof Error ? error.message : 'Error al procesar la factura con el servidor.';
             setProcessingDetails(errorMessage);
+        }
+    };
+
+    const handleManualComplete = async () => {
+        if (!billingOrder) return;
+        
+        const confirm = window.confirm('¿Deseas registrar esta venta como completada sin emitir factura electrónica?');
+        if (!confirm) return;
+
+        try {
+            await handleStatusChange(billingOrder.id, OrderStatus.Completed, {
+                billingType: 'Sin Factura'
+            });
+            setIsBillingModalOpen(false);
+        } catch (error) {
+            console.error('Failed to complete order manually:', error);
+            alert('Error al completar el pedido.');
         }
     };
 
@@ -579,6 +605,12 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                                     Emitir Factura
                                 </button>
                                 <button
+                                    onClick={handleManualComplete}
+                                    className="w-full py-2 bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-200 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-dark-600 transition-all border border-gray-300 dark:border-dark-600"
+                                >
+                                    Solo registrar venta (sin factura)
+                                </button>
+                                <button
                                     onClick={() => setIsBillingModalOpen(false)}
                                     className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm"
                                 >
@@ -614,9 +646,11 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                         <OrderCard
                             key={order.id}
                             order={order}
+                            userRoleName={currentUser?.role.name}
                             onEdit={() => handleOpenModal(order)}
                             onDelete={() => handleDeleteOrder(order.id)}
                             onStatusChange={(newStatus) => handleStatusChange(order.id, newStatus)}
+                            onPayment={handleOpenBilling}
                             onBilling={() => handleOpenBilling(order)}
                         />
                     ))

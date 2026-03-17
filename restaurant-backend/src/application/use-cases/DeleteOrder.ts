@@ -15,12 +15,24 @@
  */
 
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
-import { NotFoundError } from '../../domain/errors/CustomErrors';
+import { NotFoundError, ForbiddenError } from '../../domain/errors/CustomErrors';
+import { OrderStatus } from '../../domain/entities/Order';
 
 export class DeleteOrder {
     constructor(private orderRepository: IOrderRepository) { }
 
-    async execute(id: string): Promise<void> {
+    async execute(id: string, roleId?: string): Promise<void> {
+        const order = await this.orderRepository.findById(id);
+        
+        if (!order) {
+            throw new NotFoundError(`Order with ID ${id} not found`);
+        }
+
+        // Restricción: Solo Administrador (ID '1') puede borrar pedidos completados
+        if (order.status === OrderStatus.Completed && roleId !== '1') {
+            throw new ForbiddenError('Solo el administrador puede eliminar pedidos del historial');
+        }
+
         const result = await this.orderRepository.delete(id);
         if (!result) {
             throw new NotFoundError(`Order with ID ${id} not found`);

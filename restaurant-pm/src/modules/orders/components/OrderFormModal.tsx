@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file OrderFormModal.tsx
  * @description Componente modal para crear o editar una orden.
  * Este archivo pertenece al módulo de órdenes (orders).
@@ -124,6 +124,8 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
         let finalStatus = status;
         const hasUnpreparedItems = items.some(item => !item.prepared);
 
+        // Si hay items sin preparar y la orden estaba en un estado finalizado/listo, 
+        // retrocedemos el estado a "Nuevo" para que la cocina lo vuelva a ver.
         if (hasUnpreparedItems && (status === OrderStatus.Ready || status === OrderStatus.Completed)) {
             finalStatus = OrderStatus.New;
         }
@@ -138,6 +140,7 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
             status: finalStatus,
             items: cleanItems,
             createdAt: order?.createdAt || new Date().toISOString(),
+            readyAt: finalStatus === OrderStatus.New ? null : order?.readyAt, // Reset readyAt if going back to New
             orderNumber: order?.orderNumber,
         };
         onSave(newOrder);

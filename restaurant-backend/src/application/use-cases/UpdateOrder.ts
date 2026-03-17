@@ -15,7 +15,7 @@
  * @layer Application - Lógica de negocio
  */
 
-import { Order } from '../../domain/entities/Order';
+import { Order, OrderStatus } from '../../domain/entities/Order';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 import { NotFoundError } from '../../domain/errors/CustomErrors';
 
@@ -23,6 +23,23 @@ export class UpdateOrder {
     constructor(private orderRepository: IOrderRepository) { }
 
     async execute(id: string, updates: Partial<Order>): Promise<Order> {
+        // Obtenemos la orden actual para verificar su estado
+        const currentOrder = await this.orderRepository.findById(id);
+        if (!currentOrder) {
+            throw new NotFoundError(`Order with ID ${id} not found`);
+        }
+
+        // Lógica de transición de estado incremental
+        // Si se actualizan items y hay alguno sin preparar, y la orden estaba Lista/Completada, 
+        // forzamos el regreso a "Nuevo" para que aparezca en cocina.
+        if (updates.items) {
+            const hasUnpreparedItems = updates.items.some(item => !item.prepared);
+            if (hasUnpreparedItems && (currentOrder.status === OrderStatus.Ready || currentOrder.status === OrderStatus.Completed)) {
+                updates.status = OrderStatus.New;
+                updates.readyAt = null; // Limpiamos la fecha de listo
+            }
+        }
+
         const order = await this.orderRepository.update(id, updates);
         if (!order) {
             throw new NotFoundError(`Order with ID ${id} not found`);

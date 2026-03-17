@@ -114,3 +114,28 @@ export class DatabaseError extends Error {
         };
     }
 }
+
+/**
+ * ForbiddenError - Error de acceso prohibido
+ * Se usa cuando el usuario está autenticado pero no tiene permisos para la acción
+ * Código HTTP: 403 (Forbidden)
+ */
+export class ForbiddenError extends Error {
+    public readonly code: string = 'FORBIDDEN_ERROR';
+    public readonly statusCode: number = 403;
+
+    constructor(message: string = 'Access denied') {
+        super(message);
+        this.name = 'ForbiddenError';
+        Object.setPrototypeOf(this, ForbiddenError.prototype);
+    }
+
+    toJSON() {
+        return {
+            name: this.name,
+            code: this.code,
+            message: this.message,
+            statusCode: this.statusCode
+        };
+    }
+}

@@ -27,6 +27,7 @@ export interface OrderDocument extends Document {
     estimatedMinutes?: number;
     estimateSetAt?: Date;
     billed?: boolean;
+    billingType?: 'Factura' | 'Consumidor Final' | 'Sin Factura';
 }
 
 const OrderSchema: Schema = new Schema({
@@ -40,6 +41,7 @@ const OrderSchema: Schema = new Schema({
     type: { type: String, enum: ['En Local', 'Delivery', 'Para Llevar'], required: true },
     status: { type: String, enum: Object.values(OrderStatus), default: OrderStatus.New },
     billed: { type: Boolean, default: false },
+    billingType: { type: String, enum: ['Factura', 'Consumidor Final', 'Sin Factura'] },
     orderNumber: { type: String },
     estimatedMinutes: { type: Number },
     readyAt: { type: Date },

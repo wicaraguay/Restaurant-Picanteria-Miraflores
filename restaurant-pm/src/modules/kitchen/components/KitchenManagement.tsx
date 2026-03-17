@@ -29,18 +29,18 @@ const useTimer = (startTime: string) => {
 };
 
 // --- Single Order Card for Kitchen ---
-const KitchenOrderCard: React.FC<{ 
-    order: Order; 
+const KitchenOrderCard: React.FC<{
+    order: Order;
     onUpdateItem: (orderId: string, itemIdx: number) => void;
     onSetEstimate: (orderId: string, minutes: number) => void;
     onMarkAllReady: (order: Order) => void;
 }> = ({ order, onUpdateItem, onSetEstimate, onMarkAllReady }) => {
     const minutesElapsed = useTimer(order.createdAt);
     const minutesSinceEstimate = useTimer(order.estimateSetAt || order.createdAt);
-    
+
     // Calculate remaining time relative to when the estimate was set
-    const remainingTime = (order.estimatedMinutes && order.estimateSetAt) 
-        ? order.estimatedMinutes - minutesSinceEstimate 
+    const remainingTime = (order.estimatedMinutes && order.estimateSetAt)
+        ? order.estimatedMinutes - minutesSinceEstimate
         : null;
 
     // Determine if late: 
@@ -57,7 +57,7 @@ const KitchenOrderCard: React.FC<{
             const alertThreshold = order.estimatedMinutes * 0.8;
             if (minutesSinceEstimate >= alertThreshold) return "border-orange-500 shadow-orange-500/20";
         }
-        
+
         return "border-blue-500/40 shadow-blue-500/10";
     };
 
@@ -77,24 +77,22 @@ const KitchenOrderCard: React.FC<{
                         {order.customerName}
                     </h3>
                     <div className="flex items-center gap-2 mt-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            order.type === 'En Local' ? 'bg-blue-100 text-blue-600' : 
-                            order.type === 'Delivery' ? 'bg-purple-100 text-purple-600' : 'bg-orange-100 text-orange-600'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${order.type === 'En Local' ? 'bg-blue-100 text-blue-600' :
+                                order.type === 'Delivery' ? 'bg-purple-100 text-purple-600' : 'bg-orange-100 text-orange-600'
+                            }`}>
                             {order.type.toUpperCase()}
                         </span>
                         <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
-                             {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
                     </div>
                 </div>
-                
+
                 {/* Timer Circle */}
-                <div className={`w-16 h-16 rounded-full border-4 flex flex-col items-center justify-center transition-all ${
-                    (order.estimatedMinutes && remainingTime !== null && remainingTime < 0) ? 'border-red-600 text-red-600 bg-white dark:bg-dark-900 shadow-lg shadow-red-600/30 scale-105 animate-pulse' : 
-                    (order.estimatedMinutes && remainingTime !== null && remainingTime <= 2) ? 'border-orange-500 text-orange-500 bg-orange-50 dark:bg-dark-800' : 
-                    'border-blue-600 text-blue-600 bg-blue-50 dark:bg-dark-800'
-                }`}>
+                <div className={`w-16 h-16 rounded-full border-4 flex flex-col items-center justify-center transition-all ${(order.estimatedMinutes && remainingTime !== null && remainingTime < 0) ? 'border-red-600 text-red-600 bg-white dark:bg-dark-900 shadow-lg shadow-red-600/30 scale-105 animate-pulse' :
+                        (order.estimatedMinutes && remainingTime !== null && remainingTime <= 2) ? 'border-orange-500 text-orange-500 bg-orange-50 dark:bg-dark-800' :
+                            'border-blue-600 text-blue-600 bg-blue-50 dark:bg-dark-800'
+                    }`}>
                     {order.estimatedMinutes && order.estimateSetAt && remainingTime !== null ? (
                         remainingTime >= 0 ? (
                             <>
@@ -134,11 +132,10 @@ const KitchenOrderCard: React.FC<{
                                 e.stopPropagation();
                                 onSetEstimate(order.id, m);
                             }}
-                            className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all border-2 ${
-                                order.estimatedMinutes === m 
-                                ? 'bg-blue-600 border-blue-600 text-white shadow-lg active:scale-95' 
-                                : 'bg-white dark:bg-dark-900 border-gray-100 dark:border-dark-700 text-gray-500 hover:border-blue-500 hover:text-blue-500'
-                            }`}
+                            className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all border-2 ${order.estimatedMinutes === m
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg active:scale-95'
+                                    : 'bg-white dark:bg-dark-900 border-gray-100 dark:border-dark-700 text-gray-500 hover:border-blue-500 hover:text-blue-500'
+                                }`}
                         >
                             {m} min
                         </button>
@@ -146,35 +143,36 @@ const KitchenOrderCard: React.FC<{
                 </div>
             </div>
 
-            {/* Listado de platos */}
+            {/* Listado de platos (Solo los que faltan por preparar) */}
             <div className="flex-1 p-4 space-y-2 overflow-y-auto max-h-[300px] custom-scroll">
-                {order.items.map((item, idx) => (
-                    <button
-                        key={idx}
-                        onClick={() => onUpdateItem(order.id, idx)}
-                        className={`w-full text-left p-3 rounded-2xl border-2 transition-all flex items-center justify-between group ${
-                            item.prepared 
-                                ? 'bg-gray-50 dark:bg-dark-800 border-transparent opacity-60' 
-                                : 'bg-white dark:bg-dark-900 border-gray-100 dark:border-dark-700 hover:border-blue-500'
-                        }`}
-                    >
-                        <div className="flex items-center gap-3">
-                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${
-                                item.prepared ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-600'
-                            }`}>
-                                {item.quantity}
-                            </span>
-                            <span className={`font-bold text-sm ${item.prepared ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-100'}`}>
-                                {item.name}
-                            </span>
-                        </div>
-                        {item.prepared ? (
-                            <CheckCircleIcon className="w-5 h-5 text-green-500" />
-                        ) : (
+                {order.items.filter(item => !item.prepared).map((item, originalIdx) => {
+                    // We need the original index for update
+                    const actualIdx = order.items.findIndex((i, idx) => i === item);
+
+                    return (
+                        <button
+                            key={actualIdx}
+                            onClick={() => onUpdateItem(order.id, actualIdx)}
+                            className="w-full text-left p-3 rounded-2xl border-2 transition-all flex items-center justify-between group bg-white dark:bg-dark-900 border-gray-100 dark:border-dark-700 hover:border-blue-500"
+                        >
+                            <div className="flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black bg-blue-100 text-blue-600">
+                                    {item.quantity}
+                                </span>
+                                <span className="font-bold text-sm text-gray-800 dark:text-gray-100">
+                                    {item.name}
+                                </span>
+                            </div>
                             <div className="w-5 h-5 rounded-full border-2 border-gray-200 group-hover:border-blue-500 transition-colors" />
-                        )}
-                    </button>
-                ))}
+                        </button>
+                    );
+                })}
+                {/* Opcional: Mostrar contador de items listos si hay alguno */}
+                {order.items.some(i => i.prepared) && (
+                    <div className="pt-2 text-[10px] font-bold text-gray-400 text-center uppercase tracking-widest">
+                        {order.items.filter(i => i.prepared).length} platos ya despachados
+                    </div>
+                )}
             </div>
 
             {/* Acciones principales */}
@@ -182,11 +180,10 @@ const KitchenOrderCard: React.FC<{
                 <button
                     onClick={() => onMarkAllReady(order)}
                     disabled={!allReady}
-                    className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                        allReady 
-                            ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-600/20' 
+                    className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${allReady
+                            ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-600/20'
                             : 'bg-gray-100 dark:bg-dark-800 text-gray-400 dark:text-gray-600 border-2 border-dashed border-gray-200 dark:border-dark-700 shadow-none'
-                    }`}
+                        }`}
                 >
                     {allReady ? (
                         <>
@@ -214,9 +211,9 @@ const KitchenManagement: React.FC<KitchenManagementProps> = ({ orders, setOrders
         if (!order) return;
 
         const updatedItems = [...order.items];
-        updatedItems[itemIdx] = { 
-            ...updatedItems[itemIdx], 
-            prepared: !updatedItems[itemIdx].prepared 
+        updatedItems[itemIdx] = {
+            ...updatedItems[itemIdx],
+            prepared: !updatedItems[itemIdx].prepared
         };
 
         // Optimistic update
@@ -235,23 +232,23 @@ const KitchenManagement: React.FC<KitchenManagementProps> = ({ orders, setOrders
     const handleSetEstimate = async (orderId: string, minutes: number) => {
         const order = safeOrders.find(o => o.id === orderId);
         const isCurrentlySelected = order?.estimatedMinutes === minutes;
-        
+
         const now = new Date().toISOString();
         const newMinutes = isCurrentlySelected ? null : minutes;
         const newSetAt = isCurrentlySelected ? null : now;
 
         // Optimistic update
         const originalOrders = [...safeOrders];
-        setOrders(prev => prev.map(o => o.id === orderId ? { 
-            ...o, 
-            estimatedMinutes: newMinutes, 
-            estimateSetAt: newSetAt 
+        setOrders(prev => prev.map(o => o.id === orderId ? {
+            ...o,
+            estimatedMinutes: newMinutes,
+            estimateSetAt: newSetAt
         } : o));
 
         try {
-            await orderService.update(orderId, { 
-                estimatedMinutes: newMinutes, 
-                estimateSetAt: newSetAt 
+            await orderService.update(orderId, {
+                estimatedMinutes: newMinutes,
+                estimateSetAt: newSetAt
             });
         } catch (error) {
             console.error('Failed to update estimate:', error);

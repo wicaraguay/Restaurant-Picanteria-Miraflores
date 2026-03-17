@@ -27,6 +27,7 @@ export class MongoOrderRepository extends BaseRepository<Order> implements IOrde
             estimatedMinutes: doc.estimatedMinutes,
             estimateSetAt: doc.estimateSetAt,
             billed: doc.billed,
+            billingType: doc.billingType,
             orderNumber: doc.orderNumber
         };
     }

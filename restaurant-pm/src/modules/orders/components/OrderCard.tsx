@@ -12,10 +12,12 @@ interface OrderCardProps {
     onEdit: () => void;
     onDelete: () => void;
     onStatusChange: (newStatus: OrderStatus) => void;
+    onPayment?: (order: Order) => void;
     onBilling?: () => void;
+    userRoleName?: string;
 }
 
-export const OrderCard: React.FC<OrderCardProps> = ({ order, onEdit, onDelete, onStatusChange, onBilling }) => {
+export const OrderCard: React.FC<OrderCardProps> = ({ order, onEdit, onDelete, onStatusChange, onPayment, onBilling, userRoleName }) => {
     const getStatusColor = () => {
         switch (order.status) {
             case OrderStatus.New: return 'border-blue-500 dark:border-blue-400';
@@ -58,9 +60,16 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onEdit, onDelete, o
         : '';
 
     const handleStatusClick = () => {
-        if (order.status === OrderStatus.New) onStatusChange(OrderStatus.Ready);
-        else if (order.status === OrderStatus.Ready) onStatusChange(OrderStatus.Completed);
-        else onStatusChange(OrderStatus.New);
+        if (order.status === OrderStatus.Completed) return; // Prevent clicking status badge in History
+        
+        if (order.status === OrderStatus.New) {
+            onStatusChange(OrderStatus.Ready);
+        } else if (order.status === OrderStatus.Ready) {
+            if (onPayment) onPayment(order);
+            else onStatusChange(OrderStatus.Completed);
+        } else {
+            onStatusChange(OrderStatus.New);
+        }
     };
 
     const total = order.items.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
@@ -81,10 +90,26 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onEdit, onDelete, o
 
                 <div className="flex justify-between items-center mb-3 md:mb-4">
                     <span className="text-[9px] md:text-[10px] font-black bg-gray-100 dark:bg-dark-900 px-2 py-1 rounded-lg text-gray-500 dark:text-gray-400 uppercase tracking-widest">{order.type}</span>
-                    <button onClick={handleStatusClick} className={`text-[9px] md:text-[10px] font-black py-1 px-3 rounded-xl uppercase tracking-widest transition-all active:scale-95 ${getStatusBadgeColor()}`}>
+                    <button 
+                        onClick={handleStatusClick} 
+                        disabled={order.status === OrderStatus.Completed}
+                        className={`text-[9px] md:text-[10px] font-black py-1 px-3 rounded-xl uppercase tracking-widest transition-all ${order.status !== OrderStatus.Completed ? 'active:scale-95' : 'cursor-default'} ${getStatusBadgeColor()}`}
+                    >
                         {order.status}
                     </button>
                 </div>
+
+                {order.status === OrderStatus.Completed && order.billingType && (
+                    <div className="mb-4">
+                        <span className={`text-[8px] md:text-[9px] font-black px-2 py-0.5 rounded-lg border uppercase tracking-widest ${
+                            order.billingType === 'Factura' ? 'border-green-200 text-green-700 bg-green-50' :
+                            order.billingType === 'Consumidor Final' ? 'border-blue-200 text-blue-700 bg-blue-50' :
+                            'border-gray-200 text-gray-600 bg-gray-50'
+                        }`}>
+                            {order.billingType}
+                        </span>
+                    </div>
+                )}
 
                 <div className="space-y-1.5 md:space-y-2 mb-4 md:mb-6">
                     {order.items.map((item: OrderItem, index: number) => (
@@ -103,20 +128,24 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onEdit, onDelete, o
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {order.status === OrderStatus.Completed && onBilling && (
+                    {order.status === OrderStatus.Ready && onBilling && (
                         <button
                             onClick={onBilling}
-                            className="flex-1 flex items-center justify-center gap-2 py-2 md:py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest shadow-lg shadow-green-500/20 transition-all active:scale-95"
+                            className="flex-1 flex items-center justify-center gap-2 py-2 md:py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest shadow-lg shadow-orange-500/20 transition-all active:scale-95"
                         >
-                            <span>🧾</span> Facturar
+                            <span>🧾</span> Pagar / Facturar
                         </button>
                     )}
-                    <button onClick={onEdit} className="p-2 md:p-2.5 bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300 rounded-xl md:rounded-2xl hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all active:scale-95">
-                        <EditIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                    </button>
-                    <button onClick={onDelete} className="p-2 md:p-2.5 bg-gray-100 dark:bg-dark-700 text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all active:scale-95">
-                        <TrashIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                    </button>
+                    {order.status !== OrderStatus.Completed && (
+                        <button onClick={onEdit} className="p-2 md:p-2.5 bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300 rounded-xl md:rounded-2xl hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all active:scale-95">
+                            <EditIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                        </button>
+                    )}
+                    {(order.status !== OrderStatus.Completed || userRoleName === 'Administrador') && (
+                        <button onClick={onDelete} className="p-2 md:p-2.5 bg-gray-100 dark:bg-dark-700 text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all active:scale-95">
+                            <TrashIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

@@ -41,5 +41,6 @@ export interface Order {
     estimatedMinutes?: number | null;
     estimateSetAt?: Date | null;
     billed?: boolean;
+    billingType?: 'Factura' | 'Consumidor Final' | 'Sin Factura';
     orderNumber?: string;
 }

@@ -67,8 +67,9 @@ export class OrderController {
 
     public delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            logger.info('Deleting order', { id: req.params.id });
-            await this.deleteOrder.execute(req.params.id);
+            const roleId = req.user?.roleId;
+            logger.info('Deleting order', { id: req.params.id, roleId });
+            await this.deleteOrder.execute(req.params.id, roleId);
             logger.info('Order deleted successfully', { id: req.params.id });
             res.json(ResponseFormatter.success({ deleted: true }));
         } catch (error) {
