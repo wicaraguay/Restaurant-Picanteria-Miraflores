@@ -134,7 +134,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                     </button>
                     <div>
                         <h2 className="text-lg md:text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
-                            Nuevo Pedido POS
+                            {initialOrder ? `Editando Pedido #${initialOrder.orderNumber || initialOrder.id.slice(-6)}` : 'Nuevo Pedido POS'}
                         </h2>
                         <p className="text-[10px] md:text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
@@ -350,8 +350,8 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                                     <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
                                 ) : (
                                     <>
-                                        <PlusIcon className="w-6 h-6" />
-                                        CONFIRMAR PEDIDO
+                                        {initialOrder ? <ClipboardListIcon className="w-6 h-6" /> : <PlusIcon className="w-6 h-6" />}
+                                        {initialOrder ? 'ACTUALIZAR PEDIDO' : 'CONFIRMAR PEDIDO'}
                                     </>
                                 )}
                             </button>
