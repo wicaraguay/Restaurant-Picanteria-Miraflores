@@ -98,7 +98,8 @@ export class GenerateInvoice {
         this.billingService.validateRealTimeTransmission(invoice.info.fechaEmision);
 
         // Pre-calculate user flags for learning and email logic
-        const isConsumidorFinal = client.identification === '9999999999999';
+        // Pre-calculate user flags for learning and email logic
+        const isConsumidorFinal = String(client.identification) === '9999999999999';
         const isValidEmail = client.email &&
             !client.email.includes('consumidor@final') &&
             !client.email.includes('noemail') &&
@@ -175,7 +176,7 @@ export class GenerateInvoice {
             date: now.toISOString(), // Storing as ISO String
             documentType: 'Factura',
             customerName: invoice.info.razonSocialComprador,
-            customerIdentification: invoice.info.identificacionComprador,
+            customerIdentification: String(invoice.info.identificacionComprador),
             customerAddress: invoice.info.direccionComprador,
             customerEmail: invoice.info.emailComprador,
             items: details.map(d => ({
@@ -189,43 +190,46 @@ export class GenerateInvoice {
             total: invoice.info.importeTotal,
             sriStatus: authResult?.estado || result.estado,
             environment: invoice.info.ambiente,
-            authorizationDate: authResult?.fechaAutorizacion
+            customerPhone: invoice.info.telefonoComprador,
+            paymentMethod: invoice.info.formaPago,
+            authorizationDate: authResult?.fechaAutorizacion,
+            regime: info.billing?.regime || 'General'
         });
 
         // 9. Update Order
         await this.orderRepository.update(invoice.orderId, { billed: true });
 
         // 10. Auto-learn Customer Data (Real-time Learning)
-        if (client.identification && !isConsumidorFinal) {
+        const identification = String(client.identification).trim();
+        if (identification && identification !== 'undefined' && !isConsumidorFinal) {
             try {
-                const existingCustomer = await this.customerRepository.findByIdentification(client.identification);
+                const existingCustomer = await this.customerRepository.findByIdentification(identification);
                 if (existingCustomer) {
                     // Update existing customer info if changed
                     await this.customerRepository.update(existingCustomer.id, {
                         name: client.name,
-                        email: client.email || existingCustomer.email,
-                        address: client.address || existingCustomer.address,
-                        phone: client.phone || existingCustomer.phone,
+                        email: (client.email && client.email.trim() !== '') ? client.email : existingCustomer.email,
+                        address: (client.address && client.address.trim() !== '') ? client.address : existingCustomer.address,
+                        phone: (client.phone && client.phone.trim() !== '') ? client.phone : existingCustomer.phone,
                         lastVisit: now
                     });
-                    console.log(`[GenerateInvoice] Updated customer info for: ${client.identification}`);
+                    console.log(`[GenerateInvoice] Updated customer info for: ${identification}`);
                 } else {
-                    // Create new customer
-                    await this.customerRepository.create({
-                        id: '', // Handled by repository
+                    const newCustomerData = {
                         name: client.name,
-                        identification: client.identification,
-                        email: client.email || '',
-                        address: client.address || '',
-                        phone: client.phone || '',
+                        identification: identification,
+                        email: (client.email && client.email.trim() !== '') ? client.email : undefined,
+                        address: (client.address && client.address.trim() !== '') ? client.address : undefined,
+                        phone: (client.phone && client.phone.trim() !== '') ? client.phone : undefined,
                         loyaltyPoints: 0,
                         lastVisit: now
-                    });
-                    console.log(`[GenerateInvoice] Created NEW customer entry for: ${client.identification}`);
+                    };
+                    
+                    const created = await this.customerRepository.create(newCustomerData as any);
+                    console.log(`[GenerateInvoice] Created NEW customer entry for: ${identification} (ID: ${created?.id || 'mock'})`);
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error('[GenerateInvoice] Failed to auto-learn customer data:', error);
-                // Don't fail the whole invoice process if customer learning fails
             }
         }
 

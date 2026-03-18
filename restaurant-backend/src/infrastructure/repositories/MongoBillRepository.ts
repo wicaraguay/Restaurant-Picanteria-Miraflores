@@ -38,6 +38,8 @@ export class MongoBillRepository extends BaseRepository<Bill> implements IBillRe
             doc.xmlUrl,
             doc.pdfUrl,
             doc.hasCreditNote,
+            doc.customerPhone,
+            doc.paymentMethod,
             doc.createdAt
         );
     }

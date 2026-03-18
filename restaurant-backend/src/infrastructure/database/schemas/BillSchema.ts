@@ -45,7 +45,9 @@ const BillSchema = new Schema({
     authorizationDate: { type: String },
     xmlUrl: { type: String },
     pdfUrl: { type: String },
-    hasCreditNote: { type: Boolean, default: false }
+    hasCreditNote: { type: Boolean, default: false },
+    customerPhone: { type: String },
+    paymentMethod: { type: String }
 }, {
     timestamps: true
 });

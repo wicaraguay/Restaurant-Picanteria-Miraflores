@@ -29,7 +29,13 @@ describe('MongoBillRepository Integration Tests', () => {
             'RIMPE',
             '1234567890123456789012345678901234567890123456789',
             'RECIBIDO',
-            '1'
+            '1',
+            undefined, // authorizationDate
+            undefined, // xmlUrl
+            undefined, // pdfUrl
+            false,     // hasCreditNote
+            '0999999999',
+            '01'
         );
 
         const created = await repository.create(billData);
@@ -60,7 +66,13 @@ describe('MongoBillRepository Integration Tests', () => {
             'RIMPE',
             accessKey,
             'RECIBIDO',
-            '1'
+            '1',
+            undefined,
+            undefined,
+            undefined,
+            false,
+            '0999999999',
+            '01'
         );
 
         await repository.create(billData);

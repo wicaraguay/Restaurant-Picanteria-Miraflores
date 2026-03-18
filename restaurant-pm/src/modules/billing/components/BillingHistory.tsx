@@ -126,7 +126,8 @@ const BillingHistory: React.FC = () => {
                 identification: bill.customerIdentification,
                 address: bill.customerAddress,
                 email: bill.customerEmail || config.fiscalEmail || 'consumidor@final.com',
-                phone: '9999999999'
+                phone: bill.customerPhone || '9999999999',
+                paymentMethod: bill.paymentMethod || '01'
             };
 
             const result = await billingService.generateXML({

@@ -39,12 +39,11 @@ const CustomerSchema: Schema = new Schema({
 }, { timestamps: true });
 
 // ==================== INDEXES FOR PERFORMANCE ====================
-// Unique index for email (if provided, must be unique)
-CustomerSchema.index({ email: 1 }, { unique: true, sparse: true }); // sparse: true allows null values
+CustomerSchema.index({ email: 1 }); // For searching by email
 CustomerSchema.index({ phone: 1 }); // For searching by phone
 CustomerSchema.index({ name: 1 }); // For searching by name
 CustomerSchema.index({ lastVisit: -1 }); // For sorting by last visit
 CustomerSchema.index({ loyaltyPoints: -1 }); // For sorting by loyalty points
-CustomerSchema.index({ identification: 1 }); // For fast lookup by RUC/CI
+CustomerSchema.index({ identification: 1 }, { unique: true }); // Each RUC/CI must be unique
 
 export const CustomerModel = mongoose.model<CustomerDocument>('Customer', CustomerSchema);

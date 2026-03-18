@@ -18,6 +18,8 @@ export interface Bill {
     customerIdentification: string;
     customerAddress: string;
     customerEmail?: string;
+    customerPhone?: string;
+    paymentMethod?: string;
     items: BillItem[];
     subtotal: number;
     tax: number;

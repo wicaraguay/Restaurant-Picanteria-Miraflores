@@ -109,6 +109,32 @@ const AdminContent: React.FC = () => {
         return () => clearInterval(intervalId);
     }, [setOrdersContext, isLoading]);
 
+    // ✅ POLLING: Sincronización automática de clientes cada 10 seg
+    // Esto asegura que clientes aprendidos por el backend (auto-learn) aparezcan en la lista
+    useEffect(() => {
+        const pollCustomers = async () => {
+            if (isLoading) return;
+
+            try {
+                const response = await api.customers.getAll();
+                let customers: Customer[] = [];
+                
+                if (response && response.data) {
+                    customers = Array.isArray(response.data) ? response.data : (response.data.data || []);
+                } else {
+                    customers = Array.isArray(response) ? response : [];
+                }
+                
+                setCustomersContext(customers);
+            } catch (error) {
+                console.error("Error sincronizando clientes:", error);
+            }
+        };
+
+        const intervalId = setInterval(pollCustomers, 10000);
+        return () => clearInterval(intervalId);
+    }, [setCustomersContext, isLoading]);
+
     // Wrapper para setMenuItems que acepta funciones updater
     const setMenuItems = useCallback((value: MenuItem[] | ((prev: MenuItem[]) => MenuItem[])) => {
         if (typeof value === 'function') {

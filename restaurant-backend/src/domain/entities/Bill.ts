@@ -49,6 +49,8 @@ export class Bill {
         public readonly xmlUrl?: string,
         public readonly pdfUrl?: string,
         public readonly hasCreditNote?: boolean,
+        public readonly customerPhone?: string,
+        public readonly paymentMethod?: string,
         public readonly createdAt?: Date
     ) { }
 }

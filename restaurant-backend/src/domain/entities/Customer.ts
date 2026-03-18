@@ -19,8 +19,8 @@
 export interface Customer {
     id: string;
     name: string;
-    email: string;
-    phone: string;
+    email?: string;
+    phone?: string;
     loyaltyPoints: number;
     lastVisit: Date;
     identification?: string; // RUC or CI
