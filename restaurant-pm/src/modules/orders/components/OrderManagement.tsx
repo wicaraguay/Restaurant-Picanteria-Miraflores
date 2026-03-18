@@ -6,7 +6,7 @@ import { SetState } from '../../../types';
 import { MenuItem } from '../../menu/types/menu.types';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
 import Modal from '../../../components/ui/Modal';
-import { PlusIcon, EditIcon, TrashIcon, SearchIcon, MinusIcon, ClipboardListIcon, PrinterIcon, ChevronLeftIcon } from '../../../components/ui/Icons';
+import { PlusIcon, EditIcon, TrashIcon, SearchIcon, MinusIcon, ClipboardListIcon, PrinterIcon, ChevronLeftIcon, LayoutIcon, MonitorIcon, ClockIcon, HistoryIcon } from '../../../components/ui/Icons';
 import { OrderNumberGenerator } from '../utils/orderNumberGenerator';
 import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
 import { generateAccessKey } from '../../billing/utils/sri';
@@ -383,37 +383,41 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                     </p>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="flex bg-gray-100 dark:bg-dark-800 p-1 rounded-xl shadow-inner border border-gray-200 dark:border-dark-700">
+                <div className="flex flex-col sm:flex-row lg:items-center gap-4 w-full sm:w-auto">
+                    <div className="flex bg-gray-100 dark:bg-dark-800 p-1.5 rounded-2xl shadow-inner border border-gray-200 dark:border-dark-700 w-full sm:w-auto">
                         <button
                             onClick={() => { setViewMode('dashboard'); setEditingOrder(null); }}
-                            className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${viewMode === 'dashboard' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-md ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'dashboard' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
                         >
-                            TABLERO
+                            <LayoutIcon className="w-3.5 h-3.5" />
+                            <span>Tablero</span>
                         </button>
                         <button
                             onClick={() => setViewMode('pos')}
-                            className={`px-6 py-2 rounded-lg text-xs font-black transition-all ${viewMode === 'pos' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-md ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'pos' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
                         >
-                            SISTEMA POS
+                            <MonitorIcon className="w-3.5 h-3.5" />
+                            <span>Sistema POS</span>
                         </button>
                     </div>
 
                     {viewMode === 'dashboard' && (
                         <>
-                            <div className="h-8 w-[1px] bg-gray-200 dark:bg-dark-700 mx-2 hidden sm:block"></div>
-                            <div className="flex bg-gray-100 dark:bg-dark-800 p-1 rounded-xl">
+                            <div className="hidden lg:block h-8 w-[1px] bg-gray-200 dark:bg-dark-700 mx-1"></div>
+                            <div className="flex bg-gray-100 dark:bg-dark-800 p-1.5 rounded-2xl shadow-inner border border-gray-200 dark:border-dark-700 w-full sm:w-auto">
                                 <button
                                     onClick={() => setActiveTab('active')}
-                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'active' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-400'}`}
+                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'active' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
                                 >
-                                    EN CURSO
+                                    <ClockIcon className="w-3.5 h-3.5" />
+                                    <span>En Curso</span>
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('history')}
-                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'history' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-400'}`}
+                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
                                 >
-                                    HISTORIAL
+                                    <HistoryIcon className="w-3.5 h-3.5" />
+                                    <span>Historial</span>
                                 </button>
                             </div>
                         </>
@@ -421,22 +425,22 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 </div>
 
                 {viewMode === 'dashboard' && activeTab === 'history' && (
-                    <div className="flex flex-col sm:flex-row gap-2 flex-1 max-w-2xl">
+                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:flex-1 lg:max-w-xl">
                         <div className="relative flex-1">
-                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                             <input 
                                 type="text"
-                                placeholder="Buscar por cliente o # pedido..."
+                                placeholder="Buscar cliente o # pedido..."
                                 value={historySearch}
                                 onChange={e => setHistorySearch(e.target.value)}
-                                className={`${inputClass} pl-10 h-11`}
+                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:border-gray-700 dark:bg-dark-800 dark:text-white"
                             />
                         </div>
                         <input 
                             type="date"
                             value={historyDate}
                             onChange={e => setHistoryDate(e.target.value)}
-                            className={`${inputClass} w-full sm:w-auto h-11`}
+                            className="w-full sm:w-auto rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:border-gray-700 dark:bg-dark-800 dark:text-white"
                         />
                     </div>
                 )}
@@ -444,9 +448,9 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 {viewMode === 'dashboard' && (
                     <button 
                         onClick={() => handleOpenModal(null)} 
-                        className="flex items-center bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-sm hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/25 active:scale-95 group"
+                        className="w-full sm:w-auto flex items-center justify-center bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/25 active:scale-95 group"
                     >
-                        <PlusIcon className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" /> 
+                        <PlusIcon className="w-4 h-4 mr-2 group-hover:rotate-90 transition-transform" /> 
                         NUEVO PEDIDO
                     </button>
                 )}

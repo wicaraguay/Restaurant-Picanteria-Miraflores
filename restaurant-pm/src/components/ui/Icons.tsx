@@ -255,3 +255,34 @@ export const BarChartIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <line x1="6" y1="20" x2="6" y2="16" />
   </svg>
 );
+
+export const LayoutIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...iconProps} {...props}>
+    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+    <line x1="3" y1="9" x2="21" y2="9" />
+    <line x1="9" y1="21" x2="9" y2="9" />
+  </svg>
+);
+
+export const MonitorIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...iconProps} {...props}>
+    <rect width="20" height="14" x="2" y="3" rx="2" />
+    <line x1="8" x2="16" y1="21" y2="21" />
+    <line x1="12" x2="12" y1="17" y2="21" />
+  </svg>
+);
+
+export const ClockIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...iconProps} {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+export const HistoryIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...iconProps} {...props}>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
