@@ -14,13 +14,12 @@ import { logger } from '../../../utils/logger';
 import Card from '../../../components/ui/Card';
 import ToggleSwitch from '../../../components/ui/ToggleSwitch';
 import { MenuFormModal } from './MenuFormModal';
+import { MenuItemCard } from './MenuItemCard';
 
 interface MenuManagementProps {
     menuItems: MenuItem[];
-    setMenuItems: SetState<MenuItem[]>;
+    setMenuItems: React.Dispatch<React.SetStateAction<MenuItem[]>>;
 }
-
-
 
 const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,26 +36,14 @@ const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems
             let savedItem: MenuItem;
 
             if (exists) {
-                // Update existing item
                 logger.info('Updating menu item', { id: itemToSave.id, name: itemToSave.name });
-                // We send the itemToSave, ensuring we don't send the ID if it's not needed by the backend update body, 
-                // but usually PUT takes the ID in URL and body as payload.
-                // Note: The backend route put('/:id') uses req.params.id and req.body.
                 savedItem = await menuService.update(itemToSave.id, itemToSave);
-
                 setMenuItems(prev => prev.map(item => item.id === itemToSave.id ? savedItem : item));
                 logger.info('Menu item updated successfully');
             } else {
-                // Create new item
-                // Remove ID if it's a temp ID (optional, but backend usually assigns ID)
-                // However, menuRoutes.ts:40 uses req.body as MenuItem. If backend ignores ID it's fine.
-                // Let's assume backend assigns a new ID or uses the one provided if valid (usually Mongo assigns _id).
-                // Ideally we shouldn't send the temp ID 'Date.now().toString()'.
                 const { id, ...newItemData } = itemToSave;
                 logger.info('Creating new menu item', { name: newItemData.name });
-
                 savedItem = await menuService.create(newItemData);
-
                 setMenuItems(prev => [...prev, savedItem]);
                 logger.info('Menu item created successfully');
             }
@@ -107,58 +94,63 @@ const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems
     }, [menuItems]);
 
     return (
-        <div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <MenuFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveItem} item={editingItem} />
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-light-background hidden lg:block">Gestión de Menú</h1>
-                <button onClick={() => handleOpenModal()} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm rounded-lg shadow-sm transition-colors w-full lg:w-auto justify-center">
-                    <PlusIcon className="w-5 h-5 mr-1" /> Añadir Plato
+            
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
+                <div>
+                    <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white tracking-tighter uppercase mb-1">
+                        Gestión de Menú
+                    </h1>
+                    <p className="text-gray-500 dark:text-gray-400 font-medium">
+                        Organiza y personaliza los deliciosos platos que ofrece tu restaurante.
+                    </p>
+                </div>
+                <button 
+                    onClick={() => handleOpenModal()} 
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-all active:scale-95 w-full sm:w-auto justify-center"
+                >
+                    <PlusIcon className="w-5 h-5" /> Añadir Nuevo Plato
                 </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-16">
                 {Object.keys(groupedMenu).sort().map(category => (
-                    <div key={category}>
-                        <Card title={category}>
-                            <div className="divide-y divide-gray-100 dark:divide-dark-700">
-                                {groupedMenu[category].map(item => (
-                                    <div key={item.id} className="py-4 first:pt-0 last:pb-0">
-                                        <div className="flex flex-row items-start gap-4">
-                                            <div className="flex-shrink-0">
-                                                <img
-                                                    src={item.imageUrl || 'https://via.placeholder.com/80'}
-                                                    alt={item.name}
-                                                    loading="lazy"
-                                                    decoding="async"
-                                                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg object-cover shadow-sm bg-gray-100 border border-gray-100 dark:border-gray-700 transition-opacity duration-300"
-                                                />
-                                            </div>
+                    <div key={category} className="space-y-6">
+                        <div className="flex items-center gap-4">
+                            <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest bg-gray-100 dark:bg-dark-700 px-4 py-2 rounded-xl border border-gray-200 dark:border-dark-600">
+                                {category}
+                            </h2>
+                            <div className="h-px flex-1 bg-gradient-to-r from-gray-200 dark:from-dark-600 to-transparent"></div>
+                        </div>
 
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex justify-between items-start">
-                                                    <h3 className="font-bold text-gray-900 dark:text-white text-base sm:text-lg truncate pr-2">{item.name}</h3>
-                                                    <span className="font-bold text-gray-900 dark:text-white bg-gray-100 dark:bg-dark-700 px-2 py-0.5 rounded text-sm border border-gray-200 dark:border-gray-600">${item.price.toFixed(2)}</span>
-                                                </div>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{item.description || 'Sin descripción'}</p>
-
-                                                <div className="flex items-center justify-between mt-3">
-                                                    <div className="flex items-center">
-                                                        <ToggleSwitch checked={item.available} onChange={() => handleToggleAvailability(item)} />
-                                                        <span className={`ml-2 text-xs font-medium ${item.available ? 'text-green-600' : 'text-gray-400'}`}>{item.available ? 'Activo' : 'Inactivo'}</span>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        <button onClick={() => handleOpenModal(item)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:text-blue-400"><EditIcon className="w-4 h-4" /></button>
-                                                        <button onClick={() => handleDeleteItem(item.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400"><TrashIcon className="w-4 h-4" /></button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </Card>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+                            {groupedMenu[category].map(item => (
+                                <MenuItemCard 
+                                    key={item.id} 
+                                    item={item} 
+                                    onEdit={() => handleOpenModal(item)} 
+                                    onDelete={() => handleDeleteItem(item.id)} 
+                                    onToggleAvailability={() => handleToggleAvailability(item)}
+                                />
+                            ))}
+                        </div>
                     </div>
                 ))}
+
+                {menuItems.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-20 text-center bg-gray-50 dark:bg-dark-900/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-dark-800">
+                        <div className="text-6xl mb-4">🍽️</div>
+                        <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">No hay platos en el menú</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-2">Comienza añadiendo tu primer plato especial.</p>
+                        <button 
+                            onClick={() => handleOpenModal()} 
+                            className="mt-6 text-blue-600 dark:text-blue-400 font-black text-sm uppercase tracking-widest hover:underline"
+                        >
+                            Añadir Plato Ahora
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

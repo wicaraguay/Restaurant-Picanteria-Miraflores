@@ -14,18 +14,14 @@ import { PlusIcon, EditIcon, TrashIcon } from '../../../components/ui/Icons';
 import Card from '../../../components/ui/Card';
 import { EmployeeFormModal } from './EmployeeFormModal';
 import { RoleFormModal } from './RoleFormModal';
+import { EmployeeCard } from './EmployeeCard';
 
 interface HRManagementProps {
     employees: Employee[];
-    setEmployees: SetState<Employee[]>;
+    setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
     roles: Role[];
-    setRoles: SetState<Role[]>;
+    setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
 }
-
-const inputClass = "w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-gray-900 text-sm focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700/50 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:bg-gray-700 dark:focus:ring-blue-500/20";
-
-
-
 
 const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, roles, setRoles }) => {
     const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
@@ -34,39 +30,25 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
     const [editingRole, setEditingRole] = useState<Role | null>(null);
     const [loading, setLoading] = useState(false);
 
-    // Cargar empleados desde backend
+    // Cargar datos iniciales (empleados y roles)
     useEffect(() => {
-        const loadEmployees = async () => {
+        const loadInitialData = async () => {
             try {
                 setLoading(true);
-                const data = await api.employees.getAll();
-                setEmployees(data);
+                const [employeesData, rolesData] = await Promise.all([
+                    api.employees.getAll(),
+                    api.roles.getAll()
+                ]);
+                setEmployees(employeesData);
+                setRoles(rolesData);
             } catch (error) {
-                console.error('Error loading employees:', error);
-                alert('Error al cargar empleados. Usando datos locales.');
+                console.error('Error loading HR data:', error);
             } finally {
                 setLoading(false);
             }
         };
-        loadEmployees();
-    }, []);
-
-    // Cargar roles desde backend
-    useEffect(() => {
-        const loadRoles = async () => {
-            try {
-                setLoading(true);
-                const data = await api.roles.getAll();
-                setRoles(data);
-            } catch (error) {
-                console.error('Error loading roles:', error);
-                alert('Error al cargar roles. Usando datos locales.');
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadRoles();
-    }, []);
+        loadInitialData();
+    }, [setEmployees, setRoles]);
 
     const handleOpenEmployeeModal = (employee: Employee | null) => {
         if (roles.length === 0) {
@@ -85,18 +67,15 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
     const handleSaveEmployee = async (employeeToSave: any) => {
         try {
             setLoading(true);
-            const isEditing = !!employeeToSave.id; // Si tiene ID, es edición
+            const isEditing = !!employeeToSave.id;
 
             if (isEditing) {
-                // Actualizar empleado existente
                 const updated = await api.employees.update(employeeToSave.id, employeeToSave);
                 setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e));
             } else {
-                // Crear nuevo empleado
                 const created = await api.employees.create(employeeToSave);
                 setEmployees(prev => [...prev, created]);
             }
-            alert(isEditing ? 'Empleado actualizado exitosamente' : 'Empleado creado exitosamente');
         } catch (error: any) {
             console.error('Error saving employee:', error);
             alert(`Error al guardar empleado: ${error.message || 'Error desconocido'}`);
@@ -112,7 +91,6 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
             setLoading(true);
             await api.employees.delete(employeeId);
             setEmployees(prev => prev.filter(e => e.id !== employeeId));
-            alert('Empleado eliminado exitosamente');
         } catch (error: any) {
             console.error('Error deleting employee:', error);
             alert(`Error al eliminar empleado: ${error.message || 'Error desconocido'}`);
@@ -124,18 +102,15 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
     const handleSaveRole = async (roleToSave: Role) => {
         try {
             setLoading(true);
-            const isEditing = !!roleToSave.id; // Si tiene ID, es edición
+            const isEditing = !!roleToSave.id;
 
             if (isEditing) {
-                // Actualizar rol existente
                 const updated = await api.roles.update(roleToSave.id, roleToSave);
                 setRoles(prev => prev.map(r => r.id === updated.id ? updated : r));
             } else {
-                // Crear nuevo rol
                 const created = await api.roles.create(roleToSave);
                 setRoles(prev => [...prev, created]);
             }
-            alert(isEditing ? 'Rol actualizado exitosamente' : 'Rol creado exitosamente');
         } catch (error: any) {
             console.error('Error saving role:', error);
             alert(`Error al guardar rol: ${error.message || 'Error desconocido'}`);
@@ -156,7 +131,6 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
             setLoading(true);
             await api.roles.delete(roleId);
             setRoles(prev => prev.filter(r => r.id !== roleId));
-            alert('Rol eliminado exitosamente');
         } catch (error: any) {
             console.error('Error deleting role:', error);
             alert(`Error al eliminar rol: ${error.message || 'Error desconocido'}`);
@@ -165,115 +139,116 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
         }
     };
 
-    const getShiftClasses = (shift: string) => {
-        switch (shift) {
-            case 'AM': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
-            case 'PM': return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300';
-            case 'AM-PM': return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
-            case 'Libre': return 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400';
-            default: return 'bg-gray-50 text-gray-500';
-        }
-    };
-
-    const getCurrentDay = () => {
+    const currentDayName = DAYS_OF_WEEK[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]; // Ajuste para que Lunes sea 0 y Domingo 6 si es necesario, pero DAYS_OF_WEEK asumo que es L-D.
+    // Verificamos el primer día de DAYS_OF_WEEK
+    const getActualDayName = () => {
         const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
         return days[new Date().getDay()];
     };
-    const currentDayName = getCurrentDay();
-
-    const renderContent = () => (
-        <div className="space-y-6">
-            {loading && <div className="text-center py-4"><p className="text-gray-600 dark:text-gray-400">Cargando...</p></div>}
-            <Card title="Equipo de Trabajo" actions={<button onClick={() => handleOpenEmployeeModal(null)} disabled={loading} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-sm rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"><PlusIcon className="w-4 h-4 mr-1" /> Añadir</button>}>
-                {/* Desktop Table */}
-                <div className="hidden lg:block overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs uppercase bg-gray-50 dark:bg-dark-700 text-gray-600 dark:text-gray-300">
-                            <tr>
-                                <th className="px-4 py-3">Empleado</th><th className="px-4 py-3">Rol</th>
-                                {DAYS_OF_WEEK.map(day => <th key={day} className={`px-2 py-3 text-center ${day === currentDayName ? 'bg-blue-50 dark:bg-blue-900/20 font-bold text-blue-700 dark:text-blue-300' : ''}`}>{day.substring(0, 3)}</th>)}
-                                <th className="px-4 py-3 text-center">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {employees.map(e => {
-                                const roleName = roles.find(r => r.id === e.roleId)?.name || 'Sin Rol';
-                                return (
-                                    <tr key={e.id} className="bg-white border-b dark:bg-dark-800 dark:border-dark-700 hover:bg-gray-50 dark:hover:bg-dark-700/50 transition-colors">
-                                        <th className="px-4 py-4 font-medium dark:text-white">
-                                            <div>{e.name}</div><div className="font-mono text-xs text-gray-500">{e.username}</div>
-                                        </th>
-                                        <td className="px-4 py-4">{roleName}</td>
-                                        {DAYS_OF_WEEK.map(day => (
-                                            <td key={day} className={`px-2 py-4 text-center ${day === currentDayName ? 'bg-blue-50 dark:bg-blue-900/10' : ''}`}>
-                                                <span className={`px-2 py-1 text-xs font-bold rounded ${getShiftClasses(e.shifts[day])}`}>{e.shifts[day]}</span>
-                                            </td>
-                                        ))}
-                                        <td className="px-4 py-4 text-center">
-                                            <div className="flex items-center justify-center space-x-2">
-                                                <button onClick={() => handleOpenEmployeeModal(e)} className="text-blue-600 hover:text-blue-800 p-1"><EditIcon className="w-5 h-5" /></button>
-                                                <button onClick={() => handleDeleteEmployee(e.id)} className="text-red-600 hover:text-red-800 p-1"><TrashIcon className="w-5 h-5" /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Mobile Cards */}
-                <div className="lg:hidden space-y-4">
-                    {employees.map(e => {
-                        const roleName = roles.find(r => r.id === e.roleId)?.name || 'Sin Rol';
-                        const todayShift = e.shifts[currentDayName];
-                        return (
-                            <div key={e.id} className="p-4 rounded-lg bg-gray-50 dark:bg-dark-700/50 border border-gray-100 dark:border-dark-600 relative">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <h3 className="font-bold text-gray-900 dark:text-white">{e.name}</h3>
-                                        <p className="text-sm text-gray-500">{roleName}</p>
-                                    </div>
-                                    <div className="flex space-x-2">
-                                        <button onClick={() => handleOpenEmployeeModal(e)} className="text-blue-600 bg-blue-100 p-2 rounded-lg dark:bg-blue-900/30"><EditIcon className="w-4 h-4" /></button>
-                                        <button onClick={() => handleDeleteEmployee(e.id)} className="text-red-600 bg-red-100 p-2 rounded-lg dark:bg-red-900/30"><TrashIcon className="w-4 h-4" /></button>
-                                    </div>
-                                </div>
-
-                                <div className="mt-3 flex items-center justify-between bg-white dark:bg-dark-800 p-3 rounded-md border border-gray-100 dark:border-dark-600">
-                                    <span className="text-sm text-gray-500">Turno de Hoy ({currentDayName}):</span>
-                                    <span className={`px-3 py-1 text-xs font-bold rounded ${getShiftClasses(todayShift)}`}>
-                                        {todayShift}
-                                    </span>
-                                </div>
-                            </div>
-                        )
-                    })}
-                </div>
-            </Card>
-
-            <Card title="Roles y Permisos" actions={<button onClick={() => handleOpenRoleModal(null)} disabled={loading} className="flex items-center bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-dark-700 dark:text-white dark:hover:bg-dark-600 px-3 py-2 text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><PlusIcon className="w-4 h-4 mr-1" /> Gestionar</button>}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {roles.map(role => (
-                        <div key={role.id} className="p-3 rounded-lg border border-gray-100 dark:border-dark-700 flex justify-between items-center bg-gray-50 dark:bg-dark-700/50">
-                            <p className="font-medium text-gray-800 dark:text-light-background">{role.name}</p>
-                            <div className="flex items-center space-x-1">
-                                <button onClick={() => handleOpenRoleModal(role)} className="text-blue-600 p-1.5 hover:bg-blue-50 rounded dark:hover:bg-blue-900/20"><EditIcon className="w-4 h-4" /></button>
-                                <button onClick={() => handleDeleteRole(role.id)} className="text-red-600 p-1.5 hover:bg-red-50 rounded dark:hover:bg-red-900/20" disabled={role.name === 'Administrador'}><TrashIcon className="w-4 h-4" /></button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </Card>
-        </div>
-    );
+    const actualDay = getActualDayName();
 
     return (
-        <div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <EmployeeFormModal isOpen={isEmployeeModalOpen} onClose={() => setIsEmployeeModalOpen(false)} onSave={handleSaveEmployee} employee={editingEmployee} roles={roles} />
             <RoleFormModal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} onSave={handleSaveRole} role={editingRole} />
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-light-background mb-6 hidden lg:block">Recursos Humanos</h1>
-            {renderContent()}
+
+            {/* Encabezado Principal */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
+                <div>
+                    <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white tracking-tighter uppercase mb-1">
+                        Recursos Humanos
+                    </h1>
+                    <p className="text-gray-500 dark:text-gray-400 font-medium">
+                        Gestiona tu equipo, asigna roles y organiza los turnos de trabajo.
+                    </p>
+                </div>
+                <button 
+                    onClick={() => handleOpenEmployeeModal(null)}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-all active:scale-95 w-full sm:w-auto justify-center"
+                >
+                    <PlusIcon className="w-5 h-5" /> Añadir Empleado
+                </button>
+            </div>
+
+            <div className="space-y-16">
+                {/* Sección de Equipo */}
+                <section className="space-y-8">
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest bg-gray-100 dark:bg-dark-700 px-4 py-2 rounded-xl border border-gray-200 dark:border-dark-600">
+                            Equipo de Trabajo
+                        </h2>
+                        <div className="h-px flex-1 bg-gradient-to-r from-gray-200 dark:from-dark-600 to-transparent"></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
+                        {employees.map(employee => {
+                            const role = roles.find(r => r.id === employee.roleId);
+                            return (
+                                <EmployeeCard
+                                    key={employee.id}
+                                    employee={employee}
+                                    roleName={role?.name || 'Sin Rol'}
+                                    currentDayName={actualDay}
+                                    onEdit={() => handleOpenEmployeeModal(employee)}
+                                    onDelete={() => handleDeleteEmployee(employee.id)}
+                                />
+                            );
+                        })}
+                    </div>
+
+                    {employees.length === 0 && !loading && (
+                        <div className="text-center py-20 bg-white dark:bg-dark-800 rounded-3xl border-2 border-dashed border-gray-100 dark:border-dark-700">
+                            <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">No hay empleados registrados</p>
+                        </div>
+                    )}
+                </section>
+
+                {/* Sección de Roles */}
+                <section className="space-y-8">
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest bg-gray-100 dark:bg-dark-700 px-4 py-2 rounded-xl border border-gray-200 dark:border-dark-600">
+                            Roles y Permisos
+                        </h2>
+                        <div className="h-px flex-1 bg-gradient-to-r from-gray-200 dark:from-dark-600 to-transparent"></div>
+                        <button 
+                            onClick={() => handleOpenRoleModal(null)}
+                            className="p-2 bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                        >
+                            <PlusIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {roles.map(role => (
+                            <div key={role.id} className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-gray-100 dark:border-dark-700 flex justify-between items-center shadow-sm hover:shadow-md transition-all">
+                                <div>
+                                    <h3 className="font-black text-gray-900 dark:text-white text-sm uppercase tracking-widest truncate max-w-[150px]">
+                                        {role.name}
+                                    </h3>
+                                    <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-0.5">
+                                        {employees.filter(e => e.roleId === role.id).length} Empleados
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <button 
+                                        onClick={() => handleOpenRoleModal(role)}
+                                        className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                    >
+                                        <EditIcon className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDeleteRole(role.id)}
+                                        disabled={role.name === 'Administrador' || employees.some(e => e.roleId === role.id)}
+                                        className="p-2 text-gray-400 hover:text-red-500 disabled:opacity-20 transition-colors"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            </div>
         </div>
     );
 };
