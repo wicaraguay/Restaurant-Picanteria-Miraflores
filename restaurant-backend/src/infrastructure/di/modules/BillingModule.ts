@@ -9,6 +9,7 @@ import { DeleteBill } from '../../../application/use-cases/DeleteBill';
 import { CheckCreditNoteStatus } from '../../../application/use-cases/CheckCreditNoteStatus';
 import { GetCreditNotes } from '../../../application/use-cases/GetCreditNotes';
 import { ResetBillingSystem } from '../../../application/use-cases/ResetBillingSystem';
+import { ResetFullSystem } from '../../../application/use-cases/ResetFullSystem';
 import { UpdateBill } from '../../../application/use-cases/UpdateBill';
 
 import { SRIService } from '../../services/SRIService';
@@ -25,7 +26,7 @@ export class BillingModule {
     private pdfService?: PDFService;
     private emailService?: IEmailService;
     private billingService?: BillingService;
-    
+
     private generateInvoiceUseCase?: GenerateInvoice;
     private checkInvoiceStatusUseCase?: CheckInvoiceStatus;
     private generateCreditNoteUseCase?: GenerateCreditNote;
@@ -35,10 +36,11 @@ export class BillingModule {
     private getCreditNotesUseCase?: GetCreditNotes;
     private checkCreditNoteStatusUseCase?: CheckCreditNoteStatus;
     private resetBillingSystemUseCase?: ResetBillingSystem;
+    private resetFullSystemUseCase?: ResetFullSystem;
     private updateBillUseCase?: UpdateBill;
     private billingController?: BillingController;
 
-    constructor(private repoModule: RepositoryModule) {}
+    constructor(private repoModule: RepositoryModule) { }
 
     public getSRIService(): SRIService {
         if (!this.sriService) {
@@ -148,8 +150,12 @@ export class BillingModule {
     public getCheckCreditNoteStatusUseCase(): CheckCreditNoteStatus {
         if (!this.checkCreditNoteStatusUseCase) {
             this.checkCreditNoteStatusUseCase = new CheckCreditNoteStatus(
+                this.repoModule.getRestaurantConfigRepository(),
                 this.repoModule.getCreditNoteRepository(),
-                this.getSRIService()
+                this.repoModule.getBillRepository(),
+                this.getSRIService(),
+                this.getPDFService(),
+                this.getEmailService()
             );
             logger.debug('CheckCreditNoteStatus use case instantiated');
         }
@@ -170,6 +176,14 @@ export class BillingModule {
             logger.debug('ResetBillingSystem use case instantiated');
         }
         return this.resetBillingSystemUseCase;
+    }
+
+    public getResetFullSystemUseCase(): ResetFullSystem {
+        if (!this.resetFullSystemUseCase) {
+            this.resetFullSystemUseCase = new ResetFullSystem();
+            logger.debug('ResetFullSystem use case instantiated');
+        }
+        return this.resetFullSystemUseCase;
     }
 
     public getUpdateBillUseCase(): UpdateBill {

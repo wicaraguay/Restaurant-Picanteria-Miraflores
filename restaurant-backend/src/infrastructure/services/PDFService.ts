@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { Invoice } from '../../domain/billing/invoice';
+import { CreditNote } from '../../domain/billing/creditNote';
 import axios from 'axios';
 
 export class PDFService {
@@ -8,6 +9,280 @@ export class PDFService {
             return this.generateTicketPDF(invoice);
         }
         return this.generateA4PDF(invoice);
+    }
+
+    public async generateCreditNotePDF(creditNote: CreditNote): Promise<Buffer> {
+        return this.generateCreditNoteA4PDF(creditNote);
+    }
+
+    private generateCreditNoteA4PDF(creditNote: CreditNote): Promise<Buffer> {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const doc = new PDFDocument({ margin: 30, size: 'A4' });
+                const chunks: Buffer[] = [];
+
+                doc.on('data', chunk => chunks.push(chunk));
+                doc.on('end', () => resolve(Buffer.concat(chunks)));
+
+                await this.generateCreditNoteHeader(doc, creditNote);
+                this.generateCreditNoteInformation(doc, creditNote);
+                this.generateCreditNoteTable(doc, creditNote);
+                this.generateCreditNoteFooter(doc, creditNote);
+
+                doc.end();
+            } catch (error) {
+                console.error('Error generating credit note PDF:', error);
+                reject(error);
+            }
+        });
+    }
+
+    private async generateCreditNoteHeader(doc: PDFKit.PDFDocument, creditNote: CreditNote): Promise<void> {
+        const leftMargin = 30;
+        const rightMargin = 565;
+        const topY = 30;
+
+        let currentLeftY = topY;
+
+        if (creditNote.info.logoUrl) {
+            try {
+                let logo: Buffer | null = null;
+                if (creditNote.info.logoUrl.startsWith('data:')) {
+                    const base64Data = creditNote.info.logoUrl.split(';base64,').pop();
+                    logo = Buffer.from(base64Data || '', 'base64');
+                } else {
+                    const response = await axios.get(creditNote.info.logoUrl, { responseType: 'arraybuffer' });
+                    logo = Buffer.from(response.data);
+                }
+
+                if (logo && logo.length > 0) {
+                    doc.image(logo, leftMargin, currentLeftY, { fit: [250, 120] });
+                    currentLeftY += 130;
+                }
+            } catch (error) {
+                console.error('[PDFService CreditNote] Failed to load logo:', error);
+                currentLeftY = topY + 10;
+            }
+        } else {
+            currentLeftY = topY + 10;
+        }
+
+        doc.fillColor('#111827')
+            .font('Helvetica-Bold')
+            .fontSize(16)
+            .text((creditNote.info.nombreComercial || '').toUpperCase(), leftMargin, currentLeftY);
+
+        currentLeftY = doc.y + 2;
+
+        doc.fontSize(9)
+            .font('Helvetica')
+            .fillColor('#4b5563')
+            .text(creditNote.info.razonSocial || '', leftMargin, currentLeftY);
+
+        currentLeftY = doc.y + 1;
+
+        doc.font('Helvetica-Bold')
+            .fillColor('#4b5563')
+            .text(`RUC: ${creditNote.info.ruc}`, leftMargin, currentLeftY);
+
+        currentLeftY = doc.y + 1;
+
+        doc.font('Helvetica')
+            .fillColor('#4b5563')
+            .text(creditNote.info.dirMatriz, leftMargin, currentLeftY, { width: 300, align: 'left' });
+
+        let currentRightY = topY;
+        const rightColWidth = 250;
+        const rightColX = rightMargin - rightColWidth;
+
+        doc.fillColor('#1f2937')
+            .fontSize(9)
+            .font('Helvetica')
+            .text(`Ambiente: ${creditNote.info.ambiente === '2' ? 'Producción' : 'Pruebas'}`, rightColX, currentRightY, { align: 'right', width: rightColWidth });
+
+        currentRightY += 12;
+
+        doc.fontSize(12)
+            .font('Helvetica-Bold')
+            .text('NOTA DE CRÉDITO N°', rightColX, currentRightY, { align: 'right', width: rightColWidth });
+
+        currentRightY += 15;
+
+        doc.fontSize(12)
+            .text(`${creditNote.info.estab}-${creditNote.info.ptoEmi}-${creditNote.info.secuencial}`, rightColX, currentRightY, { align: 'right', width: rightColWidth });
+
+        currentRightY += 20;
+
+        doc.fontSize(8)
+            .font('Helvetica-Bold')
+            .text('CLAVE DE ACCESO:', rightColX, currentRightY, { align: 'right', width: rightColWidth });
+
+        currentRightY += 10;
+
+        doc.font('Courier')
+            .fontSize(7)
+            .text(creditNote.info.claveAcceso || '', rightColX, currentRightY, { align: 'right', width: rightColWidth, characterSpacing: 0 });
+
+        currentRightY += 12;
+
+        doc.font('Helvetica-Bold')
+            .fontSize(8)
+            .text('FECHA Y HORA DE AUTORIZACIÓN:', rightColX, currentRightY, { align: 'right', width: rightColWidth });
+
+        currentRightY += 10;
+
+        const authDateText = this.formatDateTime(creditNote.authorizationDate || creditNote.info.fechaEmision);
+
+        doc.font('Helvetica')
+            .text(authDateText, rightColX, currentRightY, { align: 'right', width: rightColWidth });
+
+        const headerBottomY = Math.max(currentLeftY, doc.y) + 10;
+        this.generateHr(doc, headerBottomY);
+
+        doc.y = headerBottomY;
+    }
+
+    private generateCreditNoteInformation(doc: PDFKit.PDFDocument, creditNote: CreditNote): void {
+        const startY = doc.y + 25;
+        const boxHeight = 150;
+        const boxWidth = 535;
+        const boxX = 30;
+
+        doc.rect(boxX, startY, boxWidth, boxHeight)
+            .fillColor('#f9fafb')
+            .fill();
+
+        doc.fillColor('#1f2937')
+            .fontSize(9)
+            .font('Helvetica-Bold')
+            .text('Información de la Nota de Crédito', boxX + 15, startY + 15);
+
+        const col1X = boxX + 15;
+        const col2X = 310;
+        const colWidth = 250;
+
+        let currentY = startY + 35;
+
+        // Beneficiary Info
+        this.drawClientField(doc, 'Razón Social / Nombres', creditNote.info.razonSocialComprador, col1X, currentY, colWidth);
+        this.drawClientField(doc, 'Identificación', creditNote.info.identificacionComprador, col2X, currentY, colWidth);
+        currentY += 25;
+
+        this.drawClientField(doc, 'Fecha de Emisión', creditNote.info.fechaEmision, col1X, currentY, colWidth);
+        currentY += 25;
+
+        // Modified Document Info (Specific to Credit Note)
+        doc.fillColor('#1f2937')
+            .fontSize(8.5)
+            .font('Helvetica-Bold')
+            .text('Documento Modificado', col1X, currentY);
+        currentY += 12;
+
+        this.drawClientField(doc, 'Comprobante', `FACTURA ${creditNote.info.numDocModificado}`, col1X, currentY, colWidth);
+        this.drawClientField(doc, 'Fecha de Emisión Doc.', creditNote.info.fechaEmisionDocSustento, col2X, currentY, colWidth);
+        currentY += 25;
+
+        this.drawClientField(doc, 'Motivo de Modificación', creditNote.info.motivo, col1X, currentY, boxWidth - 30);
+
+        doc.y = startY + boxHeight;
+    }
+
+    private generateCreditNoteTable(doc: PDFKit.PDFDocument, creditNote: CreditNote): void {
+        let currentY = doc.y + 20;
+        const leftMargin = 30;
+        const colWidths = {
+            code: 70,
+            desc: 265,
+            qty: 50,
+            unit: 75,
+            total: 75
+        };
+
+        // Header
+        doc.fillColor('#374151')
+            .font('Helvetica-Bold')
+            .fontSize(8.5);
+
+        doc.text('Código', leftMargin, currentY, { width: colWidths.code });
+        doc.text('Descripción', leftMargin + colWidths.code, currentY, { width: colWidths.desc });
+        doc.text('Cant.', leftMargin + colWidths.code + colWidths.desc, currentY, { width: colWidths.qty, align: 'center' });
+        doc.text('P. Unitario', leftMargin + colWidths.code + colWidths.desc + colWidths.qty, currentY, { width: colWidths.unit, align: 'right' });
+        doc.text('Subtotal', leftMargin + colWidths.code + colWidths.desc + colWidths.qty + colWidths.unit, currentY, { width: colWidths.total, align: 'right' });
+
+        currentY += 15;
+        this.generateHr(doc, currentY);
+        currentY += 10;
+
+        // Rows
+        doc.font('Helvetica').fontSize(8.5).fillColor('#4b5563');
+
+        creditNote.detalles.forEach(item => {
+            const startX = leftMargin;
+            doc.text(item.codigoPrincipal || '', startX, currentY, { width: colWidths.code });
+            doc.text(item.descripcion, startX + colWidths.code, currentY, { width: colWidths.desc });
+            doc.text(item.cantidad.toString(), startX + colWidths.code + colWidths.desc, currentY, { width: colWidths.qty, align: 'center' });
+            doc.text(`$${item.precioUnitario.toFixed(2)}`, startX + colWidths.code + colWidths.desc + colWidths.qty, currentY, { width: colWidths.unit, align: 'right' });
+            doc.text(`$${item.precioTotalSinImpuesto.toFixed(2)}`, startX + colWidths.code + colWidths.desc + colWidths.qty + colWidths.unit, currentY, { width: colWidths.total, align: 'right' });
+
+            currentY = doc.y + 8;
+            if (currentY > 700) {
+                doc.addPage();
+                currentY = 50;
+            }
+        });
+
+        this.generateHr(doc, currentY + 5);
+        doc.y = currentY + 15;
+    }
+
+    private generateCreditNoteFooter(doc: PDFKit.PDFDocument, creditNote: CreditNote): void {
+        const startY = doc.y;
+        const leftMargin = 30;
+        const rightMargin = 565;
+
+        // Totals column
+        const totalsWidth = 180;
+        const totalsX = rightMargin - totalsWidth;
+        let currentY = startY;
+
+        const drawTotalRow = (label: string, value: string, isLast = false) => {
+            doc.fillColor(isLast ? '#111827' : '#4b5563')
+                .font(isLast ? 'Helvetica-Bold' : 'Helvetica')
+                .fontSize(isLast ? 10 : 9);
+
+            doc.text(label, totalsX, currentY, { width: totalsWidth - 85, align: 'left' });
+            doc.text(`$${value}`, totalsX + totalsWidth - 80, currentY, { width: 80, align: 'right' });
+            currentY += 18;
+        };
+
+        const subtotalBase = creditNote.info.totalSinImpuestos.toFixed(2);
+        const ivaValue = (creditNote.info.importeTotal - creditNote.info.totalSinImpuestos).toFixed(2);
+        const totalValue = creditNote.info.importeTotal.toFixed(2);
+
+        drawTotalRow('Subtotal 0%', '0.00');
+        drawTotalRow(`Subtotal 15%`, subtotalBase);
+        drawTotalRow('Subtotal No Objeto IVA', '0.00');
+        drawTotalRow('Subtotal Exento IVA', '0.00');
+        drawTotalRow('Subtotal Sin Impuestos', subtotalBase);
+        drawTotalRow('Descuento', '0.00');
+        drawTotalRow(`IVA 15%`, ivaValue);
+        
+        currentY += 5;
+        this.generateHr(doc, currentY, 1.5, '#e5e7eb', totalsX, rightMargin);
+        currentY += 8;
+
+        drawTotalRow('VALOR TOTAL', totalValue, true);
+
+        // Additional info (Motivo)
+        doc.font('Helvetica-Bold').fontSize(9).fillColor('#1f2937')
+            .text('Información Adicional', leftMargin, startY);
+        
+        doc.font('Helvetica').fontSize(8.5).fillColor('#4b5563')
+            .text(`Motivo: ${creditNote.info.motivo}`, leftMargin, startY + 15, { width: 300 });
+
+        if (creditNote.info.emailComprador) {
+            doc.text(`Email: ${creditNote.info.emailComprador}`, leftMargin, doc.y + 5);
+        }
     }
 
     private async generateA4PDF(invoice: Invoice): Promise<Buffer> {
@@ -508,8 +783,8 @@ export class PDFService {
             .text('No tiene validez tributaria oficial hasta ser autorizado por el SRI.', 30, bottomY + 24);
     }
 
-    private generateHr(doc: PDFKit.PDFDocument, y: number) {
-        doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(30, y).lineTo(565, y).stroke();
+    private generateHr(doc: PDFKit.PDFDocument, y: number, lineWidth = 1, color = '#e5e7eb', startX = 30, endX = 565) {
+        doc.strokeColor(color).lineWidth(lineWidth).moveTo(startX, y).lineTo(endX, y).stroke();
     }
 
     private formatDateTime(input: string | Date | undefined): string {

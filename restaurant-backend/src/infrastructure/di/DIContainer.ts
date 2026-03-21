@@ -68,6 +68,7 @@ import { CreateEmployee } from '../../application/use-cases/CreateEmployee';
 import { UpdateEmployee } from '../../application/use-cases/UpdateEmployee';
 import { DeleteEmployee } from '../../application/use-cases/DeleteEmployee';
 import { ResetBillingSystem } from '../../application/use-cases/ResetBillingSystem';
+import { ResetFullSystem } from '../../application/use-cases/ResetFullSystem';
 
 export class DIContainer {
     private static instance: DIContainer;
@@ -149,6 +150,7 @@ export class DIContainer {
     public getGetCreditNotesUseCase(): GetCreditNotes { return this.billingModule.getGetCreditNotesUseCase(); }
     public getCheckCreditNoteStatusUseCase(): CheckCreditNoteStatus { return this.billingModule.getCheckCreditNoteStatusUseCase(); }
     public getResetBillingSystemUseCase(): ResetBillingSystem { return this.billingModule.getResetBillingSystemUseCase(); }
+    public getResetFullSystemUseCase(): ResetFullSystem { return this.billingModule.getResetFullSystemUseCase(); }
 
     // --- Controllers ---
     public getOrderController(): OrderController { return this.orderModule.getOrderController(); }

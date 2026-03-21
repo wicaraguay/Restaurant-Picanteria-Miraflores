@@ -19,6 +19,7 @@ const billController = new BillController(
     container.getGetBillsUseCase(),
     container.getDeleteBillUseCase(),
     container.getResetBillingSystemUseCase(),
+    container.getResetFullSystemUseCase(),
     container.getBillingService(),
     container.getSRIService()
 );
@@ -58,5 +59,11 @@ router.delete('/:id', billController.delete);
  * RESETEA TODO EL SISTEMA DE FACTURACION (CUIDADO)
  */
 router.post('/reset', billController.reset);
+
+/**
+ * POST /api/bills/reset-all
+ * BORRA TODO PARA NUEVO CLIENTE (USO EXTREMO)
+ */
+router.post('/reset-all', billController.resetAll);
 
 export default router;

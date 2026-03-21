@@ -143,9 +143,10 @@ export class GenerateCreditNote {
         // Retry logic: If SRI rejects due to duplicate sequential, get new one and retry
         const MAX_ATTEMPTS = 3;
         let attempts = 0;
-        let result: any;
+        let result = null;
         let currentSequential = secuencial;
         let currentAccessKey = '';
+        let signedXml = '';
 
         while (attempts < MAX_ATTEMPTS) {
             attempts++;
@@ -160,7 +161,7 @@ export class GenerateCreditNote {
                 currentAccessKey = creditNote.info.claveAcceso!; // Access key is generated in generateCreditNoteXML
 
                 // Sign XML
-                const signedXml = await this.sriService.signXML(xml);
+                signedXml = await this.sriService.signXML(xml);
 
                 // Send to SRI
                 console.log('[GenerateCreditNote] Sending to SRI...');
@@ -270,15 +271,28 @@ export class GenerateCreditNote {
                 originalBill.customerEmail.includes('.');
 
             if (authResult.estado === 'AUTORIZADO' && isValidEmail) {
-                console.log(`[GenerateCreditNote] Sending email to ${originalBill.customerEmail}`);
-                if (authResult.fechaAutorizacion) creditNote.authorizationDate = authResult.fechaAutorizacion;
+                try {
+                    console.log(`[GenerateCreditNote] Sending email to ${originalBill.customerEmail}`);
+                    if (authResult.fechaAutorizacion) creditNote.authorizationDate = authResult.fechaAutorizacion;
 
-                // For now, we'll skip PDF generation for credit notes
-                // You can extend PDFService later to support credit note PDFs
-                // const pdfBuffer = await this.pdfService.generateCreditNotePDF(creditNote);
-                // await this.emailService.sendCreditNoteEmail(originalBill.customerEmail, creditNote, pdfBuffer, signedXml);
+                    // Generate PDF for Credit Note
+                    const pdfBuffer = await this.pdfService.generateCreditNotePDF(creditNote);
+                    
+                    // Send Email with PDF and Signed XML
+                    await this.emailService.sendCreditNoteEmail(
+                        originalBill.customerEmail!, 
+                        creditNote, 
+                        pdfBuffer, 
+                        signedXml
+                    );
+                    
+                    console.log('[GenerateCreditNote] Credit note email sent successfully');
+                } catch (emailError) {
+                    console.error('[GenerateCreditNote] Failed to send credit note email:', emailError);
+                    // We don't throw here to avoid failing the whole process just because of an email error
+                }
             } else {
-                console.log('[GenerateCreditNote] Skipping email - Conditions not met');
+                console.log('[GenerateCreditNote] Skipping email - Conditions not met (Not Authorized or Invalid Email)');
             }
         }
 

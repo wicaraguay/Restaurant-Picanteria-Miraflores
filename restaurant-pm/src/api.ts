@@ -417,6 +417,9 @@ export class ApiService {
         resetSystem: async (): Promise<any> => {
             return this.post(`${API_ENDPOINTS.BILLS.BASE}/reset`, {});
         },
+        resetAllSystem: async (): Promise<any> => {
+            return this.post(`${API_ENDPOINTS.BILLS.BASE}/reset-all`, {});
+        },
     };
 
     /**

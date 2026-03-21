@@ -3,6 +3,7 @@ import { CreateBill } from '../../application/use-cases/CreateBill';
 import { GetBills } from '../../application/use-cases/GetBills';
 import { DeleteBill } from '../../application/use-cases/DeleteBill';
 import { ResetBillingSystem } from '../../application/use-cases/ResetBillingSystem';
+import { ResetFullSystem } from '../../application/use-cases/ResetFullSystem';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
 import { NotFoundError } from '../../domain/errors/CustomErrors';
@@ -18,6 +19,7 @@ export class BillController {
         private getBills: GetBills,
         private deleteBill: DeleteBill,
         private resetBillingSystem: ResetBillingSystem,
+        private resetFullSystem: ResetFullSystem,
         private billingService: BillingService,
         private sriService: SRIService
     ) { }
@@ -198,6 +200,21 @@ export class BillController {
             logger.warn('⚠️ RESET SYSTEM REQUESTED ⚠️');
             const result = await this.resetBillingSystem.execute();
             logger.info('System reset completed successfully');
+            res.json(ResponseFormatter.success(result));
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    /**
+     * POST /api/bills/reset-all
+     * PURGA TOTAL DEL SISTEMA (USA CON PRECAUCION)
+     */
+    public resetAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            logger.error('🧨 nuclear RESET ALL REQUESTED 🧨');
+            const result = await this.resetFullSystem.execute();
+            logger.info('Full system purge completed successfully');
             res.json(ResponseFormatter.success(result));
         } catch (error) {
             next(error);

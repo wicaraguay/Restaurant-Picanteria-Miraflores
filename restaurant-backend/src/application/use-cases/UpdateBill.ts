@@ -42,7 +42,7 @@ export class UpdateBill {
                 return {
                     name: d.descripcion,
                     quantity: d.cantidad,
-                    price: parseFloat((itemTotal / d.cantidad).toFixed(2)),
+                    price: parseFloat((itemTotal / d.cantidad).toFixed(6)),
                     total: itemTotal
                 };
             });

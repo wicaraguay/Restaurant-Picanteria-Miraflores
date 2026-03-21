@@ -1,37 +1,40 @@
 /**
- * Componente de Gestión de Configuración - White Label
+ * Componente de Gestión de Configuración - White Label Premium
  * 
- * Permite configurar completamente el restaurante:
- * - Información del negocio
- * - Personalización de marca (logo, colores)
- * - Información fiscal
- * - Configuración regional
+ * Refactorizado según AGENTS.md:
+ * - Modularizado en secciones independientes
+ * - UX mejorada basada en Gestión de Pedidos (Tabbed navigation, Pulsing status)
+ * - Calidad de código y mantenibilidad incrementada
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
 import { processImage } from '../../../utils/imageUtils';
 import { ErrorHandler } from '../../../utils/errorHandler';
-import { QRCodeCanvas } from 'qrcode.react';
 import { uploadToCloudinary } from '../../../utils/cloudinary';
 import { api } from '../../../api';
 
-// Componentes locales y globales
-import Card from '../../../components/ui/Card';
-import { ResetConfigModal } from './ResetConfigModal';
-import { ResetBillingModal } from './ResetBillingModal';
+// --- Icons (from UI context) ---
+import { 
+    SettingsIcon, 
+    LayoutIcon, 
+    ChefHatIcon, 
+    AlertCircleIcon, 
+    CheckCircleIcon 
+} from '../../../components/ui/Icons';
 
-const inputClass = "w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-gray-900 text-sm focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700/50 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:bg-gray-700 dark:focus:ring-blue-500/20";
+// --- Sections ---
+import BusinessInfoSection from './sections/BusinessInfoSection';
+import BrandCustomizationSection from './sections/BrandCustomizationSection';
+import BillingSRISection from './sections/BillingSRISection';
+import DangerZoneSection from './sections/DangerZoneSection';
 
-
+type SettingsTab = 'general' | 'brand' | 'billing' | 'danger';
 
 const SettingsManagement: React.FC = () => {
-    const { config, updateConfig, resetConfig } = useRestaurantConfig();
-    const [isResetConfigModalOpen, setIsResetConfigModalOpen] = useState(false);
-    const [isResetBillingModalOpen, setIsResetBillingModalOpen] = useState(false);
+    const { config, updateConfig, resetConfig, refreshConfig } = useRestaurantConfig();
+    const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [isUploading, setIsUploading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const fiscalLogoInputRef = useRef<HTMLInputElement>(null);
 
     // Estados locales para formularios
     const [businessInfo, setBusinessInfo] = useState({
@@ -53,17 +56,8 @@ const SettingsManagement: React.FC = () => {
     });
 
     const [brandColors, setBrandColors] = useState(config.brandColors);
-
-    const [regionalConfig, setRegionalConfig] = useState({
-        currency: config.currency,
-        currencySymbol: config.currencySymbol,
-        timezone: config.timezone,
-        locale: config.locale,
-    });
-
     const [billingConfig, setBillingConfig] = useState(config.billing);
 
-    // Sincronizar estado local cuando llega la configuración del backend
     useEffect(() => {
         setBusinessInfo({
             name: config.name,
@@ -82,50 +76,37 @@ const SettingsManagement: React.FC = () => {
             contribuyenteEspecial: config.contribuyenteEspecial,
         });
         setBrandColors(config.brandColors);
-        setRegionalConfig({
-            currency: config.currency,
-            currencySymbol: config.currencySymbol,
-            timezone: config.timezone,
-            locale: config.locale,
-        });
         setBillingConfig(config.billing);
     }, [config]);
 
-    // Guardar información del negocio
-    const handleSaveBusinessInfo = (e: React.FormEvent) => {
+    // Handlers
+    const handleSaveBusinessInfo = async (e: React.FormEvent) => {
         e.preventDefault();
-        updateConfig(businessInfo);
+        await updateConfig(businessInfo);
         alert('Información del negocio guardada correctamente');
     };
 
-    // Guardar colores de marca
-    const handleSaveBrandColors = (e: React.FormEvent) => {
+    const handleSaveBrandColors = async (e: React.FormEvent) => {
         e.preventDefault();
-        updateConfig({ brandColors });
+        await updateConfig({ brandColors });
         alert('Colores de marca guardados correctamente');
     };
 
-    // Guardar información unificada de Facturación y SRI
-    const handleSaveUnifiedBilling = (e: React.FormEvent) => {
+    const handleSaveUnifiedBilling = async (e: React.FormEvent) => {
         e.preventDefault();
-        updateConfig({
+        await updateConfig({
             ...fiscalInfo,
             billing: billingConfig
         });
         alert('Información de Facturación y SRI guardada correctamente');
     };
 
-    // Manejar carga de logo
-    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
+    const handleLogoUpload = async (file: File) => {
         setIsUploading(true);
         try {
             const result = await processImage(file, 200, 200);
-
             if (result.success && result.data) {
-                updateConfig({ logo: result.data });
+                await updateConfig({ logo: result.data });
                 alert('Logo cargado correctamente');
             } else {
                 ErrorHandler.showError(new Error(result.error || 'Error al procesar imagen'));
@@ -137,616 +118,147 @@ const SettingsManagement: React.FC = () => {
         }
     };
 
-    // Manejar carga de logo fiscal
-    const handleFiscalLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
+    const handleFiscalLogoUpload = async (file: File) => {
         setIsUploading(true);
         try {
-            // Usamos Cloudinary para subir la imagen, igual que en el menú
             const imageUrl = await uploadToCloudinary(file);
-
             if (imageUrl) {
-                // Actualizamos directamente el config con el nuevo logo fiscal
-                // IMPORTANTE: Pasamos SOLO lo que queremos actualizar para evitar conflictos
                 const newFiscalInfo = { ...fiscalInfo, fiscalLogo: imageUrl };
-                // 1. Actualizar estado local inmediato (optimistic UI)
                 setFiscalInfo(newFiscalInfo);
-
-                console.log('Subida exitosa. URL Cloudinary:', imageUrl);
-
-                // 2. Guardar en backend
-                // CORRECCION: fiscalLogo debe ir DESPUÉS del spread para asegurar que no se sobrescriba con el valor antiguo
-                await updateConfig({
-                    ...fiscalInfo,
-                    fiscalLogo: imageUrl
-                });
-                alert('Logo Fiscal cargado correctamente en la nube\nURL: ' + imageUrl);
+                await updateConfig({ ...fiscalInfo, fiscalLogo: imageUrl });
+                alert('Logo Fiscal cargado correctamente en la nube');
             }
         } catch (error: any) {
             ErrorHandler.showError(error, 'Error al cargar logo fiscal');
-            if (error.message === 'CONFIG_MISSING') {
-                alert('Faltan credenciales de Cloudinary.');
-            }
         } finally {
             setIsUploading(false);
         }
     };
 
-    // Eliminar logo
-    const handleRemoveLogo = () => {
+    const handleRemoveLogo = async () => {
         if (confirm('¿Deseas eliminar el logo actual?')) {
-            updateConfig({ logo: '' });
+            await updateConfig({ logo: '' });
         }
     };
 
-    const handleResetConfig = () => {
-        resetConfig();
-        // Actualizar estados locales con la configuración por defecto
-        setBusinessInfo({
-            name: config.name,
-            slogan: config.slogan || '',
-            phone: config.phone,
-            email: config.email,
-            address: config.address,
-            website: config.website || '',
-        });
-        setFiscalInfo({
-            ruc: config.ruc,
-            businessName: config.businessName,
-            fiscalEmail: config.fiscalEmail,
-            fiscalLogo: config.fiscalLogo,
-            obligadoContabilidad: config.obligadoContabilidad,
-            contribuyenteEspecial: config.contribuyenteEspecial,
-        });
-        setBrandColors(config.brandColors);
-        setRegionalConfig({
-            currency: config.currency,
-            currencySymbol: config.currencySymbol,
-            timezone: config.timezone,
-            locale: config.locale,
-        });
-        setBillingConfig(config.billing);
+    const handleRemoveFiscalLogo = async () => {
+        if (confirm('¿Eliminar logo fiscal?')) {
+            await updateConfig({ ...fiscalInfo, billing: billingConfig, fiscalLogo: '' });
+        }
+    };
+
+    const handleResetConfig = async () => {
+        await resetConfig();
         alert('Configuración restaurada a valores por defecto');
     };
 
-    // Manejar reinicio de sistema de facturación
     const handleResetBilling = async () => {
         try {
             await api.bills.resetSystem();
-            alert('Sistema de facturación reiniciado correctamente.\n\n- Facturas eliminadas\n- Secuencias en 0\n- Órdenes reseteadas');
-            // Recargar configuración para ver la secuencia en 0 (aunque el context debería actualizarse si hiciéramos un fetch, forzamos recarga simple o dejamos que el usuario navegue)
+            await refreshConfig();
+            alert('Sistema de facturación reiniciado correctamente.\n- Facturas eliminadas\n- Secuencias en 0');
             window.location.reload();
         } catch (error: any) {
             ErrorHandler.showError(error, 'Error al reiniciar sistema de facturación');
         }
     };
 
+    const handleResetFullSystem = async () => {
+        try {
+            console.warn('🧨 Inicia Purga Total del Sistema 🧨');
+            await api.bills.resetAllSystem();
+            await refreshConfig();
+            alert('SISTEMA PURGADO: El restaurante ha vuelto a su estado original. Todos los datos operativos han sido eliminados.');
+            window.location.reload();
+        } catch (error: any) {
+            ErrorHandler.showError(error, 'Error fatal durante la purga');
+        }
+    };
+
+    const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+        { id: 'general', label: 'General', icon: <LayoutIcon className="w-4 h-4" /> },
+        { id: 'brand', label: 'Marca', icon: <ChefHatIcon className="w-4 h-4" /> },
+        { id: 'billing', label: 'Facturación / SRI', icon: <SettingsIcon className="w-4 h-4" /> },
+        { id: 'danger', label: 'Avanzado', icon: <AlertCircleIcon className="w-4 h-4" /> },
+    ];
+
     return (
-        <div>
-            <ResetConfigModal
-                isOpen={isResetConfigModalOpen}
-                onClose={() => setIsResetConfigModalOpen(false)}
-                onConfirm={handleResetConfig}
-            />
-            <ResetBillingModal
-                isOpen={isResetBillingModalOpen}
-                onClose={() => setIsResetBillingModalOpen(false)}
-                onConfirm={handleResetBilling}
-            />
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-light-background mb-6">Configuración del Sistema</h1>
-            <div className="space-y-6">
-                {/* Información del Negocio */}
-                <Card title="Información del Negocio">
-                    <form onSubmit={handleSaveBusinessInfo} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre del Restaurante *</label>
-                                <input
-                                    type="text"
-                                    id="name"
-                                    value={businessInfo.name}
-                                    onChange={(e) => setBusinessInfo({ ...businessInfo, name: e.target.value })}
-                                    className={inputClass}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="slogan" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Slogan</label>
-                                <input
-                                    type="text"
-                                    id="slogan"
-                                    value={businessInfo.slogan}
-                                    onChange={(e) => setBusinessInfo({ ...businessInfo, slogan: e.target.value })}
-                                    className={inputClass}
-                                    placeholder="Sabor Tradicional"
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Teléfono *</label>
-                                <input
-                                    type="tel"
-                                    id="phone"
-                                    value={businessInfo.phone}
-                                    onChange={(e) => setBusinessInfo({ ...businessInfo, phone: e.target.value })}
-                                    className={inputClass}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email *</label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    value={businessInfo.email}
-                                    onChange={(e) => setBusinessInfo({ ...businessInfo, email: e.target.value })}
-                                    className={inputClass}
-                                    required
-                                />
-                            </div>
-                            <div className="md:col-span-2">
-                                <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dirección *</label>
-                                <input
-                                    type="text"
-                                    id="address"
-                                    value={businessInfo.address}
-                                    onChange={(e) => setBusinessInfo({ ...businessInfo, address: e.target.value })}
-                                    className={inputClass}
-                                    required
-                                />
-                            </div>
-                            <div className="md:col-span-2">
-                                <label htmlFor="website" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sitio Web</label>
-                                <input
-                                    type="url"
-                                    id="website"
-                                    value={businessInfo.website}
-                                    onChange={(e) => setBusinessInfo({ ...businessInfo, website: e.target.value })}
-                                    className={inputClass}
-                                    placeholder="https://mirestaurante.com"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex justify-end">
-                            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors">Guardar Información</button>
-                        </div>
-                    </form>
-                </Card>
+        <div className="flex flex-col h-full bg-white dark:bg-dark-900 transition-colors duration-300">
+            {/* Header premium */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-6 px-1">
+                <div className="flex flex-col">
+                    <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Configuración</h1>
+                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                        CENTRO DE CONTROL MAESTRO
+                    </p>
+                </div>
 
-                {/* Código QR del Menú */}
-                <Card title="Código QR del Menú">
-                    <div className="flex flex-col items-center justify-center p-6 space-y-4">
-                        {businessInfo.website ? (
-                            <>
-                                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                                    <QRCodeCanvas
-                                        id="qr-code-canvas"
-                                        value={businessInfo.website.trim().startsWith('http') ? businessInfo.website.trim() : `https://${businessInfo.website.trim()}`}
-                                        size={200}
-                                        level={"H"}
-                                        includeMargin={true}
-                                    />
-                                </div>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">
-                                    Este código QR dirige a los clientes a: <br />
-                                    <a href={businessInfo.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium break-all">
-                                        {businessInfo.website}
-                                    </a>
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const canvas = document.getElementById('qr-code-canvas') as HTMLCanvasElement;
-                                        if (canvas) {
-                                            const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
-                                            const downloadLink = document.createElement("a");
-                                            downloadLink.href = pngUrl;
-                                            downloadLink.download = `menu-qr-${businessInfo.name.replace(/\s+/g, '-').toLowerCase()}.png`;
-                                            document.body.appendChild(downloadLink);
-                                            downloadLink.click();
-                                            document.body.removeChild(downloadLink);
-                                        }
-                                    }}
-                                    className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                                    </svg>
-                                    <span>Descargar QR</span>
-                                </button>
-                            </>
-                        ) : (
-                            <div className="text-center py-8">
-                                <div className="text-orange-500 mb-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                </div>
-                                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">URL no configurada</h3>
-                                <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-4">
-                                    Para generar el código QR, primero debes configurar la URL de "Sitio Web" en la sección de Información del Negocio.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </Card>
+                <div className="flex bg-gray-100 dark:bg-dark-800 p-1.5 rounded-2xl shadow-inner border border-gray-200 dark:border-dark-700 w-full sm:w-auto">
+                    {tabs.map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                activeTab === tab.id 
+                                ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' 
+                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                            }`}
+                        >
+                            {tab.icon}
+                            <span className="hidden md:inline">{tab.label}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
 
-                {/* Personalización de Marca */}
-                <Card title="Personalización de Marca">
-                    <div className="space-y-6">
-                        {/* Logo */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Logo del Restaurante</label>
-                            <div className="flex items-center space-x-4">
-                                {config.logo ? (
-                                    <div className="relative">
-                                        <img src={config.logo} alt="Logo" className="w-24 h-24 object-contain border-2 border-gray-200 dark:border-gray-600 rounded-lg" />
-                                        <button
-                                            type="button"
-                                            onClick={handleRemoveLogo}
-                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
-                                        >
-                                            ×
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="w-24 h-24 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-400">
-                                        Sin logo
-                                    </div>
-                                )}
-                                <div>
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleLogoUpload}
-                                        className="hidden"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={isUploading}
-                                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors disabled:bg-blue-300"
-                                    >
-                                        {isUploading ? 'Cargando...' : config.logo ? 'Cambiar Logo' : 'Subir Logo'}
-                                    </button>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">PNG, JPG, WEBP o SVG. Máx 500KB.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Colores de Marca */}
-                        <form onSubmit={handleSaveBrandColors}>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label htmlFor="primaryColor" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Color Primario</label>
-                                    <div className="flex items-center space-x-2">
-                                        <input
-                                            type="color"
-                                            id="primaryColor"
-                                            value={brandColors.primary}
-                                            onChange={(e) => setBrandColors({ ...brandColors, primary: e.target.value })}
-                                            className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
-                                        />
-                                        <input
-                                            type="text"
-                                            value={brandColors.primary}
-                                            onChange={(e) => setBrandColors({ ...brandColors, primary: e.target.value })}
-                                            className={inputClass}
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label htmlFor="secondaryColor" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Color Secundario</label>
-                                    <div className="flex items-center space-x-2">
-                                        <input
-                                            type="color"
-                                            id="secondaryColor"
-                                            value={brandColors.secondary}
-                                            onChange={(e) => setBrandColors({ ...brandColors, secondary: e.target.value })}
-                                            className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
-                                        />
-                                        <input
-                                            type="text"
-                                            value={brandColors.secondary}
-                                            onChange={(e) => setBrandColors({ ...brandColors, secondary: e.target.value })}
-                                            className={inputClass}
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label htmlFor="accentColor" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Color de Acento</label>
-                                    <div className="flex items-center space-x-2">
-                                        <input
-                                            type="color"
-                                            id="accentColor"
-                                            value={brandColors.accent}
-                                            onChange={(e) => setBrandColors({ ...brandColors, accent: e.target.value })}
-                                            className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
-                                        />
-                                        <input
-                                            type="text"
-                                            value={brandColors.accent}
-                                            onChange={(e) => setBrandColors({ ...brandColors, accent: e.target.value })}
-                                            className={inputClass}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex justify-end mt-4">
-                                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors">Guardar Colores</button>
-                            </div>
-                        </form>
-                    </div>
-                </Card>
-
-                {/* Datos de Facturación y SRI (Unificado) */}
-                <Card title="Datos de Facturación y SRI">
-                    <form onSubmit={handleSaveUnifiedBilling} className="space-y-6">
-
-                        {/* Sección: Información Fiscal */}
-                        <div>
-                            <h3 className="text-sm uppercase tracking-wider text-gray-500 dark:text-gray-400 font-bold mb-3 border-b border-gray-200 dark:border-gray-700 pb-1">Información Fiscal (RUC)</h3>
-
-                            {/* Logo Fiscal */}
-                            <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                                <div>
-                                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Logo para Facturas</h4>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Opcional. Si no se sube, se usará el logo del negocio.</p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    {config.fiscalLogo ? (
-                                        <div className="relative group">
-                                            <img src={config.fiscalLogo} alt="Logo Fiscal" className="w-12 h-12 object-contain bg-white rounded border border-gray-200" />
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    if (confirm('¿Eliminar logo fiscal?')) updateConfig({ ...fiscalInfo, billing: billingConfig, fiscalLogo: '' });
-                                                }}
-                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                ×
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="w-12 h-12 border-2 border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400">
-                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                        </div>
-                                    )}
-                                    <input
-                                        ref={fiscalLogoInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleFiscalLogoUpload}
-                                        className="hidden"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => fiscalLogoInputRef.current?.click()}
-                                        disabled={isUploading}
-                                        className="text-sm bg-white dark:bg-dark-600 border border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 dark:hover:bg-dark-500 transition-colors"
-                                    >
-                                        {config.fiscalLogo ? 'Cambiar' : 'Subir'}
-                                    </button>
-                                </div>
-                            </div>
-                            {config.fiscalLogo && (
-                                <div className="mb-4 text-xs text-gray-500 dark:text-gray-400 font-mono break-all bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700">
-                                    URL Externa: {config.fiscalLogo}
-                                </div>
-                            )}
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="ruc" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">RUC *</label>
-                                    <input
-                                        type="text"
-                                        id="ruc"
-                                        value={fiscalInfo.ruc}
-                                        onChange={(e) => setFiscalInfo({ ...fiscalInfo, ruc: e.target.value })}
-                                        className={inputClass}
-                                        required
-                                        maxLength={13}
-                                        placeholder="0999999999001"
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Razón Social *</label>
-                                    <input
-                                        type="text"
-                                        id="businessName"
-                                        value={fiscalInfo.businessName}
-                                        onChange={(e) => setFiscalInfo({ ...fiscalInfo, businessName: e.target.value })}
-                                        className={inputClass}
-                                        required
-                                        placeholder="Nombre Legal Completo"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">Nombre que consta en el RUC (Persona Natural o Jurídica).</p>
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label htmlFor="fiscalEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Correo Electrónico del RUC (Fiscal)</label>
-                                    <input
-                                        type="email"
-                                        id="fiscalEmail"
-                                        value={fiscalInfo.fiscalEmail || ''}
-                                        onChange={(e) => setFiscalInfo({ ...fiscalInfo, fiscalEmail: e.target.value })}
-                                        className={inputClass}
-                                        placeholder="ejemplo@sri.com"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">Correo registrado en el SRI para notificaciones electrónicas.</p>
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label htmlFor="contribuyenteEspecial" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nro. de Resolución de Contribuyente Especial (Opcional)</label>
-                                    <input
-                                        type="text"
-                                        id="contribuyenteEspecial"
-                                        value={fiscalInfo.contribuyenteEspecial || ''}
-                                        onChange={(e) => setFiscalInfo({ ...fiscalInfo, contribuyenteEspecial: e.target.value })}
-                                        className={inputClass}
-                                        placeholder="Ej: 5368 (Dejar vacío si no aplica)"
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <div className="flex items-center p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
-                                        <input
-                                            type="checkbox"
-                                            id="obligadoContabilidad"
-                                            checked={fiscalInfo.obligadoContabilidad || false}
-                                            onChange={(e) => setFiscalInfo({ ...fiscalInfo, obligadoContabilidad: e.target.checked })}
-                                            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                        />
-                                        <label htmlFor="obligadoContabilidad" className="ml-3 block text-sm font-medium text-gray-900 dark:text-gray-200 cursor-pointer select-none">
-                                            Obligado a llevar contabilidad
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Sección: Configuración Técnica */}
-                        <div>
-                            <h3 className="text-sm uppercase tracking-wider text-gray-500 dark:text-gray-400 font-bold mb-3 border-b border-gray-200 dark:border-gray-700 pb-1">Configuración Técnica (Puntos de Emisión)</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label htmlFor="establishment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Establecimiento</label>
-                                    <input
-                                        type="text"
-                                        id="establishment"
-                                        value={billingConfig.establishment}
-                                        onChange={(e) => setBillingConfig({ ...billingConfig, establishment: e.target.value })}
-                                        className={`${inputClass} font-mono tracking-widest text-center`}
-                                        maxLength={3}
-                                        placeholder="001"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1 text-center">Ej: 001, 002...</p>
-                                </div>
-                                <div>
-                                    <label htmlFor="emissionPoint" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Punto de Emisión</label>
-                                    <input
-                                        type="text"
-                                        id="emissionPoint"
-                                        value={billingConfig.emissionPoint}
-                                        onChange={(e) => setBillingConfig({ ...billingConfig, emissionPoint: e.target.value })}
-                                        className={`${inputClass} font-mono tracking-widest text-center`}
-                                        maxLength={3}
-                                        placeholder="001"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1 text-center">Ej: 001 (Caja 1)</p>
-                                </div>
-                                <div>
-                                    <label htmlFor="regime" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Régimen Tributario</label>
-                                    <select
-                                        id="regime"
-                                        value={billingConfig.regime}
-                                        onChange={(e) => setBillingConfig({ ...billingConfig, regime: e.target.value as any })}
-                                        className={inputClass}
-                                    >
-                                        <option value="General">General</option>
-                                        <option value="RIMPE - Negocio Popular">RIMPE - Negocio Popular</option>
-                                        <option value="RIMPE - Emprendedor">RIMPE - Emprendedor</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Secuencias de Facturación (Avanzado) */}
-                        <div className="mt-6 p-4 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-100 dark:border-orange-800/30">
-                            <h4 className="text-sm font-bold text-orange-800 dark:text-orange-400 mb-2 flex items-center gap-2">
-                                <span className="text-lg">⚠️</span> Configuración de Secuenciales (Avanzado)
-                            </h4>
-                            <p className="text-xs text-orange-700 dark:text-orange-300 mb-4 leading-relaxed">
-                                Modifique estos valores <strong>SOLO</strong> si necesita sincronizar el sistema con una facturación física o electrónica anterior.
-                                El número ingresado será el <strong>ÚLTIMO</strong> emitido (el sistema usará el siguiente: n+1).
-                            </p>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="seqFactura" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Secuencia Actual Facturas
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-400 font-mono text-sm">{billingConfig.establishment}-{billingConfig.emissionPoint}-</span>
-                                        <input
-                                            type="number"
-                                            id="seqFactura"
-                                            value={billingConfig.currentSequenceFactura}
-                                            onChange={(e) => setBillingConfig({ ...billingConfig, currentSequenceFactura: parseInt(e.target.value) || 0 })}
-                                            className={`${inputClass} font-mono`}
-                                            min="0"
-                                        />
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Siguiente a emitir: <strong>{(billingConfig.currentSequenceFactura || 0) + 1}</strong>
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <label htmlFor="seqNC" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Secuencia Actual Notas de Crédito
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-400 font-mono text-sm">{billingConfig.establishment}-{billingConfig.emissionPoint}-</span>
-                                        <input
-                                            type="number"
-                                            id="seqNC"
-                                            value={billingConfig.currentSequenceNotaCredito || 0}
-                                            onChange={(e) => setBillingConfig({ ...billingConfig, currentSequenceNotaCredito: parseInt(e.target.value) || 0 })}
-                                            className={`${inputClass} font-mono`}
-                                            min="0"
-                                        />
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Siguiente a emitir: <strong>{(billingConfig.currentSequenceNotaCredito || 0) + 1}</strong>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end pt-2">
-                            <button type="submit" className="bg-green-600 text-white px-6 py-2.5 rounded-lg hover:bg-green-700 text-sm font-bold shadow-sm transition-all transform hover:scale-[1.02]">
-                                Guardar Datos Facturación
-                            </button>
-                        </div>
-                    </form>
-                </Card>
-
-                {/* Zona de Peligro */}
-                <Card title="Zona de Peligro" danger>
-                    <div className="space-y-4">
-                        <div>
-                            <h3 className="font-semibold text-gray-800 dark:text-light-background">Restaurar configuración por defecto</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                Esto restaurará toda la configuración del sistema a sus valores por defecto (información del negocio, colores, fiscal, regional y facturación). Esta acción es útil al entregar el sistema a un nuevo restaurante.
-                            </p>
-                        </div>
-                        <div className="flex justify-end">
-                            <button
-                                onClick={() => setIsResetConfigModalOpen(true)}
-                                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 text-sm font-medium transition-colors shadow-sm shadow-orange-500/30"
-                            >
-                                Restaurar Configuración
-                            </button>
-                        </div>
-
-                        <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                            <h3 className="font-semibold text-red-600 dark:text-red-400">Reiniciar Sistema de Facturación (Limpiar Datos)</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                Elimina <strong>TODAS</strong> las facturas y notas de crédito, y reinicia los contadores secuenciales a 0. Las órdenes se marcan como "no facturadas".
-                                <br />
-                                <span className="font-bold">Úsalo solo antes de entregar al cliente final.</span>
-                            </p>
-                            <div className="flex justify-end mt-2">
-                                <button
-                                    onClick={() => setIsResetBillingModalOpen(true)}
-                                    className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm font-bold transition-colors shadow-sm shadow-red-500/30 border border-red-700"
-                                >
-                                    Reiniciar Facturación (001)
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </Card>
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto pr-1">
+                {activeTab === 'general' && (
+                    <BusinessInfoSection 
+                        businessInfo={businessInfo} 
+                        onInfoChange={setBusinessInfo} 
+                        onSave={handleSaveBusinessInfo} 
+                    />
+                )}
+                {activeTab === 'brand' && (
+                    <BrandCustomizationSection 
+                        logo={config.logo} 
+                        brandColors={brandColors} 
+                        isUploading={isUploading}
+                        onLogoUpload={handleLogoUpload}
+                        onRemoveLogo={handleRemoveLogo}
+                        onColorsChange={setBrandColors}
+                        onSaveColors={handleSaveBrandColors}
+                    />
+                )}
+                {activeTab === 'billing' && (
+                    <BillingSRISection 
+                        fiscalInfo={fiscalInfo}
+                        billingConfig={billingConfig}
+                        isUploading={isUploading}
+                        onFiscalInfoChange={setFiscalInfo}
+                        onBillingConfigChange={setBillingConfig}
+                        onFiscalLogoUpload={handleFiscalLogoUpload}
+                        onRemoveFiscalLogo={handleRemoveFiscalLogo}
+                        onSave={handleSaveUnifiedBilling}
+                    />
+                )}
+                {activeTab === 'danger' && (
+                    <DangerZoneSection 
+                        onResetConfig={handleResetConfig}
+                        onResetBilling={handleResetBilling}
+                        onResetFullSystem={handleResetFullSystem}
+                    />
+                )}
+            </div>
+            
+            <div className="mt-8 py-4 border-t border-gray-100 dark:border-dark-800 flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-400">
+                <div className="flex items-center gap-2">
+                    <CheckCircleIcon className="w-3 h-3 text-green-500" />
+                    Sistema Listo v2.0
+                </div>
+                <div>{config.name} - {new Date().getFullYear()}</div>
             </div>
         </div>
     );

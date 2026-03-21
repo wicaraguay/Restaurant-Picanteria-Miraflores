@@ -273,15 +273,15 @@ const BillingHistory: React.FC = () => {
             setProcessingState(InvoiceProcessState.SENDING);
             setProcessingMessage('Re-enviando al SRI');
             setProcessingDetails('Procesando datos actualizados y transmitiendo...');
-            
+
             const result = await billingService.reSubmit(bill.id);
 
             if (result.success) {
                 setProcessingState(InvoiceProcessState.WAITING_AUTHORIZATION);
                 setProcessingMessage('Esperando autorización SRI');
-                
+
                 const sriStatus = result.authorization?.estado || result.sriResponse?.estado;
-                
+
                 if (sriStatus === 'AUTORIZADO') {
                     setProcessingState(InvoiceProcessState.AUTHORIZED);
                     setProcessingMessage('¡Factura autorizada!');
@@ -517,7 +517,7 @@ const BillingHistory: React.FC = () => {
                                     <React.Fragment key={bill.id}>
                                         <tr className="hover:bg-gray-50 dark:hover:bg-dark-750 transition-colors">
                                             <td className="px-4 py-4 text-center">
-                                                <button 
+                                                <button
                                                     onClick={() => toggleBillExpansion(bill.id)}
                                                     className={`p-1.5 rounded-lg transition-transform duration-200 ${expandedBillIds.has(bill.id) ? 'rotate-180 bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'text-gray-400'}`}
                                                 >
@@ -525,264 +525,264 @@ const BillingHistory: React.FC = () => {
                                                 </button>
                                             </td>
                                             <td className="px-6 py-4">
-                                            <div className="font-black text-gray-900 dark:text-gray-100">{bill.documentNumber}</div>
-                                            <div className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
-                                                <HistoryIcon className="w-3 h-3" /> {bill.date}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-gray-800 dark:text-gray-200">{bill.customerName}</div>
-                                            <div className="text-[10px] font-bold text-blue-600/60 dark:text-blue-400/60 uppercase tracking-wider">{bill.customerIdentification}</div>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            {bill.environment === '2' ? (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 uppercase">
-                                                    PRODUCCIÓN
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 uppercase">
-                                                    PRUEBAS
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            {(() => {
-                                                const displayTotal = (bill.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
-                                                const displaySubtotal = displayTotal / 1.15;
-                                                return (
-                                                    <>
-                                                        <div className="font-black text-blue-600 dark:text-blue-400 text-base">${displayTotal.toFixed(2)}</div>
-                                                        <div className="text-[10px] font-bold text-gray-400 tracking-tighter uppercase">Sub: ${displaySubtotal.toFixed(2)}</div>
-                                                    </>
-                                                );
-                                            })()}
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <div className="flex justify-center mb-1.5">
-                                                {getStatusBadge(bill)}
-                                            </div>
-                                            <div className="text-[8px] font-mono text-gray-400 bg-gray-50 dark:bg-dark-900 px-2 py-1 rounded-md border border-gray-100 dark:border-dark-700 max-w-[140px] truncate mx-auto" title={bill.accessKey}>
-                                                {bill.accessKey}
-                                            </div>
-                                            {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
-                                                <div 
-                                                    onClick={() => {
-                                                        setSelectedBillForXml(bill);
-                                                        setIsXmlModalOpen(true);
-                                                    }}
-                                                    className="mt-2 text-[7px] font-bold text-gray-400 dark:text-gray-500 leading-tight max-w-[140px] mx-auto italic uppercase tracking-tighter cursor-pointer hover:text-blue-500 text-center" 
-                                                    title="Haz clic para ver el XML técnico"
-                                                >
-                                                    {(() => {
-                                                        const msg = (bill.sriMessage || '').toLowerCase();
-                                                        const status = bill.sriStatus || '';
-                                                        
-                                                        const isUser = msg.includes('identificacion') || msg.includes('ruc') || msg.includes('secuencial') || msg.includes('datos') || msg.includes('cliente') || msg.includes('razon social') || msg.includes('email') || msg.includes('estructura') || msg.includes('impuesto');
-                                                        const isSRI = msg.includes('sri') || msg.includes('interno') || msg.includes('servidor') || msg.includes('mantenimiento') || msg.includes('conexion') || msg.includes('timeout') || msg.includes('500');
-
-                                                        if (isUser) return 'FALLO: ERROR DEL USUARIO (VER XML)';
-                                                        if (isSRI) return 'FALLO: ERROR DEL SRI (VER XML)';
-                                                        
-                                                        if (status === 'DEVUELTA' || status === 'RECHAZADA') return 'FALLO: ERROR DEL USUARIO (VER XML)';
-                                                        if (status === 'ERROR' || status === 'TIMEOUT' || status === 'PENDING') return 'FALLO: ERROR DEL SRI (VER XML)';
-                                                        
-                                                        return 'FALLO: ERROR DEL SRI (VER XML)';
-                                                    })()}
+                                                <div className="font-black text-gray-900 dark:text-gray-100">{bill.documentNumber}</div>
+                                                <div className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                                    <HistoryIcon className="w-3 h-3" /> {bill.date}
                                                 </div>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end items-center gap-1">
-                                                {/* PRIMARY ACTIONS (Print & Status) */}
-
-                                                {/* Edit Client Data (Only for failed/draft) */}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold text-gray-800 dark:text-gray-200">{bill.customerName}</div>
+                                                <div className="text-[10px] font-bold text-blue-600/60 dark:text-blue-400/60 uppercase tracking-wider">{bill.customerIdentification}</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                {bill.environment === '2' ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 uppercase">
+                                                        PRODUCCIÓN
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 uppercase">
+                                                        PRUEBAS
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {(() => {
+                                                    const displayTotal = (bill.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
+                                                    const displaySubtotal = displayTotal / 1.15;
+                                                    return (
+                                                        <>
+                                                            <div className="font-black text-blue-600 dark:text-blue-400 text-base">${displayTotal.toFixed(2)}</div>
+                                                            <div className="text-[10px] font-bold text-gray-400 tracking-tighter uppercase">Sub: ${displaySubtotal.toFixed(2)}</div>
+                                                        </>
+                                                    );
+                                                })()}
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="flex justify-center mb-1.5">
+                                                    {getStatusBadge(bill)}
+                                                </div>
+                                                <div className="text-[8px] font-mono text-gray-400 bg-gray-50 dark:bg-dark-900 px-2 py-1 rounded-md border border-gray-100 dark:border-dark-700 max-w-[140px] truncate mx-auto" title={bill.accessKey}>
+                                                    {bill.accessKey}
+                                                </div>
                                                 {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                    <div
+                                                        onClick={() => {
+                                                            setSelectedBillForXml(bill);
+                                                            setIsXmlModalOpen(true);
+                                                        }}
+                                                        className="mt-2 text-[7px] font-bold text-gray-400 dark:text-gray-500 leading-tight max-w-[140px] mx-auto italic uppercase tracking-tighter cursor-pointer hover:text-blue-500 text-center"
+                                                        title="Haz clic para ver el XML técnico"
+                                                    >
+                                                        {(() => {
+                                                            const msg = (bill.sriMessage || '').toLowerCase();
+                                                            const status = bill.sriStatus || '';
+
+                                                            const isUser = msg.includes('identificacion') || msg.includes('ruc') || msg.includes('secuencial') || msg.includes('datos') || msg.includes('cliente') || msg.includes('razon social') || msg.includes('email') || msg.includes('estructura') || msg.includes('impuesto');
+                                                            const isSRI = msg.includes('sri') || msg.includes('interno') || msg.includes('servidor') || msg.includes('mantenimiento') || msg.includes('conexion') || msg.includes('timeout') || msg.includes('500');
+
+                                                            if (isUser) return 'FALLO: ERROR DEL USUARIO (VER XML)';
+                                                            if (isSRI) return 'FALLO: ERROR DEL SRI (VER XML)';
+
+                                                            if (status === 'DEVUELTA' || status === 'RECHAZADA') return 'FALLO: ERROR DEL USUARIO (VER XML)';
+                                                            if (status === 'ERROR' || status === 'TIMEOUT' || status === 'PENDING') return 'FALLO: ERROR DEL SRI (VER XML)';
+
+                                                            return 'FALLO: ERROR DEL SRI (VER XML)';
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex justify-end items-center gap-1">
+                                                    {/* PRIMARY ACTIONS (Print & Status) */}
+
+                                                    {/* Edit Client Data (Only for failed/draft) */}
+                                                    {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedBillForEdit(bill);
+                                                                setIsEditModalOpen(true);
+                                                            }}
+                                                            className="p-2 bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-600 dark:bg-dark-700 dark:text-gray-400 rounded-xl transition-all"
+                                                            title="Editar datos del cliente"
+                                                        >
+                                                            <EditIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Check Status / Retry */}
+                                                    {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                        <button
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                if (!bill.accessKey || bill.sriStatus === 'BORRADOR' || bill.sriStatus === 'ERROR') {
+                                                                    await handleReSubmit(bill);
+                                                                } else {
+                                                                    await handleCheckStatus(bill);
+                                                                }
+                                                            }}
+                                                            className={`p-2 rounded-xl transition-all shadow-sm ${(!bill.accessKey || bill.sriStatus === 'BORRADOR')
+                                                                ? 'bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400'
+                                                                : 'bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400'
+                                                                }`}
+                                                            title={(!bill.accessKey || bill.sriStatus === 'BORRADOR') ? "Re-intentar envío SRI" : "Actualizar Estado SRI"}
+                                                        >
+                                                            <RefreshCcwIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+
                                                     <button
+                                                        onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf`, '_blank')}
+                                                        className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 dark:text-gray-400 dark:hover:bg-dark-700 rounded-xl transition-all"
+                                                        title="Ver RIDE (PDF)"
+                                                    >
+                                                        <PrinterIcon className="w-4 h-4" />
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf?format=ticket`, '_blank')}
+                                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-xl transition-all"
+                                                        title="Imprimir Ticket"
+                                                    >
+                                                        <div className="flex items-center justify-center w-4 h-4 border border-current rounded-[4px] text-[8px] font-bold">
+                                                            T
+                                                        </div>
+                                                    </button>
+
+                                                    {/* Download XML */}
+                                                    <button
+                                                        onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/xml`, '_blank')}
+                                                        className="p-2 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all"
+                                                        title="Descargar XML Firmado (Legal)"
+                                                        disabled={bill.sriStatus !== 'AUTORIZADO'}
+                                                    >
+                                                        <div className="flex items-center justify-center w-4 h-4 border border-current rounded-[4px] text-[8px] font-bold">
+                                                            XML
+                                                        </div>
+                                                    </button>
+
+                                                    {/* DIVIDER */}
+                                                    <div className="w-px h-4 bg-gray-200 dark:bg-dark-700 mx-1"></div>
+
+                                                    {/* SECONDARY ACTIONS (Manage) */}
+
+                                                    {/* Credit Note (Always visible, disabled if not applicable) */}
+                                                    <button
+                                                        disabled={
+                                                            bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ||
+                                                            bill.hasCreditNote ||
+                                                            bill.customerIdentification?.trim() === '9999999999999'
+                                                        }
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            setSelectedBillForEdit(bill);
-                                                            setIsEditModalOpen(true);
+                                                            setSelectedBillForCreditNote(bill);
                                                         }}
-                                                        className="p-2 bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-600 dark:bg-dark-700 dark:text-gray-400 rounded-xl transition-all"
-                                                        title="Editar datos del cliente"
+                                                        className={`p-2 rounded-xl transition-all ${bill.sriStatus?.trim().toUpperCase() === 'AUTORIZADO' &&
+                                                            !bill.hasCreditNote &&
+                                                            bill.customerIdentification?.trim() !== '9999999999999'
+                                                            ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 cursor-pointer'
+                                                            : 'text-gray-200 dark:text-gray-700 cursor-not-allowed opacity-50'
+                                                            }`}
+                                                        title={
+                                                            bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO'
+                                                                ? "Solo facturas AUTORIZADAS pueden tener Nota de Crédito"
+                                                                : bill.hasCreditNote
+                                                                    ? "Ya tiene Nota de Crédito"
+                                                                    : bill.customerIdentification?.trim() === '9999999999999'
+                                                                        ? "No se puede emitir Nota de Crédito a Consumidor Final"
+                                                                        : "Emitir Nota de Crédito"
+                                                        }
                                                     >
-                                                        <EditIcon className="w-4 h-4" />
+                                                        <FileTextIcon className="w-4 h-4" />
                                                     </button>
-                                                )}
 
-                                                {/* Check Status / Retry */}
-                                                {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                    {/* Delete */}
                                                     <button
                                                         onClick={async (e) => {
                                                             e.stopPropagation();
-                                                            if (!bill.accessKey || bill.sriStatus === 'BORRADOR' || bill.sriStatus === 'ERROR') {
-                                                                await handleReSubmit(bill);
-                                                            } else {
-                                                                await handleCheckStatus(bill);
+                                                            if (confirm('¿Eliminar factura?')) {
+                                                                try {
+                                                                    setIsLoading(true);
+                                                                    await billingService.delete(bill.id);
+                                                                    await fetchBills();
+                                                                } catch (error) {
+                                                                    console.error('Error:', error);
+                                                                } finally {
+                                                                    setIsLoading(false);
+                                                                }
                                                             }
                                                         }}
-                                                        className={`p-2 rounded-xl transition-all shadow-sm ${(!bill.accessKey || bill.sriStatus === 'BORRADOR')
-                                                            ? 'bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400'
-                                                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400'
-                                                            }`}
-                                                        title={(!bill.accessKey || bill.sriStatus === 'BORRADOR') ? "Re-intentar envío SRI" : "Actualizar Estado SRI"}
+                                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+                                                        title="Eliminar Registro"
                                                     >
-                                                        <RefreshCcwIcon className="w-4 h-4" />
+                                                        <TrashIcon className="w-4 h-4" />
                                                     </button>
-                                                )}
-
-                                                <button
-                                                    onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf`, '_blank')}
-                                                    className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 dark:text-gray-400 dark:hover:bg-dark-700 rounded-xl transition-all"
-                                                    title="Ver RIDE (PDF)"
-                                                >
-                                                    <PrinterIcon className="w-4 h-4" />
-                                                </button>
-
-                                                <button
-                                                    onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf?format=ticket`, '_blank')}
-                                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-xl transition-all"
-                                                    title="Imprimir Ticket"
-                                                >
-                                                    <div className="flex items-center justify-center w-4 h-4 border border-current rounded-[4px] text-[8px] font-bold">
-                                                        T
-                                                    </div>
-                                                </button>
-
-                                                {/* Download XML */}
-                                                <button
-                                                    onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/xml`, '_blank')}
-                                                    className="p-2 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all"
-                                                    title="Descargar XML Firmado (Legal)"
-                                                    disabled={bill.sriStatus !== 'AUTORIZADO'}
-                                                >
-                                                    <div className="flex items-center justify-center w-4 h-4 border border-current rounded-[4px] text-[8px] font-bold">
-                                                        XML
-                                                    </div>
-                                                </button>
-
-                                                {/* DIVIDER */}
-                                                <div className="w-px h-4 bg-gray-200 dark:bg-dark-700 mx-1"></div>
-
-                                                {/* SECONDARY ACTIONS (Manage) */}
-
-                                                {/* Credit Note (Always visible, disabled if not applicable) */}
-                                                <button
-                                                    disabled={
-                                                        bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ||
-                                                        bill.hasCreditNote ||
-                                                        bill.customerIdentification?.trim() === '9999999999999'
-                                                    }
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedBillForCreditNote(bill);
-                                                    }}
-                                                    className={`p-2 rounded-xl transition-all ${bill.sriStatus?.trim().toUpperCase() === 'AUTORIZADO' &&
-                                                        !bill.hasCreditNote &&
-                                                        bill.customerIdentification?.trim() !== '9999999999999'
-                                                        ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 cursor-pointer'
-                                                        : 'text-gray-200 dark:text-gray-700 cursor-not-allowed opacity-50'
-                                                        }`}
-                                                    title={
-                                                        bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO'
-                                                            ? "Solo facturas AUTORIZADAS pueden tener Nota de Crédito"
-                                                            : bill.hasCreditNote
-                                                                ? "Ya tiene Nota de Crédito"
-                                                                : bill.customerIdentification?.trim() === '9999999999999'
-                                                                    ? "No se puede emitir Nota de Crédito a Consumidor Final"
-                                                                    : "Emitir Nota de Crédito"
-                                                    }
-                                                >
-                                                    <FileTextIcon className="w-4 h-4" />
-                                                </button>
-
-                                                {/* Delete */}
-                                                <button
-                                                    onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        if (confirm('¿Eliminar factura?')) {
-                                                            try {
-                                                                setIsLoading(true);
-                                                                await billingService.delete(bill.id);
-                                                                await fetchBills();
-                                                            } catch (error) {
-                                                                console.error('Error:', error);
-                                                            } finally {
-                                                                setIsLoading(false);
-                                                            }
-                                                        }
-                                                    }}
-                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
-                                                    title="Eliminar Registro"
-                                                >
-                                                    <TrashIcon className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {/* EXPANDED SECTION: ITEMS DETAIL */}
-                                    {expandedBillIds.has(bill.id) && (
-                                        <tr className="bg-gray-50/30 dark:bg-dark-900/40 animate-in slide-in-from-top-2 duration-300">
-                                            <td colSpan={7} className="px-6 py-6 pb-8 border-b border-gray-100 dark:border-dark-700">
-                                                <div className="max-w-3xl mx-auto space-y-4">
-                                                    <div className="flex items-center justify-between">
-                                                        <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                                                            <LayoutIcon className="w-3 h-3" /> Detalle de Productos Consumidos
-                                                        </h4>
-                                                    </div>
-                                                    <div className="bg-white dark:bg-dark-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-dark-700 shadow-sm">
-                                                        <table className="w-full text-xs border-collapse">
-                                                            <thead className="bg-gray-50/50 dark:bg-dark-750 text-gray-400 font-bold uppercase tracking-widest text-[9px] border-b border-gray-100 dark:border-dark-700">
-                                                                <tr>
-                                                                    <th className="px-5 py-3 text-left">Producto</th>
-                                                                    <th className="px-5 py-3 text-center w-24">Cant.</th>
-                                                                    <th className="px-5 py-3 text-right w-32">P. Unit.</th>
-                                                                    <th className="px-5 py-3 text-right w-32">Subtotal</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-gray-50 dark:divide-dark-750">
-                                                                {bill.items?.map((item, idx) => (
-                                                                    <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-dark-700/50 transition-colors">
-                                                                        <td className="px-5 py-4 font-bold text-gray-700 dark:text-gray-300">{item.name}</td>
-                                                                        <td className="px-5 py-4 text-center font-bold text-gray-500">{item.quantity}</td>
-                                                                        <td className="px-5 py-4 text-right font-medium text-gray-500">${(item.price || 0).toFixed(2)}</td>
-                                                                        <td className="px-5 py-4 text-right font-black text-gray-700 dark:text-gray-300">${(item.total || 0).toFixed(2)}</td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                            <tfoot className="bg-gray-50/20 dark:bg-dark-750/30 border-t border-gray-100 dark:border-dark-700">
-                                                                {(() => {
-                                                                    const displayTotal = (bill.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
-                                                                    const displaySubtotal = displayTotal / 1.15;
-                                                                    const displayTax = displayTotal - displaySubtotal;
-                                                                    return (
-                                                                        <>
-                                                                            <tr>
-                                                                                <td colSpan={3} className="px-5 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal Sin Impuestos</td>
-                                                                                <td className="px-5 py-3 text-right font-bold text-gray-600 dark:text-gray-400">${displaySubtotal.toFixed(2)}</td>
-                                                                            </tr>
-                                                                            <tr>
-                                                                                <td colSpan={3} className="px-5 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">IVA (15%)</td>
-                                                                                <td className="px-5 py-3 text-right font-bold text-gray-600 dark:text-gray-400">${displayTax.toFixed(2)}</td>
-                                                                            </tr>
-                                                                            <tr className="bg-blue-50/30 dark:bg-blue-900/10">
-                                                                                <td colSpan={3} className="px-5 py-4 text-right text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Total Factura</td>
-                                                                                <td className="px-5 py-4 text-right font-black text-blue-700 dark:text-blue-300 text-sm">${displayTotal.toFixed(2)}</td>
-                                                                            </tr>
-                                                                        </>
-                                                                    );
-                                                                })()}
-                                                            </tfoot>
-                                                        </table>
-                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
-                                    )}
-                                </React.Fragment>
-                            ))
-                        )}
-                    </tbody>
+                                        {/* EXPANDED SECTION: ITEMS DETAIL */}
+                                        {expandedBillIds.has(bill.id) && (
+                                            <tr className="bg-gray-50/30 dark:bg-dark-900/40 animate-in slide-in-from-top-2 duration-300">
+                                                <td colSpan={7} className="px-6 py-6 pb-8 border-b border-gray-100 dark:border-dark-700">
+                                                    <div className="max-w-3xl mx-auto space-y-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                                                                <LayoutIcon className="w-3 h-3" /> Detalle de Productos Consumidos
+                                                            </h4>
+                                                        </div>
+                                                        <div className="bg-white dark:bg-dark-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-dark-700 shadow-sm">
+                                                            <table className="w-full text-xs border-collapse">
+                                                                <thead className="bg-gray-50/50 dark:bg-dark-750 text-gray-400 font-bold uppercase tracking-widest text-[9px] border-b border-gray-100 dark:border-dark-700">
+                                                                    <tr>
+                                                                        <th className="px-5 py-3 text-left">Producto</th>
+                                                                        <th className="px-5 py-3 text-center w-24">Cant.</th>
+                                                                        <th className="px-5 py-3 text-right w-32">P. Unit.</th>
+                                                                        <th className="px-5 py-3 text-right w-32">Subtotal</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-gray-50 dark:divide-dark-750">
+                                                                    {bill.items?.map((item, idx) => (
+                                                                        <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-dark-700/50 transition-colors">
+                                                                            <td className="px-5 py-4 font-bold text-gray-700 dark:text-gray-300">{item.name}</td>
+                                                                            <td className="px-5 py-4 text-center font-bold text-gray-500">{item.quantity}</td>
+                                                                            <td className="px-5 py-4 text-right font-medium text-gray-500">${(item.price || 0).toFixed(2)}</td>
+                                                                            <td className="px-5 py-4 text-right font-black text-gray-700 dark:text-gray-300">${(item.total || 0).toFixed(2)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                                <tfoot className="bg-gray-50/20 dark:bg-dark-750/30 border-t border-gray-100 dark:border-dark-700">
+                                                                    {(() => {
+                                                                        const displayTotal = (bill.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
+                                                                        const displaySubtotal = displayTotal / 1.15;
+                                                                        const displayTax = displayTotal - displaySubtotal;
+                                                                        return (
+                                                                            <>
+                                                                                <tr>
+                                                                                    <td colSpan={3} className="px-5 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal Sin Impuestos</td>
+                                                                                    <td className="px-5 py-3 text-right font-bold text-gray-600 dark:text-gray-400">${displaySubtotal.toFixed(2)}</td>
+                                                                                </tr>
+                                                                                <tr>
+                                                                                    <td colSpan={3} className="px-5 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">IVA (15%)</td>
+                                                                                    <td className="px-5 py-3 text-right font-bold text-gray-600 dark:text-gray-400">${displayTax.toFixed(2)}</td>
+                                                                                </tr>
+                                                                                <tr className="bg-blue-50/30 dark:bg-blue-900/10">
+                                                                                    <td colSpan={3} className="px-5 py-4 text-right text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Total Factura</td>
+                                                                                    <td className="px-5 py-4 text-right font-black text-blue-700 dark:text-blue-300 text-sm">${displayTotal.toFixed(2)}</td>
+                                                                                </tr>
+                                                                            </>
+                                                                        );
+                                                                    })()}
+                                                                </tfoot>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                ))
+                            )}
+                        </tbody>
                     </table>
                 </div>
 

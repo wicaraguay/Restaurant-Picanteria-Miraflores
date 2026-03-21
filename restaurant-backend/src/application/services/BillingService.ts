@@ -20,46 +20,37 @@ export interface BillingDetail {
 }
 
 export class BillingService {
-    /**
-     * Calculates billing details including taxes for a set of items.
-     * @param items Array of items from an order or bill
-     * @param taxRate Current tax rate (e.g., 15)
-     * @returns Array of BillingDetail with calculated values
-     */
     public calculateDetails(items: any[], taxRate: number = 15): BillingDetail[] {
         const rateDecimal = taxRate / 100;
 
-        return items.map((item: any, index: number) => {
-            // Price can be inclusive or exclusive depending on the context
-            // In GenerateInvoice, price is inclusive
-            // In CheckInvoiceStatus, price is unit price (exclusive)
+        // 1. Calculate individual items and accumulate totals
+        let totalSubtotalSum = 0;
+        let totalTaxSum = 0;
+        let totalInclusiveSum = 0;
 
+        const details = items.map((item: any, index: number) => {
             const quantity = item.quantity || 1;
-            let subtotalRounded: number;
-            let unitPrice: number;
-
             let totalInclusive: number;
 
             if (item.total !== undefined && item.total !== null) {
-                // Explicitly provided total (e.g. from POS or UI)
                 totalInclusive = item.total;
             } else {
-                // Use price as inclusive by default
                 totalInclusive = (item.price || 0) * quantity;
             }
 
             const rawSubtotal = totalInclusive / (1 + rateDecimal);
-            subtotalRounded = parseFloat(rawSubtotal.toFixed(2));
-            unitPrice = parseFloat((subtotalRounded / quantity).toFixed(6));
-
-            // Calculate tax as residue of total to preserve exact 12.99 etc.
+            const subtotalRounded = parseFloat(rawSubtotal.toFixed(2));
             const taxValueRounded = parseFloat((totalInclusive - subtotalRounded).toFixed(2));
+
+            totalSubtotalSum += subtotalRounded;
+            totalTaxSum += taxValueRounded;
+            totalInclusiveSum += totalInclusive;
 
             return {
                 codigoPrincipal: item.id || `ITEM-${index + 1}`,
                 descripcion: item.name,
                 cantidad: quantity,
-                precioUnitario: unitPrice,
+                precioUnitario: parseFloat((subtotalRounded / quantity).toFixed(6)),
                 descuento: 0,
                 precioTotalSinImpuesto: subtotalRounded,
                 impuestos: [{
@@ -71,6 +62,34 @@ export class BillingService {
                 }]
             };
         });
+
+        // 2. PENNY ADJUSTMENT (Total-driven logic)
+        // Mathematically, the subtotal of the WHOLE invoice should be Rounded(Sum(Total) / 1.15)
+        // If the sum of individual subtotals differs, we adjust the last item.
+        if (details.length > 0) {
+            const targetTotalSubtotal = parseFloat((totalInclusiveSum / (1 + rateDecimal)).toFixed(2));
+            const subtotalDifference = parseFloat((targetTotalSubtotal - totalSubtotalSum).toFixed(2));
+
+            if (Math.abs(subtotalDifference) > 0 && Math.abs(subtotalDifference) < 0.10) {
+                console.log(`[BillingService] Applying penny adjustment: ${subtotalDifference > 0 ? '+' : ''}${subtotalDifference} to last item subtotal`);
+                
+                const lastItem = details[details.length - 1];
+                lastItem.precioTotalSinImpuesto = parseFloat((lastItem.precioTotalSinImpuesto + subtotalDifference).toFixed(2));
+                lastItem.precioUnitario = parseFloat((lastItem.precioTotalSinImpuesto / lastItem.cantidad).toFixed(6));
+                
+                // Adjust baseImponible and valor for the last item's tax
+                // Tax MUST be TotalItem - SubtotalItem to keep TotalItem unchanged
+                const lastItemTotal = items[items.length - 1].total || (items[items.length - 1].price * (items[items.length - 1].quantity || 1));
+                const newTaxValue = parseFloat((lastItemTotal - lastItem.precioTotalSinImpuesto).toFixed(2));
+                
+                lastItem.impuestos[0].baseImponible = lastItem.precioTotalSinImpuesto;
+                lastItem.impuestos[0].valor = newTaxValue;
+
+                console.log(`[BillingService] New Last Item: Sub=${lastItem.precioTotalSinImpuesto}, Tax=${newTaxValue}, Total=${(lastItem.precioTotalSinImpuesto + newTaxValue).toFixed(2)}`);
+            }
+        }
+
+        return details;
     }
 
     /**
