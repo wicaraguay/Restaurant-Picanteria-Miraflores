@@ -34,7 +34,8 @@ describe('GenerateInvoice Customer Learning Repro', () => {
             getCurrentDateEcuador: vi.fn().mockReturnValue('17/03/2026'),
             getIdentificacionType: vi.fn().mockReturnValue('05'),
             getLogoUrl: vi.fn().mockReturnValue('logo.png'),
-            validateRealTimeTransmission: vi.fn()
+            validateRealTimeTransmission: vi.fn(),
+            validateConsumidorFinal: vi.fn()
         };
         mockCustomerRepo = {
             findByIdentification: vi.fn(),

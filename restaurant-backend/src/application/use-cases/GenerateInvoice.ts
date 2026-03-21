@@ -40,6 +40,9 @@ export class GenerateInvoice {
         const totalImpuestos = details.reduce((sum, d) => sum + d.impuestos[0].valor, 0);
         const total = subtotal + totalImpuestos;
 
+        // 1.1. Validate Consumidor Final (SRI 2026 Compliance)
+        this.billingService.validateConsumidorFinal(client.identification, total);
+
         // 2. Get Config
         const config = await this.configRepository.get();
         const info = config || {} as any; // Fallback handled in logic or entity
@@ -75,7 +78,7 @@ export class GenerateInvoice {
                 fechaEmision: this.billingService.getCurrentDateEcuador(),
                 obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
                 tipoIdentificacionComprador: this.billingService.getIdentificacionType(client.identification),
-                razonSocialComprador: client.name,
+                razonSocialComprador: String(client.identification) === '9999999999999' ? 'CONSUMIDOR FINAL' : client.name,
                 identificacionComprador: client.identification,
                 direccionComprador: client.address,
                 totalSinImpuestos: subtotal,

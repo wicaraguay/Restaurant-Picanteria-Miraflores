@@ -93,6 +93,7 @@ describe('GenerateInvoice Auto-Learning', () => {
     it('should NOT learn if it is Consumidor Final', async () => {
         const cfRequest = {
             ...validRequest,
+            order: { ...validRequest.order, total: 40 },
             client: { ...validRequest.client, identification: '9999999999999', name: 'CONSUMIDOR FINAL' }
         };
 

@@ -84,12 +84,39 @@ export class BillingService {
 
     /**
      * Maps identification string to SRI identification type
+     * 04: RUC (13 digits)
+     * 05: Cédula (10 digits)
+     * 06: Pasaporte / Identificación Exterior
+     * 07: Consumidor Final (9999999999999)
      */
     public getIdentificacionType(id: string): "04" | "05" | "06" | "07" {
-        if (!id || id === '9999999999999') return '07';
-        if (id.length === 13) return '04';
-        if (id.length === 10) return '05';
+        if (!id || id.trim() === '' || id === '9999999999999') return '07';
+        
+        const cleanId = id.trim();
+        if (cleanId.length === 13 && /^\d+$/.test(cleanId)) return '04';
+        if (cleanId.length === 10 && /^\d+$/.test(cleanId)) return '05';
+        
+        // If it doesn't match RUC or Cédula, assume Passport/Other (06)
+        // Note: For Consumidor Final, it MUST be '07'
         return '06';
+    }
+
+    /**
+     * Validates "Consumidor Final" requirements according to SRI 2026 regulations
+     * Resolution NAC-DGERCGC25-00000017
+     * @param identification - Buyer identification
+     * @param total - Invoice total amount
+     * @throws ValidationError if requirements are not met
+     */
+    public validateConsumidorFinal(identification: string, total: number): void {
+        const isCF = identification === '9999999999999';
+        
+        if (isCF && total >= 50) {
+            throw new ValidationError(
+                `⚠️ Límite de Consumidor Final excedido: Las facturas de $50.00 o más requieren identificación completa ` +
+                `(Resolución SRI NAC-DGERCGC25-00000017). Total actual: $${total.toFixed(2)}.`
+            );
+        }
     }
 
     /**
