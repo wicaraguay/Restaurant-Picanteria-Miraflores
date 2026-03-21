@@ -9,6 +9,7 @@ import { DeleteBill } from '../../../application/use-cases/DeleteBill';
 import { CheckCreditNoteStatus } from '../../../application/use-cases/CheckCreditNoteStatus';
 import { GetCreditNotes } from '../../../application/use-cases/GetCreditNotes';
 import { ResetBillingSystem } from '../../../application/use-cases/ResetBillingSystem';
+import { UpdateBill } from '../../../application/use-cases/UpdateBill';
 
 import { SRIService } from '../../services/SRIService';
 import { PDFService } from '../../services/PDFService';
@@ -34,6 +35,7 @@ export class BillingModule {
     private getCreditNotesUseCase?: GetCreditNotes;
     private checkCreditNoteStatusUseCase?: CheckCreditNoteStatus;
     private resetBillingSystemUseCase?: ResetBillingSystem;
+    private updateBillUseCase?: UpdateBill;
     private billingController?: BillingController;
 
     constructor(private repoModule: RepositoryModule) {}
@@ -170,11 +172,24 @@ export class BillingModule {
         return this.resetBillingSystemUseCase;
     }
 
+    public getUpdateBillUseCase(): UpdateBill {
+        if (!this.updateBillUseCase) {
+            this.updateBillUseCase = new UpdateBill(
+                this.repoModule.getBillRepository(),
+                this.getBillingService()
+            );
+            logger.debug('UpdateBill use case instantiated');
+        }
+        return this.updateBillUseCase;
+    }
+
     public getBillingController(): BillingController {
         if (!this.billingController) {
             this.billingController = new BillingController(
                 this.getGenerateInvoiceUseCase(),
-                this.getCheckInvoiceStatusUseCase()
+                this.getCheckInvoiceStatusUseCase(),
+                this.getUpdateBillUseCase(),
+                this.getGetBillsUseCase()
             );
             logger.debug('BillingController instantiated');
         }

@@ -115,7 +115,7 @@ export abstract class BaseRepository<T> {
         try {
             // Validate and sanitize inputs
             page = Math.max(1, Math.floor(page));
-            limit = Math.min(100, Math.max(1, Math.floor(limit)));
+            limit = Math.min(5000, Math.max(1, Math.floor(limit)));
 
             const skip = (page - 1) * limit;
 

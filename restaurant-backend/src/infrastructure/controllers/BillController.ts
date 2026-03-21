@@ -7,6 +7,7 @@ import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
 import { NotFoundError } from '../../domain/errors/CustomErrors';
 import { PDFService } from '../services/PDFService';
+import { SRIService } from '../services/SRIService';
 import { RestaurantConfigModel } from '../database/schemas/RestaurantConfigSchema';
 
 import { BillingService } from '../../application/services/BillingService';
@@ -17,7 +18,8 @@ export class BillController {
         private getBills: GetBills,
         private deleteBill: DeleteBill,
         private resetBillingSystem: ResetBillingSystem,
-        private billingService: BillingService
+        private billingService: BillingService,
+        private sriService: SRIService
     ) { }
 
     public getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -29,6 +31,13 @@ export class BillController {
             if (req.query.documentNumber) filter.documentNumber = req.query.documentNumber;
             if (req.query.customerIdentification) filter.customerIdentification = req.query.customerIdentification;
             if (req.query.documentType) filter.documentType = req.query.documentType;
+
+            // Filtro por rango de fechas
+            if (req.query.startDate || req.query.endDate) {
+                filter.date = {};
+                if (req.query.startDate) filter.date.$gte = req.query.startDate;
+                if (req.query.endDate) filter.date.$lte = req.query.endDate;
+            }
 
             const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { createdAt: -1 };
 
@@ -70,50 +79,7 @@ export class BillController {
             }
 
             const pdfService = new PDFService();
-            const config: any = await RestaurantConfigModel.findOne();
-            const [estab, ptoEmi, secuencial] = billData.documentNumber.split('-');
-
-            const invoice: any = {
-                orderId: billData.orderId,
-                authorizationDate: billData.authorizationDate,
-                creationDate: billData.createdAt,
-                detalles: billData.items.map(item => ({
-                    descripcion: item.name,
-                    cantidad: item.quantity,
-                    precioUnitario: item.price,
-                    precioTotalSinImpuesto: item.price * item.quantity,
-                    impuestos: [{
-                        codigo: '2',
-                        tarifa: config?.billing?.taxRate || 15,
-                        valor: Math.max(0, item.total - (item.price * item.quantity))
-                    }]
-                })),
-                info: {
-                    estab, ptoEmi, secuencial,
-                    fechaEmision: billData.date,
-                    razonSocialComprador: billData.customerName,
-                    identificacionComprador: billData.customerIdentification,
-                    direccionComprador: billData.customerAddress || 'S/N',
-                    emailComprador: billData.customerEmail,
-                    importeTotal: billData.total,
-                    totalSinImpuestos: billData.subtotal,
-                    totalDescuento: 0,
-                    claveAcceso: billData.accessKey,
-                    ambiente: billData.environment || '1',
-                    ruc: config?.ruc || process.env.RUC || '0000000000001',
-                    razonSocial: config?.businessName || process.env.BUSINESS_NAME || 'RESTAURANTE PICANTERIA',
-                    nombreComercial: config?.name || process.env.COMMERCIAL_NAME,
-                    dirMatriz: config?.address || process.env.DIR_MATRIZ || 'Guayaquil, Ecuador',
-                    dirEstablecimiento: config?.address || process.env.DIR_ESTABLECIMIENTO || process.env.DIR_MATRIZ,
-                    tasaIva: (config?.billing?.taxRate || 15).toString(),
-                    obligadoContabilidad: config?.obligadoContabilidad ? 'SI' : 'NO',
-                    moneda: 'DOLAR',
-                    formaPago: '01',
-                    telefonoComprador: 'S/N',
-                    emailMatriz: config?.fiscalEmail || config?.email || process.env.SMTP_FROM,
-                    logoUrl: this.billingService.getLogoUrl(config)
-                }
-            };
+            const invoice = await this.mapBillToInvoice(billData);
 
             const format = (req.query.format as 'A4' | 'ticket') || 'A4';
             const pdfBuffer = await pdfService.generateInvoicePDF(invoice, format);
@@ -124,6 +90,89 @@ export class BillController {
         } catch (error) {
             next(error);
         }
+    };
+
+    /**
+     * GET /api/bills/:id/xml
+     * Genera y descarga el XML firmado de una factura existente
+     */
+    public generateXml = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.params;
+            logger.info('Generating XML for existing bill', { id });
+
+            const billData = await this.getBills.executeById(id);
+
+            if (!billData) {
+                throw new NotFoundError('La factura no existe en el registro.', 'Bill');
+            }
+
+            if (!billData.accessKey) {
+                throw new Error('Esta transacción no tiene Clave de Acceso generada en el SRI.');
+            }
+
+            const invoice = await this.mapBillToInvoice(billData);
+
+            // Generar y firmar el XML
+            const xml = this.sriService.generateInvoiceXML(invoice, billData.accessKey);
+            const signedXml = await this.sriService.signXML(xml);
+
+            res.setHeader('Content-Type', 'application/xml');
+            res.setHeader('Content-Disposition', `attachment; filename=Factura-${billData.documentNumber}.xml`);
+            res.send(signedXml);
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    /**
+     * Mapea los datos de una Bill persistida al formato Invoice usado por SRI/PDF Service
+     */
+    private mapBillToInvoice = async (billData: any): Promise<any> => {
+        const config: any = await RestaurantConfigModel.findOne();
+        const [estab, ptoEmi, secuencial] = billData.documentNumber.split('-');
+
+        return {
+            orderId: billData.orderId,
+            authorizationDate: billData.authorizationDate,
+            creationDate: billData.createdAt,
+            detalles: billData.items.map((item: any) => ({
+                descripcion: item.name,
+                cantidad: item.quantity,
+                precioUnitario: item.price,
+                precioTotalSinImpuesto: item.price * item.quantity,
+                impuestos: [{
+                    codigo: '2',
+                    tarifa: config?.billing?.taxRate || 15,
+                    valor: Math.max(0, item.total - (item.price * item.quantity))
+                }]
+            })),
+            info: {
+                estab, ptoEmi, secuencial,
+                fechaEmision: billData.date,
+                razonSocialComprador: billData.customerName,
+                identificacionComprador: billData.customerIdentification,
+                direccionComprador: billData.customerAddress || 'S/N',
+                emailComprador: billData.customerEmail,
+                importeTotal: billData.total,
+                totalSinImpuestos: billData.subtotal,
+                totalDescuento: 0,
+                claveAcceso: billData.accessKey,
+                ambiente: billData.environment || '1',
+                ruc: config?.ruc || process.env.RUC || '0000000000001',
+                razonSocial: config?.businessName || process.env.BUSINESS_NAME || 'RESTAURANTE PICANTERIA',
+                nombreComercial: config?.name || process.env.COMMERCIAL_NAME,
+                dirMatriz: config?.address || process.env.DIR_MATRIZ || 'Guayaquil, Ecuador',
+                dirEstablecimiento: config?.address || process.env.DIR_ESTABLECIMIENTO || process.env.DIR_MATRIZ,
+                tasaIva: (config?.billing?.taxRate || 15).toString(),
+                obligadoContabilidad: config?.obligadoContabilidad ? 'SI' : 'NO',
+                moneda: 'DOLAR',
+                formaPago: '01',
+                telefonoComprador: 'S/N',
+                emailMatriz: config?.fiscalEmail || config?.email || process.env.SMTP_FROM,
+                logoUrl: this.billingService.getLogoUrl(config)
+            }
+        };
     };
 
     public delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

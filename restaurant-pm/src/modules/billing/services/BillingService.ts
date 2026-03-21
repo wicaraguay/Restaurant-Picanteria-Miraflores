@@ -115,6 +115,20 @@ export class BillingService {
     public async checkCreditNoteStatus(accessKey: string): Promise<any> {
         return apiService.post('/credit-notes/check-status', { accessKey });
     }
+
+    /**
+     * Actualiza los datos y detalles de una factura
+     */
+    public async updateBill(id: string, data: any): Promise<any> {
+        return apiService.put(`/billing/update-bill/${id}`, data);
+    }
+
+    /**
+     * Re-enviar factura al SRI
+     */
+    public async reSubmit(id: string): Promise<any> {
+        return apiService.post(`/billing/re-submit/${id}`, {});
+    }
 }
 
 export const billingService = BillingService.getInstance();

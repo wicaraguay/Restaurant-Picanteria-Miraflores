@@ -23,8 +23,14 @@ export class GenerateInvoice {
         private customerRepository: ICustomerRepository
     ) { }
 
-    async execute(data: { order: any, client: any, taxRate?: number, logoUrl?: string }): Promise<any> {
-        const { order, client, taxRate = 15, logoUrl } = data;
+    async execute(params: { 
+        order: any, 
+        client: any, 
+        taxRate?: number, 
+        logoUrl?: string,
+        id?: string
+    }): Promise<any> {
+        const { order, client, taxRate = 15, logoUrl } = params;
 
         // Validate Email Format (User Request)
         // Ensure email has correct format to avoid sending typos (commas, extra letters)
@@ -109,12 +115,52 @@ export class GenerateInvoice {
             client.email.includes('@') &&
             client.email.includes('.');
 
-        // 5. Generate XML
+        // 5. ETAPA 1: Crear Borrador en DB
+        const billData: any = {
+            id: params.id, // Reutilizar ID si viene de un re-intento
+            accessKey: undefined,
+            documentNumber: `${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}`,
+            orderId: invoice.orderId,
+            date: now.toISOString(),
+            documentType: 'Factura',
+            customerName: invoice.info.razonSocialComprador,
+            customerIdentification: String(invoice.info.identificacionComprador),
+            customerAddress: invoice.info.direccionComprador,
+            customerEmail: invoice.info.emailComprador,
+            items: details.map(d => {
+                const itemTotal = d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0);
+                return {
+                    name: d.descripcion,
+                    quantity: d.cantidad,
+                    price: parseFloat((itemTotal / d.cantidad).toFixed(6)),
+                    total: itemTotal
+                };
+            }),
+            subtotal: invoice.info.totalSinImpuestos,
+            tax: totalImpuestos,
+            total: invoice.info.importeTotal,
+            sriStatus: 'BORRADOR',
+            environment: invoice.info.ambiente,
+            customerPhone: invoice.info.telefonoComprador,
+            paymentMethod: invoice.info.formaPago,
+            regime: info.billing?.regime || 'General'
+        };
+
+        const draftBill = await this.billRepository.upsert(billData);
+
+        // 6. ETAPA 2: Generar y Firmar XML (VALIDADO)
         const xml = this.sriService.generateInvoiceXML(invoice);
         const signedXml = await this.sriService.signXML(xml);
         const isProd = process.env.SRI_ENV === '2';
 
-        // 6. Send to SRI
+        await this.billRepository.upsert({
+            id: draftBill.id,
+            accessKey: invoice.info.claveAcceso,
+            xmlContent: signedXml,
+            sriStatus: 'VALIDADO'
+        });
+
+        // 7. ETAPA 3: Envío al SRI (AUTORIZADO)
         const result = await this.sriService.sendToSRI(signedXml, isProd);
 
         // 7. Handle Response & Authorization
@@ -171,32 +217,12 @@ export class GenerateInvoice {
             }
         }
 
-        // 8. Persist Bill
+        // 8. Persistir Resultado Final
         await this.billRepository.upsert({
-            accessKey: invoice.info.claveAcceso,
-            documentNumber: `${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}`,
-            orderId: invoice.orderId,
-            date: now.toISOString(), // Storing as ISO String
-            documentType: 'Factura',
-            customerName: invoice.info.razonSocialComprador,
-            customerIdentification: String(invoice.info.identificacionComprador),
-            customerAddress: invoice.info.direccionComprador,
-            customerEmail: invoice.info.emailComprador,
-            items: details.map(d => ({
-                name: d.descripcion,
-                quantity: d.cantidad,
-                price: d.precioUnitario,
-                total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)
-            })),
-            subtotal: invoice.info.totalSinImpuestos,
-            tax: totalImpuestos,
-            total: invoice.info.importeTotal,
+            id: draftBill.id,
             sriStatus: authResult?.estado || result.estado,
-            environment: invoice.info.ambiente,
-            customerPhone: invoice.info.telefonoComprador,
-            paymentMethod: invoice.info.formaPago,
             authorizationDate: authResult?.fechaAutorizacion,
-            regime: info.billing?.regime || 'General'
+            sriMessage: (authResult?.mensajes || result.mensajes || []).join(' ')
         });
 
         // 9. Update Order

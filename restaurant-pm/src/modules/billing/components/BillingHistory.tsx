@@ -1,3 +1,10 @@
+/**
+ * Componente: BillingHistory
+ * Descripción: Vista principal para el historial de facturación electrónica. 
+ * Permite buscar, filtrar, autorizar, consultar estado y emitir notas de crédito.
+ * Estilizado siguiendo el patrón premium de "Operaciones" del sistema POS.
+ * Responsabilidad: Gestión visual de comprobantes emitidos.
+ */
 import React, { useState, useEffect } from 'react';
 import { billingService } from '../services/BillingService';
 import { Bill } from '../types/billing.types';
@@ -5,6 +12,8 @@ import { API_BASE_URL } from '../../../config/api.config';
 import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
 import CreditNoteModal from './CreditNoteModal.tsx';
 import InvoiceProcessingModal, { InvoiceProcessState } from './InvoiceProcessingModal';
+import { XMLViewerModal } from './XMLViewerModal';
+import { EditBillModal } from './EditBillModal';
 
 import {
     SearchIcon,
@@ -17,7 +26,13 @@ import {
     AlertCircleIcon,
     ArrowRightIcon,
     PlusIcon,
-    TrashIcon
+    TrashIcon,
+    LayoutIcon,
+    HistoryIcon,
+    CalendarIcon,
+    ChevronDownIcon,
+    EditIcon,
+    EyeIcon
 } from '../../../components/ui/Icons';
 
 const BillingHistory: React.FC = () => {
@@ -26,8 +41,10 @@ const BillingHistory: React.FC = () => {
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
     const [limit] = useState(15);
+    const [expandedBillIds, setExpandedBillIds] = useState<Set<string>>(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const [idSearch, setIdSearch] = useState('');
+    const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
     const [selectedBillForCreditNote, setSelectedBillForCreditNote] = useState<Bill | null>(null);
     const { config } = useRestaurantConfig();
 
@@ -38,6 +55,12 @@ const BillingHistory: React.FC = () => {
     const [processingDetails, setProcessingDetails] = useState('');
     const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
 
+    // Estados para nuevos modales
+    const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [selectedBillForXml, setSelectedBillForXml] = useState<Bill | null>(null);
+    const [selectedBillForEdit, setSelectedBillForEdit] = useState<Bill | null>(null);
+
     const fetchBills = async () => {
         setIsLoading(true);
         try {
@@ -46,6 +69,11 @@ const BillingHistory: React.FC = () => {
                 limit,
                 sort: { createdAt: -1 }
             };
+
+            if (selectedYear && selectedYear !== 'all') {
+                params.startDate = `${selectedYear}-01-01`;
+                params.endDate = `${selectedYear}-12-31`;
+            }
 
             if (searchTerm) params.customerIdentification = searchTerm;
             if (idSearch) params.documentNumber = idSearch;
@@ -68,12 +96,22 @@ const BillingHistory: React.FC = () => {
 
     useEffect(() => {
         fetchBills();
-    }, [page]);
+    }, [page, selectedYear]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         setPage(1);
         fetchBills();
+    };
+
+    const toggleBillExpansion = (billId: string) => {
+        const newExpanded = new Set(expandedBillIds);
+        if (newExpanded.has(billId)) {
+            newExpanded.delete(billId);
+        } else {
+            newExpanded.add(billId);
+        }
+        setExpandedBillIds(newExpanded);
     };
 
     const handleAuthorize = async (bill: Bill) => {
@@ -96,7 +134,8 @@ const BillingHistory: React.FC = () => {
                 id: item.name,
                 name: item.name,
                 quantity: item.quantity,
-                price: item.quantity > 0 ? (item.total / item.quantity) : 0
+                price: item.price,
+                total: item.total
             }));
 
             // ETAPA 2: Generación
@@ -226,40 +265,101 @@ const BillingHistory: React.FC = () => {
         }
     };
 
-    const handleExportCSV = () => {
-        if (bills.length === 0) return;
+    const handleReSubmit = async (bill: Bill) => {
+        setIsProcessingModalOpen(true);
+        setGeneratedInvoiceNumber(bill.documentNumber || '');
 
-        const headers = ["Fecha", "Numero", "Cliente", "RUC/CI", "Subtotal", "IVA", "Total", "SRI Status", "Clave Acceso"];
-        const rows = bills.map(b => [
-            b.date,
-            b.documentNumber,
-            b.customerName,
-            b.customerIdentification,
-            b.subtotal.toFixed(2),
-            b.tax.toFixed(2),
-            b.total.toFixed(2),
-            b.sriStatus || 'PENDIENTE',
-            `'${b.accessKey || ''}` // Quote to avoid scientific notation in Excel
-        ]);
+        try {
+            setProcessingState(InvoiceProcessState.SENDING);
+            setProcessingMessage('Re-enviando al SRI');
+            setProcessingDetails('Procesando datos actualizados y transmitiendo...');
+            
+            const result = await billingService.reSubmit(bill.id);
 
-        const csvContent = "data:text/csv;charset=utf-8,"
-            + headers.join(",") + "\n"
-            + rows.map(r => r.join(",")).join("\n");
+            if (result.success) {
+                setProcessingState(InvoiceProcessState.WAITING_AUTHORIZATION);
+                setProcessingMessage('Esperando autorización SRI');
+                
+                const sriStatus = result.authorization?.estado || result.sriResponse?.estado;
+                
+                if (sriStatus === 'AUTORIZADO') {
+                    setProcessingState(InvoiceProcessState.AUTHORIZED);
+                    setProcessingMessage('¡Factura autorizada!');
+                } else {
+                    setProcessingState(InvoiceProcessState.PENDING);
+                }
+                await fetchBills();
+            } else {
+                setProcessingState(InvoiceProcessState.ERROR);
+                setProcessingMessage('Error en el re-envío');
+                setProcessingDetails(result.message || 'Error al procesar la solicitud.');
+            }
+        } catch (error) {
+            console.error('Error re-submitting bill:', error);
+            setProcessingState(InvoiceProcessState.ERROR);
+            setProcessingMessage('Error técnico');
+            setProcessingDetails(error instanceof Error ? error.message : 'Error desconocido');
+        }
+    };
 
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `Facturacion_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    const handleExportCSV = async () => {
+        setIsLoading(true);
+        try {
+            // Para la declaración anual, necesitamos TODOS los registros del periodo
+            const params: any = {
+                limit: 5000, // Límite máximo para exportación
+                sort: { date: 1 } // Ordenar por fecha para el reporte
+            };
+
+            if (selectedYear && selectedYear !== 'all') {
+                params.startDate = `${selectedYear}-01-01`;
+                params.endDate = `${selectedYear}-12-31`;
+            }
+
+            const response = await billingService.getAll(params);
+            const allBills = response.data || [];
+
+            if (allBills.length === 0) {
+                alert('No hay facturas en este periodo para exportar.');
+                return;
+            }
+
+            const headers = ["Fecha", "Numero", "Cliente", "RUC/CI", "Subtotal", "IVA", "Total", "SRI Status", "Clave Acceso"];
+            const rows = allBills.map(b => [
+                b.date,
+                b.documentNumber,
+                b.customerName,
+                b.customerIdentification,
+                b.subtotal.toFixed(2),
+                b.tax.toFixed(2),
+                b.total.toFixed(2),
+                b.sriStatus || 'PENDIENTE',
+                `'${b.accessKey || ''}` // Quote to avoid scientific notation in Excel
+            ]);
+
+            const csvContent = "\uFEFF" + headers.join(",") + "\n" + rows.map(r => r.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            const yearSuffix = selectedYear === 'all' ? 'Completo' : selectedYear;
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Facturacion_${yearSuffix}_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error('Error exporting CSV:', error);
+            alert('Error al exportar los datos.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const getStatusBadge = (bill: Bill) => {
-        // Check if bill has been cancelled with a credit note
         if (bill.hasCreditNote === true || bill.sriStatus === 'CANCELLED') {
             return (
-                <span className="flex items-center gap-1 text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                <span className="flex items-center gap-1 text-[9px] font-black bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-800/50 uppercase tracking-tighter">
                     <AlertCircleIcon className="w-3 h-3" /> ANULADO (NC)
                 </span>
             );
@@ -268,20 +368,34 @@ const BillingHistory: React.FC = () => {
         const s = bill.sriStatus?.toUpperCase() || 'UNKNOWN';
         if (s === 'AUTORIZADO') {
             return (
-                <span className="flex items-center gap-1 text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                <span className="flex items-center gap-1 text-[9px] font-black bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-lg border border-green-200 dark:border-green-800/50 uppercase tracking-tighter">
                     <CheckCircleIcon className="w-3 h-3" /> AUTORIZADO
+                </span>
+            );
+        }
+        if (s === 'VALIDADO') {
+            return (
+                <span className="flex items-center gap-1 text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-2.5 py-1 rounded-lg border border-purple-200 dark:border-purple-800/50 uppercase tracking-tighter">
+                    <CheckCircleIcon className="w-3 h-3" /> VALIDADO
+                </span>
+            );
+        }
+        if (s === 'BORRADOR') {
+            return (
+                <span className="flex items-center gap-1 text-[9px] font-black bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 uppercase tracking-tighter">
+                    <FileTextIcon className="w-3 h-3" /> BORRADOR
                 </span>
             );
         }
         if (s === 'RECIBIDA' || s === 'PENDING' || s === 'SENT') {
             return (
-                <span className="flex items-center gap-1 text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                <span className="flex items-center gap-1 text-[9px] font-black bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2.5 py-1 rounded-lg border border-blue-200 dark:border-blue-800/50 uppercase tracking-tighter">
                     <RefreshCcwIcon className="w-3 h-3 animate-spin" /> PROCESANDO
                 </span>
             );
         }
         return (
-            <span className="flex items-center gap-1 text-[10px] font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+            <span className="flex items-center gap-1 text-[9px] font-black bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 uppercase tracking-tighter">
                 <AlertCircleIcon className="w-3 h-3" /> {s}
             </span>
         );
@@ -296,144 +410,222 @@ const BillingHistory: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-light-background flex items-center gap-2">
-                        <FileTextIcon className="text-primary-600" /> Historial de Facturas
-                    </h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">Control de documentos para contabilidad</p>
+        <div className="flex flex-col h-full space-y-8">
+            {/* Cabecera Estilo Operaciones */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                <div className="flex flex-col">
+                    <h1 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Historial</h1>
+                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                        CONTROL DE DOCUMENTOS ELECTRÓNICOS
+                    </p>
                 </div>
 
-                <div className="flex gap-2">
+                {/* Barra de Filtros Integrada */}
+                <div className="flex flex-col md:flex-row gap-3 w-full lg:flex-1 lg:max-w-3xl">
+                    <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 w-full">
+                        <div className="relative flex-1">
+                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <input
+                                type="text"
+                                placeholder="Buscar RUC / Cédula..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 dark:bg-dark-800 dark:border-dark-700 pl-11 pr-4 py-3 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:text-white"
+                            />
+                        </div>
+                        <div className="relative flex-1">
+                            <FileTextIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <input
+                                type="text"
+                                placeholder="Número de Factura..."
+                                value={idSearch}
+                                onChange={(e) => setIdSearch(e.target.value)}
+                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 dark:bg-dark-800 dark:border-dark-700 pl-11 pr-4 py-3 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:text-white"
+                            />
+                        </div>
+                        <div className="relative">
+                            <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <select
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(e.target.value)}
+                                className="appearance-none w-full md:w-32 rounded-2xl border border-gray-200 bg-gray-50 dark:bg-dark-800 dark:border-dark-700 pl-11 pr-8 py-3 text-sm font-bold focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:text-white"
+                            >
+                                <option value="2024">2024</option>
+                                <option value="2025">2025</option>
+                                <option value="2026">2026</option>
+                                <option value="all">TODOS</option>
+                            </select>
+                            <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                        </div>
+                        <button
+                            type="submit"
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] uppercase tracking-widest px-6 py-3.5 rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                        >
+                            Filtrar Reporte
+                        </button>
+                    </form>
+                </div>
+
+                <div className="flex gap-2 w-full lg:w-auto">
                     <button
                         onClick={handleExportCSV}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-green-500/20 transition-all"
+                        className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-green-600 hover:bg-green-700 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-green-500/20 transition-all active:scale-95"
                     >
                         <span>📊</span> Exportar CSV
                     </button>
                     <button
                         onClick={() => { setPage(1); fetchBills(); }}
-                        className="p-2 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg text-gray-600 hover:text-primary-600 shadow-sm transition-all"
+                        className="p-3.5 bg-white dark:bg-dark-800 border border-gray-100 dark:border-dark-700 rounded-2xl text-gray-600 hover:text-blue-600 shadow-lg shadow-black/5 transition-all active:scale-90"
                     >
                         <RefreshCcwIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-dark-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-dark-700">
-                <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="relative">
-                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="RUC / Cédula..."
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-dark-900 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/50"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <div className="relative">
-                        <FileTextIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Número de Factura..."
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-dark-900 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/50"
-                            value={idSearch}
-                            onChange={(e) => setIdSearch(e.target.value)}
-                        />
-                    </div>
-                    <button
-                        type="submit"
-                        className="bg-primary-600 hover:bg-primary-700 text-white font-bold py-2 rounded-xl transition-all"
-                    >
-                        Filtrar Reporte
-                    </button>
-                </form>
-            </div>
-
-            <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-sm border border-gray-100 dark:border-dark-700 overflow-hidden">
-                <div className="overflow-x-auto">
+            <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl shadow-black/5 border border-gray-100 dark:border-dark-700 overflow-hidden animate-slide-up">
+                <div className="overflow-x-auto custom-scroll">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-gray-50 dark:bg-dark-750 border-b border-gray-100 dark:border-dark-700">
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Documento</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Cliente</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Entorno</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Total</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Estado SRI</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Acciones</th>
+                            <tr className="bg-gray-100/50 dark:bg-dark-750 border-b border-gray-100 dark:border-dark-700">
+                                <th className="px-4 py-5 w-10"></th>
+                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Documento</th>
+                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Cliente</th>
+                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Ambiente</th>
+                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Monto Total</th>
+                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Estado SRI</th>
+                                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-dark-700 text-sm">
                             {isLoading ? (
                                 Array(3).fill(0).map((_, i) => (
                                     <tr key={i} className="animate-pulse">
-                                        <td colSpan={6} className="px-6 py-4">
+                                        <td colSpan={7} className="px-6 py-4">
                                             <div className="h-4 bg-gray-100 dark:bg-dark-700 rounded w-full"></div>
                                         </td>
                                     </tr>
                                 ))
                             ) : bills.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                                         No hay facturas registradas.
                                     </td>
                                 </tr>
                             ) : (
                                 bills.map((bill) => (
-                                    <tr key={bill.id} className="hover:bg-gray-50 dark:hover:bg-dark-750 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-gray-800 dark:text-gray-200">{bill.documentNumber}</div>
-                                            <div className="text-[10px] text-gray-400">{bill.date}</div>
+                                    <React.Fragment key={bill.id}>
+                                        <tr className="hover:bg-gray-50 dark:hover:bg-dark-750 transition-colors">
+                                            <td className="px-4 py-4 text-center">
+                                                <button 
+                                                    onClick={() => toggleBillExpansion(bill.id)}
+                                                    className={`p-1.5 rounded-lg transition-transform duration-200 ${expandedBillIds.has(bill.id) ? 'rotate-180 bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'text-gray-400'}`}
+                                                >
+                                                    <ChevronDownIcon className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                            <div className="font-black text-gray-900 dark:text-gray-100">{bill.documentNumber}</div>
+                                            <div className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                                <HistoryIcon className="w-3 h-3" /> {bill.date}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="font-medium text-gray-800 dark:text-gray-200">{bill.customerName}</div>
-                                            <div className="text-xs text-gray-500">{bill.customerIdentification}</div>
+                                            <div className="font-bold text-gray-800 dark:text-gray-200">{bill.customerName}</div>
+                                            <div className="text-[10px] font-bold text-blue-600/60 dark:text-blue-400/60 uppercase tracking-wider">{bill.customerIdentification}</div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             {bill.environment === '2' ? (
-                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 uppercase">
                                                     PRODUCCIÓN
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 uppercase">
                                                     PRUEBAS
                                                 </span>
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <div className="font-bold text-primary-600">${(bill.total || 0).toFixed(2)}</div>
-                                            <div className="text-[10px] text-gray-400">Sub: ${(bill.subtotal || 0).toFixed(2)}</div>
+                                            {(() => {
+                                                const displayTotal = (bill.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
+                                                const displaySubtotal = displayTotal / 1.15;
+                                                return (
+                                                    <>
+                                                        <div className="font-black text-blue-600 dark:text-blue-400 text-base">${displayTotal.toFixed(2)}</div>
+                                                        <div className="text-[10px] font-bold text-gray-400 tracking-tighter uppercase">Sub: ${displaySubtotal.toFixed(2)}</div>
+                                                    </>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                            <div className="flex justify-center mb-1">
+                                            <div className="flex justify-center mb-1.5">
                                                 {getStatusBadge(bill)}
                                             </div>
-                                            <div className="text-[9px] font-mono text-gray-400 whitespace-nowrap mx-auto" title={bill.accessKey}>
+                                            <div className="text-[8px] font-mono text-gray-400 bg-gray-50 dark:bg-dark-900 px-2 py-1 rounded-md border border-gray-100 dark:border-dark-700 max-w-[140px] truncate mx-auto" title={bill.accessKey}>
                                                 {bill.accessKey}
                                             </div>
+                                            {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                <div 
+                                                    onClick={() => {
+                                                        setSelectedBillForXml(bill);
+                                                        setIsXmlModalOpen(true);
+                                                    }}
+                                                    className="mt-2 text-[7px] font-bold text-gray-400 dark:text-gray-500 leading-tight max-w-[140px] mx-auto italic uppercase tracking-tighter cursor-pointer hover:text-blue-500 text-center" 
+                                                    title="Haz clic para ver el XML técnico"
+                                                >
+                                                    {(() => {
+                                                        const msg = (bill.sriMessage || '').toLowerCase();
+                                                        const status = bill.sriStatus || '';
+                                                        
+                                                        const isUser = msg.includes('identificacion') || msg.includes('ruc') || msg.includes('secuencial') || msg.includes('datos') || msg.includes('cliente') || msg.includes('razon social') || msg.includes('email') || msg.includes('estructura') || msg.includes('impuesto');
+                                                        const isSRI = msg.includes('sri') || msg.includes('interno') || msg.includes('servidor') || msg.includes('mantenimiento') || msg.includes('conexion') || msg.includes('timeout') || msg.includes('500');
+
+                                                        if (isUser) return 'FALLO: ERROR DEL USUARIO (VER XML)';
+                                                        if (isSRI) return 'FALLO: ERROR DEL SRI (VER XML)';
+                                                        
+                                                        if (status === 'DEVUELTA' || status === 'RECHAZADA') return 'FALLO: ERROR DEL USUARIO (VER XML)';
+                                                        if (status === 'ERROR' || status === 'TIMEOUT' || status === 'PENDING') return 'FALLO: ERROR DEL SRI (VER XML)';
+                                                        
+                                                        return 'FALLO: ERROR DEL SRI (VER XML)';
+                                                    })()}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end items-center gap-1">
                                                 {/* PRIMARY ACTIONS (Print & Status) */}
+
+                                                {/* Edit Client Data (Only for failed/draft) */}
+                                                {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedBillForEdit(bill);
+                                                            setIsEditModalOpen(true);
+                                                        }}
+                                                        className="p-2 bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-600 dark:bg-dark-700 dark:text-gray-400 rounded-xl transition-all"
+                                                        title="Editar datos del cliente"
+                                                    >
+                                                        <EditIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
 
                                                 {/* Check Status / Retry */}
                                                 {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
                                                     <button
                                                         onClick={async (e) => {
                                                             e.stopPropagation();
-                                                            if (!bill.accessKey) {
-                                                                await handleAuthorize(bill);
+                                                            if (!bill.accessKey || bill.sriStatus === 'BORRADOR' || bill.sriStatus === 'ERROR') {
+                                                                await handleReSubmit(bill);
                                                             } else {
                                                                 await handleCheckStatus(bill);
                                                             }
                                                         }}
-                                                        className={`p-2 rounded-xl transition-all shadow-sm ${!bill.accessKey
+                                                        className={`p-2 rounded-xl transition-all shadow-sm ${(!bill.accessKey || bill.sriStatus === 'BORRADOR')
                                                             ? 'bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400'
                                                             : 'bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400'
                                                             }`}
-                                                        title={!bill.accessKey ? "Generar NUEVA factura" : "Actualizar Estado SRI"}
+                                                        title={(!bill.accessKey || bill.sriStatus === 'BORRADOR') ? "Re-intentar envío SRI" : "Actualizar Estado SRI"}
                                                     >
                                                         <RefreshCcwIcon className="w-4 h-4" />
                                                     </button>
@@ -454,6 +646,18 @@ const BillingHistory: React.FC = () => {
                                                 >
                                                     <div className="flex items-center justify-center w-4 h-4 border border-current rounded-[4px] text-[8px] font-bold">
                                                         T
+                                                    </div>
+                                                </button>
+
+                                                {/* Download XML */}
+                                                <button
+                                                    onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/xml`, '_blank')}
+                                                    className="p-2 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all"
+                                                    title="Descargar XML Firmado (Legal)"
+                                                    disabled={bill.sriStatus !== 'AUTORIZADO'}
+                                                >
+                                                    <div className="flex items-center justify-center w-4 h-4 border border-current rounded-[4px] text-[8px] font-bold">
+                                                        XML
                                                     </div>
                                                 </button>
 
@@ -516,33 +720,105 @@ const BillingHistory: React.FC = () => {
                                             </div>
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
+                                    {/* EXPANDED SECTION: ITEMS DETAIL */}
+                                    {expandedBillIds.has(bill.id) && (
+                                        <tr className="bg-gray-50/30 dark:bg-dark-900/40 animate-in slide-in-from-top-2 duration-300">
+                                            <td colSpan={7} className="px-6 py-6 pb-8 border-b border-gray-100 dark:border-dark-700">
+                                                <div className="max-w-3xl mx-auto space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                                                            <LayoutIcon className="w-3 h-3" /> Detalle de Productos Consumidos
+                                                        </h4>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-dark-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-dark-700 shadow-sm">
+                                                        <table className="w-full text-xs border-collapse">
+                                                            <thead className="bg-gray-50/50 dark:bg-dark-750 text-gray-400 font-bold uppercase tracking-widest text-[9px] border-b border-gray-100 dark:border-dark-700">
+                                                                <tr>
+                                                                    <th className="px-5 py-3 text-left">Producto</th>
+                                                                    <th className="px-5 py-3 text-center w-24">Cant.</th>
+                                                                    <th className="px-5 py-3 text-right w-32">P. Unit.</th>
+                                                                    <th className="px-5 py-3 text-right w-32">Subtotal</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-gray-50 dark:divide-dark-750">
+                                                                {bill.items?.map((item, idx) => (
+                                                                    <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-dark-700/50 transition-colors">
+                                                                        <td className="px-5 py-4 font-bold text-gray-700 dark:text-gray-300">{item.name}</td>
+                                                                        <td className="px-5 py-4 text-center font-bold text-gray-500">{item.quantity}</td>
+                                                                        <td className="px-5 py-4 text-right font-medium text-gray-500">${(item.price || 0).toFixed(2)}</td>
+                                                                        <td className="px-5 py-4 text-right font-black text-gray-700 dark:text-gray-300">${(item.total || 0).toFixed(2)}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                            <tfoot className="bg-gray-50/20 dark:bg-dark-750/30 border-t border-gray-100 dark:border-dark-700">
+                                                                {(() => {
+                                                                    const displayTotal = (bill.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
+                                                                    const displaySubtotal = displayTotal / 1.15;
+                                                                    const displayTax = displayTotal - displaySubtotal;
+                                                                    return (
+                                                                        <>
+                                                                            <tr>
+                                                                                <td colSpan={3} className="px-5 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal Sin Impuestos</td>
+                                                                                <td className="px-5 py-3 text-right font-bold text-gray-600 dark:text-gray-400">${displaySubtotal.toFixed(2)}</td>
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td colSpan={3} className="px-5 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">IVA (15%)</td>
+                                                                                <td className="px-5 py-3 text-right font-bold text-gray-600 dark:text-gray-400">${displayTax.toFixed(2)}</td>
+                                                                            </tr>
+                                                                            <tr className="bg-blue-50/30 dark:bg-blue-900/10">
+                                                                                <td colSpan={3} className="px-5 py-4 text-right text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Total Factura</td>
+                                                                                <td className="px-5 py-4 text-right font-black text-blue-700 dark:text-blue-300 text-sm">${displayTotal.toFixed(2)}</td>
+                                                                            </tr>
+                                                                        </>
+                                                                    );
+                                                                })()}
+                                                            </tfoot>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
+                            ))
+                        )}
+                    </tbody>
                     </table>
                 </div>
 
-                <div className="px-6 py-4 bg-gray-50 dark:bg-dark-750 border-t border-gray-100 dark:border-dark-700 flex items-center justify-between">
-                    <span className="text-xs text-gray-500 font-medium">Mostrando {bills.length} de {total} comprobantes</span>
-                    <div className="flex gap-2">
+                {/* Paginación Estilo Premium */}
+                <div className="px-6 py-8 bg-gray-50/50 dark:bg-dark-750/50 border-t border-gray-100 dark:border-dark-700 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest order-2 md:order-1">
+                        Mostrando {bills.length} de {total} comprobantes
+                    </span>
+
+                    <div className="flex items-center gap-4 order-1 md:order-2">
                         <button
                             onClick={() => setPage(p => Math.max(1, p - 1))}
                             disabled={page === 1}
-                            className="p-1.5 rounded-lg bg-white dark:bg-dark-800 border dark:border-dark-700 disabled:opacity-50 hover:border-primary-500 transition-all shadow-sm"
+                            aria-label="Anterior"
+                            className="p-3 rounded-2xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-dark-700 transition-all shadow-xl shadow-black/5 active:scale-90"
                         >
                             <ChevronLeftIcon className="w-5 h-5" />
                         </button>
-                        <span className="flex items-center px-4 text-sm font-bold text-gray-700 dark:text-gray-300">
-                            {page}
-                        </span>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-5 py-2.5 rounded-2xl border border-blue-100 dark:border-blue-800/50 shadow-inner">
+                                PÁGINA {page}
+                            </span>
+                        </div>
+
                         <button
                             onClick={() => setPage(p => p + 1)}
                             disabled={bills.length < limit}
-                            className="p-1.5 rounded-lg bg-white dark:bg-dark-800 border dark:border-dark-700 disabled:opacity-50 hover:border-primary-500 transition-all shadow-sm"
+                            aria-label="Siguiente"
+                            className="p-3 rounded-2xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-dark-700 transition-all shadow-xl shadow-black/5 active:scale-90"
                         >
                             <ChevronRightIcon className="w-5 h-5" />
                         </button>
                     </div>
+
+                    <div className="hidden md:block w-[200px] order-3"></div>
                 </div>
             </div>
 
@@ -563,7 +839,6 @@ const BillingHistory: React.FC = () => {
                 )
             }
 
-            {/* Invoice Processing Modal */}
             <InvoiceProcessingModal
                 isOpen={isProcessingModalOpen}
                 currentState={processingState}
@@ -573,6 +848,25 @@ const BillingHistory: React.FC = () => {
                 onClose={handleCloseProcessingModal}
                 onPrint={undefined}
                 onGoToHistory={undefined}
+            />
+
+            {/* XML Viewer Modal */}
+            <XMLViewerModal
+                isOpen={isXmlModalOpen}
+                onClose={() => setIsXmlModalOpen(false)}
+                xmlContent={selectedBillForXml?.xmlContent || ''}
+                documentNumber={selectedBillForXml?.documentNumber}
+            />
+
+            {/* Edit Bill Modal */}
+            <EditBillModal
+                isOpen={isEditModalOpen}
+                bill={selectedBillForEdit}
+                onClose={() => setIsEditModalOpen(false)}
+                onSave={async (id, data) => {
+                    await billingService.updateBill(id, data);
+                    await fetchBills();
+                }}
             />
         </div >
     );

@@ -47,7 +47,9 @@ const BillSchema = new Schema({
     pdfUrl: { type: String },
     hasCreditNote: { type: Boolean, default: false },
     customerPhone: { type: String },
-    paymentMethod: { type: String }
+    paymentMethod: { type: String },
+    sriMessage: { type: String },
+    xmlContent: { type: String }
 }, {
     timestamps: true
 });

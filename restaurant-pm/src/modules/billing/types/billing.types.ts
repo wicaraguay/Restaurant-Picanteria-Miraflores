@@ -6,6 +6,7 @@
 export interface BillItem {
     name: string;
     quantity: number;
+    price: number;
     total: number;
 }
 
@@ -27,5 +28,7 @@ export interface Bill {
     sriStatus?: string;
     accessKey?: string;
     environment?: string;
+    sriMessage?: string;
+    xmlContent?: string;
     hasCreditNote?: boolean;
 }

@@ -51,6 +51,8 @@ export class Bill {
         public readonly hasCreditNote?: boolean,
         public readonly customerPhone?: string,
         public readonly paymentMethod?: string,
+        public readonly sriMessage?: string,
+        public readonly xmlContent?: string,
         public readonly createdAt?: Date
     ) { }
 }

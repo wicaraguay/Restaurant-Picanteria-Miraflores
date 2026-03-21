@@ -19,7 +19,8 @@ const billController = new BillController(
     container.getGetBillsUseCase(),
     container.getDeleteBillUseCase(),
     container.getResetBillingSystemUseCase(),
-    container.getBillingService()
+    container.getBillingService(),
+    container.getSRIService()
 );
 
 /**
@@ -39,6 +40,12 @@ router.post('/', billController.create);
  * Descargar PDF de una factura existente
  */
 router.get('/:id/pdf', billController.generatePdf);
+
+/**
+ * GET /api/bills/:id/xml
+ * Descargar XML firmado de una factura existente
+ */
+router.get('/:id/xml', billController.generateXml);
 
 /**
  * DELETE /api/bills/:id

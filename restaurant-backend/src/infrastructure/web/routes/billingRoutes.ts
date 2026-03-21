@@ -26,4 +26,16 @@ router.post('/generate-xml', billingController.generateXml);
  */
 router.post('/check-status/:accessKey', billingController.checkStatus);
 
+/**
+ * PUT /api/billing/update-bill/:id
+ * Actualiza los datos y detalles (items) de una factura fallida
+ */
+router.put('/update-bill/:id', billingController.updateBill);
+
+/**
+ * POST /api/billing/re-submit/:id
+ * Re-intenta el envío de una factura al SRI tras correcciones
+ */
+router.post('/re-submit/:id', billingController.reSubmit);
+
 export default router;

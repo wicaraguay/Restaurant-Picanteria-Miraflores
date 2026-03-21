@@ -101,7 +101,8 @@ export class CheckInvoiceStatus {
                         id: fullBill.id,
                         accessKey: invoiceToResend.info.claveAcceso,
                         date: new Date().toISOString(), // CRITICAL: Sync DB date with new Invoice Date
-                        sriStatus: 'PENDING_RETRY'
+                        sriStatus: 'PENDING_RETRY',
+                        sriMessage: (authResult?.mensajes || []).join(' ')
                     });
                     // Update local ref
                     (fullBill as any).accessKey = invoiceToResend.info.claveAcceso;
@@ -134,7 +135,8 @@ export class CheckInvoiceStatus {
                                 id: fullBill.id,
                                 accessKey: finalXmlKey,
                                 documentNumber: `${estab}-${ptoEmi}-${newSecuencial}`,
-                                sriStatus: 'PENDING_RETRY'
+                                sriStatus: 'PENDING_RETRY',
+                                sriMessage: (retryResult?.mensajes || []).join(' ')
                             });
                             const retryAuth = await this.sriService.waitForAuthorization(finalXmlKey!, isProd);
                             if (retryAuth?.estado === 'AUTORIZADO') {
@@ -165,7 +167,8 @@ export class CheckInvoiceStatus {
             accessKey: bill.accessKey,
             sriStatus: 'AUTORIZADO',
             authorizationDate: authResult.fechaAutorizacion,
-            environment: isProd ? '2' : '1'
+            environment: isProd ? '2' : '1',
+            sriMessage: ''
         });
 
         // 3. Send Email

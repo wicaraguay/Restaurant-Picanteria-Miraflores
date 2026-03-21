@@ -40,6 +40,8 @@ export class MongoBillRepository extends BaseRepository<Bill> implements IBillRe
             doc.hasCreditNote,
             doc.customerPhone,
             doc.paymentMethod,
+            doc.sriMessage,
+            doc.xmlContent,
             doc.createdAt
         );
     }
@@ -58,8 +60,14 @@ export class MongoBillRepository extends BaseRepository<Bill> implements IBillRe
                 { $set: bill },
                 { new: true, upsert: true }
             );
+        } else if (bill.documentNumber) {
+            doc = await this.model.findOneAndUpdate(
+                { documentNumber: bill.documentNumber },
+                { $set: bill },
+                { new: true, upsert: true }
+            );
         } else {
-            throw new Error('Bill upsert requires id or accessKey');
+            throw new Error('Bill upsert requires id, accessKey or documentNumber');
         }
 
         if (!doc) throw new Error('Failed to upsert bill');

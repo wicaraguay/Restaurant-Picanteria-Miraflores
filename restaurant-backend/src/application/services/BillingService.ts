@@ -38,20 +38,22 @@ export class BillingService {
             let subtotalRounded: number;
             let unitPrice: number;
 
+            let totalInclusive: number;
+
             if (item.total !== undefined && item.total !== null) {
-                // Calculation for inclusive price (from order)
-                const totalInclusive = item.total;
-                const rawSubtotal = totalInclusive / (1 + rateDecimal);
-                subtotalRounded = parseFloat(rawSubtotal.toFixed(2));
-                unitPrice = parseFloat((subtotalRounded / quantity).toFixed(6));
+                // Explicitly provided total (e.g. from POS or UI)
+                totalInclusive = item.total;
             } else {
-                // Calculation for exclusive price (from unit price)
-                const rawTotalSinImpuesto = (item.price || 0) * quantity;
-                subtotalRounded = parseFloat(rawTotalSinImpuesto.toFixed(2));
-                unitPrice = item.price || 0;
+                // Use price as inclusive by default
+                totalInclusive = (item.price || 0) * quantity;
             }
 
-            const taxValueRounded = parseFloat((subtotalRounded * rateDecimal).toFixed(2));
+            const rawSubtotal = totalInclusive / (1 + rateDecimal);
+            subtotalRounded = parseFloat(rawSubtotal.toFixed(2));
+            unitPrice = parseFloat((subtotalRounded / quantity).toFixed(6));
+
+            // Calculate tax as residue of total to preserve exact 12.99 etc.
+            const taxValueRounded = parseFloat((totalInclusive - subtotalRounded).toFixed(2));
 
             return {
                 codigoPrincipal: item.id || `ITEM-${index + 1}`,
