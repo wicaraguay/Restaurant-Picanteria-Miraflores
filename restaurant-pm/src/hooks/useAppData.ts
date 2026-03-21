@@ -30,7 +30,7 @@ export function useAppData() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const { setCustomers, setOrders, setMenuItems, setBills } = useAppState();
+    const { setCustomers, setOrders, setMenuItems, setBills, setEmployees, setRoles } = useAppState();
     const { updateConfig } = useRestaurantConfig();
 
     /**
@@ -50,6 +50,8 @@ export function useAppData() {
             setOrders(data.orders);
             setMenuItems(data.menu);
             setBills(data.bills);
+            setEmployees(data.employees);
+            setRoles(data.roles);
 
             // Actualizar configuración si existe
             if (data.config) {

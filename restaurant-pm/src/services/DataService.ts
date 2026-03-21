@@ -26,6 +26,7 @@ import { Order } from '../modules/orders/types/order.types';
 import { MenuItem } from '../modules/menu/types/menu.types';
 import { orderService } from '../modules/orders/services/OrderService';
 import { menuService } from '../modules/menu/services/MenuService';
+import { Employee, Role } from '../modules/hr/types/hr.types';
 
 /**
  * DataService - Singleton para gestión de datos
@@ -319,6 +320,44 @@ export class DataService {
     }
 
     /**
+     * Obtiene todos los empleados
+     */
+    public async getEmployees(): Promise<Employee[]> {
+        const cacheKey = 'employees';
+        const cached = this.getFromCache<Employee[]>(cacheKey);
+        if (cached) return cached;
+
+        try {
+            logger.debug('Fetching employees from API');
+            const data = await api.employees.getAll();
+            this.saveToCache(cacheKey, data);
+            return data;
+        } catch (error) {
+            logger.warn('Failed to fetch employees, returning empty array', error);
+            return [];
+        }
+    }
+
+    /**
+     * Obtiene todos los roles
+     */
+    public async getRoles(): Promise<Role[]> {
+        const cacheKey = 'roles';
+        const cached = this.getFromCache<Role[]>(cacheKey);
+        if (cached) return cached;
+
+        try {
+            logger.debug('Fetching roles from API');
+            const data = await api.roles.getAll();
+            this.saveToCache(cacheKey, data);
+            return data;
+        } catch (error) {
+            logger.warn('Failed to fetch roles, returning empty array', error);
+            return [];
+        }
+    }
+
+    /**
      * Carga todos los datos iniciales
      */
     public async loadAllData(): Promise<{
@@ -326,21 +365,25 @@ export class DataService {
         orders: Order[];
         menu: MenuItem[];
         bills: Bill[];
+        employees: Employee[];
+        roles: Role[];
         config: RestaurantConfig | null;
     }> {
         logger.info('Loading all initial data');
 
-        const [customers, orders, menu, bills, config] = await Promise.all([
+        const [customers, orders, menu, bills, config, employees, roles] = await Promise.all([
             this.getCustomers(),
             this.getOrders(),
             this.getMenu(),
             this.getBills(),
-            this.getConfig()
+            this.getConfig(),
+            this.getEmployees(),
+            this.getRoles()
         ]);
 
         logger.info('All initial data loaded successfully');
 
-        return { customers, orders, menu, bills, config };
+        return { customers, orders, menu, bills, config, employees, roles };
     }
 }
 

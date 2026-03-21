@@ -43,11 +43,18 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Rate limiting to prevent abuse
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // Limit each IP to 1000 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.',
+    windowMs: 15 * 60 * 1000, 
+    max: 10000, // Aumentado significativamente para evitar bloqueos por polling (5s/10s)
     standardHeaders: true,
     legacyHeaders: false,
+    handler: (req, res) => {
+        logger.warn('Rate limit exceeded', { ip: req.ip, path: req.path });
+        res.status(429).json({
+            status: 'error',
+            message: 'Límite de peticiones alcanzado (10,000 / 15min). Por favor espera un momento.',
+            code: 'TOO_MANY_REQUESTS'
+        });
+    }
 });
 app.use(limiter);
 

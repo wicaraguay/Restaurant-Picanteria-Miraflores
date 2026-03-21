@@ -153,8 +153,9 @@ export abstract class BaseRepository<T> {
      */
     async update(id: string, entity: Partial<T>): Promise<T | null> {
         try {
-            logger.debug(`Updating ${this.entityName}`, { id, entity });
-            const updated = await this.model.findByIdAndUpdate(id, entity, { new: true });
+            logger.info(`Updating ${this.entityName} starting...`, { id, payload: JSON.stringify(entity) });
+            // Usamos $set explícitamente para asegurar que objetos anidados (como Map/shifts) se actualicen correctamente
+            const updated = await this.model.findByIdAndUpdate(id, { $set: entity }, { new: true });
 
             if (!updated) {
                 logger.debug(`${this.entityName} not found for update`, { id });

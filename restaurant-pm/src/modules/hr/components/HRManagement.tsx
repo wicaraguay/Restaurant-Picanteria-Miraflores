@@ -30,25 +30,8 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
     const [editingRole, setEditingRole] = useState<Role | null>(null);
     const [loading, setLoading] = useState(false);
 
-    // Cargar datos iniciales (empleados y roles)
-    useEffect(() => {
-        const loadInitialData = async () => {
-            try {
-                setLoading(true);
-                const [employeesData, rolesData] = await Promise.all([
-                    api.employees.getAll(),
-                    api.roles.getAll()
-                ]);
-                setEmployees(employeesData);
-                setRoles(rolesData);
-            } catch (error) {
-                console.error('Error loading HR data:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadInitialData();
-    }, [setEmployees, setRoles]);
+    // Los datos iniciales ya son cargados por useAppData en AdminApp
+    // y pasados aquí como props. Esto evita bucles infinitos.
 
     const handleOpenEmployeeModal = (employee: Employee | null) => {
         if (roles.length === 0) {
@@ -142,8 +125,10 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
     const currentDayName = DAYS_OF_WEEK[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]; // Ajuste para que Lunes sea 0 y Domingo 6 si es necesario, pero DAYS_OF_WEEK asumo que es L-D.
     // Verificamos el primer día de DAYS_OF_WEEK
     const getActualDayName = () => {
-        const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
-        return days[new Date().getDay()];
+        // Date.getDay() -> 0: Domingo, 1: Lunes, ..., 6: Sabado
+        const dayIndex = new Date().getDay();
+        const daysReordered = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
+        return daysReordered[dayIndex];
     };
     const actualDay = getActualDayName();
 
@@ -196,7 +181,7 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
                         })}
                     </div>
 
-                    {employees.length === 0 && !loading && (
+                    {employees.length === 0 && (
                         <div className="text-center py-20 bg-white dark:bg-dark-800 rounded-3xl border-2 border-dashed border-gray-100 dark:border-dark-700">
                             <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">No hay empleados registrados</p>
                         </div>

@@ -42,4 +42,4 @@ const roleSchema = new mongoose.Schema({
 // Índice para búsquedas rápidas por nombre
 roleSchema.index({ name: 1 });
 
-export const RoleModel = mongoose.model('Role', roleSchema);
+export const RoleModel = mongoose.models.Role || mongoose.model('Role', roleSchema);
