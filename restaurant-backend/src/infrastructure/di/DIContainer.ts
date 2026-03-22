@@ -58,8 +58,11 @@ import { DeleteBill } from '../../application/use-cases/DeleteBill';
 import { GenerateCreditNote } from '../../application/use-cases/GenerateCreditNote';
 import { GetCreditNotes } from '../../application/use-cases/GetCreditNotes';
 import { CheckCreditNoteStatus } from '../../application/use-cases/CheckCreditNoteStatus';
+import { RetryInvoices } from '../../application/use-cases/RetryInvoices';
+import { CronService } from '../services/CronService';
 import { GetRoles } from '../../application/use-cases/GetRoles';
 import { CreateRole } from '../../application/use-cases/CreateRole';
+
 import { UpdateRole } from '../../application/use-cases/UpdateRole';
 import { DeleteRole } from '../../application/use-cases/DeleteRole';
 import { GetEmployees } from '../../application/use-cases/GetEmployees';
@@ -151,6 +154,9 @@ export class DIContainer {
     public getCheckCreditNoteStatusUseCase(): CheckCreditNoteStatus { return this.billingModule.getCheckCreditNoteStatusUseCase(); }
     public getResetBillingSystemUseCase(): ResetBillingSystem { return this.billingModule.getResetBillingSystemUseCase(); }
     public getResetFullSystemUseCase(): ResetFullSystem { return this.billingModule.getResetFullSystemUseCase(); }
+    public getRetryInvoicesUseCase(): RetryInvoices { return this.billingModule.getRetryInvoicesUseCase(); }
+    public getCronService(): CronService { return this.billingModule.getCronService(); }
+
 
     // --- Controllers ---
     public getOrderController(): OrderController { return this.orderModule.getOrderController(); }

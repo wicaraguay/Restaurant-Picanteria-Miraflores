@@ -1,0 +1,18 @@
+﻿
+> restaurant-backend@1.0.0 test
+> vitest test/unit/use-cases/UpdateBillSequential.test.ts --run
+
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90mC:/Users/WILLY/Desktop/Projects/PM-project/restaurant-backend[39m
+
+ [31mÔØ»[39m test/unit/use-cases/UpdateBillSequential.test.ts [2m([22m[2m4 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 34[2mms[22m[39m
+     [32mÔ£ô[39m should block editing if bill is in PENDING state[32m 8[2mms[22m[39m
+     [32mÔ£ô[39m should preserve documentNumber and clear metadata when updating a bill[32m 6[2mms[22m[39m
+[31m     [31m├ù[31m should reuse existing sequential in GenerateInvoice if provided[39m[32m 14[2mms[22m[39m
+[31m     [31m├ù[31m should generate NEW sequential in GenerateInvoice if bill has no documentNumber[39m[32m 3[2mms[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (4)[39m
+[2m   Start at [22m 02:32:25
+[2m   Duration [22m 938ms[2m (transform 193ms, setup 0ms, import 256ms, tests 34ms, environment 0ms)[22m
+

@@ -56,11 +56,26 @@ export class GenerateInvoice {
         console.log('[GenerateInvoice] Config from DB:', !!config, 'Logo field:', info.logo ? 'EXISTS' : 'MISSING', 'Fiscal Logo field:', info.fiscalLogo ? 'EXISTS' : 'MISSING');
         if (info.logo) console.log('[GenerateInvoice] Logo starts with:', info.logo.substring(0, 30));
 
-        // 3. Get Next Sequential (Atomic Operation)
-        // CRITICAL: This ensures each invoice has a unique sequential number
-        // preventing duplicate access key errors from SRI
-        const nextSequential = await this.configRepository.getNextSequential();
-        const secuencial = nextSequential.toString().padStart(9, '0');
+        // 3. Get Next Sequential (Atomic Operation) or Reuse existing one
+        let secuencial: string;
+        let existingBill = null;
+
+        if (params.id) {
+            existingBill = await this.billRepository.findById(params.id);
+        }
+
+        if (existingBill && existingBill.documentNumber) {
+            // Reuse existing sequential to avoid gaps (User Request)
+            const parts = existingBill.documentNumber.split('-');
+            secuencial = parts[parts.length - 1];
+            console.log(`[GenerateInvoice] Reusing existing sequential: ${secuencial} for bill ${params.id}`);
+        } else {
+            // CRITICAL: This ensures each invoice has a unique sequential number
+            // preventing duplicate access key errors from SRI
+            const nextSequential = await this.configRepository.getNextSequential();
+            secuencial = nextSequential.toString().padStart(9, '0');
+            console.log(`[GenerateInvoice] New sequential generated: ${secuencial}`);
+        }
 
         // 4. Build Invoice Object
         const now = new Date();

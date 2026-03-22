@@ -8,7 +8,9 @@
  */
 
 import 'dotenv/config';
+console.log('DEBUG: main.ts is starting...');
 import express from 'express';
+
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -28,6 +30,8 @@ import roleRoutes from './infrastructure/web/routes/roleRoutes';
 import creditNoteRoutes from './infrastructure/web/routes/creditNoteRoutes';
 import dashboardRoutes from './infrastructure/web/routes/dashboard.routes';
 import { cacheService } from './infrastructure/utils/CacheService';
+import { container } from './infrastructure/di/DIContainer';
+
 
 // dotenv configured at top level
 
@@ -112,6 +116,10 @@ const startServer = async () => {
 
         // Connect to database
         await dbConnection.connect();
+
+        // Start background tasks (Cron Jobs)
+        container.getCronService().init();
+
 
         // Start listening
         app.listen(PORT, () => {

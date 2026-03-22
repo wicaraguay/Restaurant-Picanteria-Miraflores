@@ -23,6 +23,11 @@ export class UpdateBill {
             throw new NotFoundError('La factura no existe.', 'Bill');
         }
 
+        const inProgressStates = ['PENDING', 'SENT', 'RECIBIDA', 'VALIDADO'];
+        if (inProgressStates.includes(bill.sriStatus || '')) {
+            throw new ValidationError(`No se puede editar una factura que está en proceso con el SRI (Estado: ${bill.sriStatus}). Espere el resultado.`);
+        }
+
         if (bill.sriStatus === 'AUTORIZADO' || bill.sriStatus === 'CANCELADO') {
             throw new ValidationError('No se puede editar una factura que ya ha sido AUTORIZADA o CANCELADA.');
         }
@@ -66,7 +71,10 @@ export class UpdateBill {
             tax,
             total,
             sriStatus: 'BORRADOR', // Reset status to Draft after edit to force re-validation
-            sriMessage: 'Datos y detalles corregidos por el usuario. Re-enviar para procesar.'
+            sriMessage: 'Datos y detalles corregidos por el usuario. Re-enviar para procesar.',
+            accessKey: undefined, // Clear metadata to force new XML generation
+            xmlContent: undefined,
+            // documentNumber stays as is to preserve numbering unless SRI rejects it later
         });
         
         // Auto-learn/Update customer data after bill update

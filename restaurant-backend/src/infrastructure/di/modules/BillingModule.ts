@@ -11,6 +11,9 @@ import { GetCreditNotes } from '../../../application/use-cases/GetCreditNotes';
 import { ResetBillingSystem } from '../../../application/use-cases/ResetBillingSystem';
 import { ResetFullSystem } from '../../../application/use-cases/ResetFullSystem';
 import { UpdateBill } from '../../../application/use-cases/UpdateBill';
+import { RetryInvoices } from '../../../application/use-cases/RetryInvoices';
+import { CronService } from '../../services/CronService';
+
 
 import { SRIService } from '../../services/SRIService';
 import { PDFService } from '../../services/PDFService';
@@ -38,7 +41,10 @@ export class BillingModule {
     private resetBillingSystemUseCase?: ResetBillingSystem;
     private resetFullSystemUseCase?: ResetFullSystem;
     private updateBillUseCase?: UpdateBill;
+    private retryInvoicesUseCase?: RetryInvoices;
+    private cronService?: CronService;
     private billingController?: BillingController;
+
 
     constructor(private repoModule: RepositoryModule) { }
 
@@ -195,6 +201,26 @@ export class BillingModule {
         }
         return this.updateBillUseCase;
     }
+
+    public getRetryInvoicesUseCase(): RetryInvoices {
+        if (!this.retryInvoicesUseCase) {
+            this.retryInvoicesUseCase = new RetryInvoices(
+                this.repoModule.getBillRepository(),
+                this.getCheckInvoiceStatusUseCase()
+            );
+            logger.debug('RetryInvoices use case instantiated');
+        }
+        return this.retryInvoicesUseCase;
+    }
+
+    public getCronService(): CronService {
+        if (!this.cronService) {
+            this.cronService = CronService.getInstance(this.getRetryInvoicesUseCase());
+            logger.debug('CronService instantiated');
+        }
+        return this.cronService;
+    }
+
 
     public getBillingController(): BillingController {
         if (!this.billingController) {
