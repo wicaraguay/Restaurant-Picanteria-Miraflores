@@ -252,8 +252,9 @@ export class BillingService {
     }
 
     /**
-     * Auto-learn or update customer data from the billing request.
-     * Centralized in BillingService for reuse across Use Cases (GenerateInvoice, UpdateBill).
+     * Auto-learns customer data from an invoice emission.
+     * CRITICAL: Normalized to prevent duplicate entries due to spaces or case sensitivity.
+     * Handles name protection to avoid overwriting real names with generic table names.
      */
     public async autoLearnCustomer(client: {
         identification: string;
@@ -267,44 +268,87 @@ export class BillingService {
             return;
         }
 
-        // Validation: skip if no identification or if it is Consumidor Final
         const rawId = client.identification;
-        if (!rawId || rawId === 'undefined' || rawId === 'null') return;
+        // Basic validation - skip invalid or anonymous IDs
+        if (!rawId || rawId === 'undefined' || rawId === 'null') {
+            return;
+        }
 
         const identification = String(rawId).trim();
         const isConsumidorFinal = identification === '9999999999999';
-
-        if (!identification || isConsumidorFinal) return;
+        
+        // Skip Consumidor Final and very short IDs (likely invalid)
+        if (!identification || isConsumidorFinal || identification.length < 5) {
+            return;
+        }
 
         try {
+            console.log(`[BillingService] Auto-learning check for: ${identification} (${client.name})`);
+            
             const existingCustomer = await this.customerRepository.findByIdentification(identification);
+            
             if (existingCustomer) {
-                // Update existing customer info if changed
-                await this.customerRepository.update(existingCustomer.id, {
-                    name: client.name,
-                    email: (client.email && client.email.trim() !== '') ? client.email : existingCustomer.email,
-                    address: (client.address && client.address.trim() !== '') ? client.address : existingCustomer.address,
-                    phone: (client.phone && client.phone.trim() !== '') ? client.phone : existingCustomer.phone,
-                    lastVisit: now
-                });
-                console.log(`[BillingService] Auto-learned: Updated customer ${identification}`);
-            } else {
-                const newCustomerData = {
-                    name: client.name,
-                    identification: identification,
-                    email: (client.email && client.email.trim() !== '') ? client.email : undefined,
-                    address: (client.address && client.address.trim() !== '') ? client.address : undefined,
-                    phone: (client.phone && client.phone.trim() !== '') ? client.phone : undefined,
-                    loyaltyPoints: 0,
+                // PROTECTION: Avoid overwriting a real name with a "Table/Mesa" placeholder
+                const isGenericName = (name: string) => {
+                    const upper = (name || '').toUpperCase();
+                    return upper.includes('MESA') || 
+                           upper.includes('TABLE') || 
+                           upper.includes('ANONIMO') || 
+                           upper.includes('CONSUMIDOR') ||
+                           /^T[0-9]+$/.test(upper) || // e.g., T1, T2
+                           upper.includes('PARA LLEVAR');
+                };
+
+                const currentIsGeneric = isGenericName(client.name);
+                const existingIsGeneric = isGenericName(existingCustomer.name);
+                
+                // Only update name if current is NOT generic OR if existing is generic and current is descriptive
+                const shouldUpdateName = !currentIsGeneric || (existingIsGeneric && !currentIsGeneric);
+                const newName = shouldUpdateName ? client.name.toUpperCase() : existingCustomer.name;
+
+                // Only update fields if new values are provided and valid
+                const updates: any = {
+                    name: newName,
                     lastVisit: now
                 };
 
+                if (client.email && client.email.trim() !== '' && !client.email.includes('consumidor@final')) {
+                    updates.email = client.email;
+                }
+                
+                if (client.address && client.address.trim() !== '' && client.address !== 'S/N') {
+                    updates.address = client.address.toUpperCase();
+                }
+                
+                if (client.phone && client.phone.trim() !== '' && client.phone !== '9999999999') {
+                    updates.phone = client.phone;
+                }
+
+                console.log(`[BillingService] Updating customer ${identification}. Name update: ${shouldUpdateName}. Fields:`, Object.keys(updates));
+                await this.customerRepository.update(existingCustomer.id, updates);
+            } else {
+                // New Customer
+                console.log(`[BillingService] Creating NEW customer record for: ${identification}`);
+                
+                const newCustomerData = {
+                    name: (client.name || 'CLIENTE NUEVO').toUpperCase(),
+                    identification: identification,
+                    email: (client.email && !client.email.includes('consumidor@final')) ? client.email : undefined,
+                    address: (client.address && client.address !== 'S/N') ? client.address.toUpperCase() : 'S/N',
+                    phone: (client.phone && client.phone !== '9999999999') ? client.phone : undefined,
+                    lastVisit: now,
+                    loyaltyPoints: 0
+                };
+
                 const created = await this.customerRepository.create(newCustomerData as any);
-                console.log(`[BillingService] Auto-learned: Created NEW customer ${identification} (ID: ${created?.id || 'new'})`);
+                console.log(`[BillingService] Successfully created customer: ${identification} (ID: ${created?.id || 'new'})`);
             }
         } catch (error: any) {
-            // Silently log error, we don't want customer learning to stop the whole billing process
-            console.error('[BillingService] Failed to auto-learn customer data:', error.message);
+            // Log but don't break the billing flow
+            console.error(`[BillingService] Error in auto-learn for ${identification}:`, error.message);
+            if (error.code === 11000 || (error.message && error.message.includes('E11000'))) {
+                console.warn(`[BillingService] Duplicate key conflict for ${identification}. This suggests lookup missed it due to inconsistent data in DB.`);
+            }
         }
     }
 }

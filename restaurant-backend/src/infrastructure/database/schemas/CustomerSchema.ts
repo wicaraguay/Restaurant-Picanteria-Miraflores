@@ -34,7 +34,7 @@ const CustomerSchema: Schema = new Schema({
     phone: { type: String },
     loyaltyPoints: { type: Number, default: 0 },
     lastVisit: { type: Date, default: Date.now },
-    identification: { type: String },
+    identification: { type: String, trim: true },
     address: { type: String },
 }, { timestamps: true });
 

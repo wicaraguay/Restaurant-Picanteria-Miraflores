@@ -164,8 +164,8 @@ const BillingHistory: React.FC = () => {
                 name: bill.customerName,
                 identification: bill.customerIdentification,
                 address: bill.customerAddress,
-                email: bill.customerEmail || config.fiscalEmail || 'consumidor@final.com',
-                phone: bill.customerPhone || '9999999999',
+                email: bill.customerEmail,
+                phone: bill.customerPhone,
                 paymentMethod: bill.paymentMethod || '01'
             };
 

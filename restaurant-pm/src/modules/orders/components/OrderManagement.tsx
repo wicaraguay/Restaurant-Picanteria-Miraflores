@@ -226,6 +226,13 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
             // Llamada real al backend
             console.log('Enviando a facturar:', { order: billingOrder, client: billingData });
+            console.log('Final Billing Request Payload:', { 
+                orderId: billingOrder.id, 
+                orderName: billingOrder.customerName, 
+                clientIdent: billingData.identification, 
+                clientName: billingData.name 
+            });
+
             const result = await billingService.generateXML({
                 order: billingOrder,
                 client: billingData,
