@@ -71,7 +71,8 @@ export class UpdateBill {
         
         // Auto-learn/Update customer data after bill update
         // Use current date as 'lastVisit'
-        if (updateData.identification || updateData.name) {
+        const hasCustomerData = updateData.identification || updateData.name || updateData.email || updateData.address || updateData.phone;
+        if (hasCustomerData) {
             await this.billingService.autoLearnCustomer({
                 identification: updateData.identification || bill.customerIdentification,
                 name: updateData.name || bill.customerName,

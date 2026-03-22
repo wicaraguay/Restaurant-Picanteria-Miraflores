@@ -250,6 +250,15 @@ export class GenerateCreditNote {
             });
 
             console.log('[GenerateCreditNote] Credit note persisted successfully');
+            
+            // Auto-learn/Update customer data
+            await this.billingService.autoLearnCustomer({
+                identification: creditNote.info.identificacionComprador,
+                name: creditNote.info.razonSocialComprador,
+                email: creditNote.info.emailComprador,
+                address: originalBill.customerAddress,
+                phone: originalBill.customerPhone
+            }, now);
 
             // 10.1. Mark the original bill as cancelled (only if credit note was authorized)
             if (authResult.estado === 'AUTORIZADO') {

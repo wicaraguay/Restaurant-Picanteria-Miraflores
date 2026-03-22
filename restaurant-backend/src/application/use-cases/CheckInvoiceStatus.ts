@@ -258,7 +258,7 @@ export class CheckInvoiceStatus {
             console.log('[CheckInvoiceStatus] Skipping email (Consumidor Final or Invalid Email).');
         }
 
-        return { success: true, authorization: authResult };
+        return { success: true, authorization: authResult, invoiceNumber: bill.documentNumber };
 
     }
 }

@@ -10,6 +10,7 @@ import { Invoice, InvoiceDetail } from '../../domain/billing/invoice';
 import { ValidationError } from '../../domain/errors/CustomErrors';
 
 import { BillingService } from '../services/BillingService';
+import { OrderStatus } from '../../domain/entities/Order';
 
 export class GenerateInvoice {
     constructor(
@@ -110,7 +111,6 @@ export class GenerateInvoice {
         // customer data is captured even if the electronic billing fails.
         await this.billingService.autoLearnCustomer(client, now);
 
-        // Pre-calculate user flags for learning and email logic
         // Pre-calculate user flags for learning and email logic
         const isConsumidorFinal = String(client.identification) === '9999999999999';
         const isValidEmail = client.email &&
@@ -229,8 +229,12 @@ export class GenerateInvoice {
             sriMessage: (authResult?.mensajes || result.mensajes || []).join(' ')
         });
 
-        // 9. Update Order
-        await this.orderRepository.update(invoice.orderId, { billed: true });
+        // 9. Update Order to COMPLETED and set billed flag to move to history
+        await this.orderRepository.update(invoice.orderId, { 
+            billed: true,
+            status: OrderStatus.Completed,
+            billingType: isConsumidorFinal ? 'Consumidor Final' : 'Factura'
+        });
 
 
         // 11. Send Email
@@ -250,9 +254,15 @@ export class GenerateInvoice {
             }
         }
 
+        // 10. Retornar resultado
         return {
-            status: authResult?.estado || result.estado,
-            xml: xml
+            success: true,
+            invoiceId: draftBill.id,
+            invoiceNumber: draftBill.documentNumber,
+            accessKey: invoice.info.claveAcceso,
+            xml: xml,
+            sriResponse: result,
+            authorization: authResult
         };
     }
 }

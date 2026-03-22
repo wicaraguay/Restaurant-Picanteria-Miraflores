@@ -5,6 +5,7 @@
 
 import { apiService } from '../../../api';
 import { API_ENDPOINTS } from '../../../config/api.config';
+import { dataService } from '../../../services/DataService'; 
 import { Bill } from '../types/billing.types';
 
 export class BillingService {
@@ -62,7 +63,9 @@ export class BillingService {
      * Generar XML y enviar al SRI (Facturación Electrónica)
      */
     public async generateXML(data: { order: any, client: any, taxRate?: number, logoUrl?: string }): Promise<any> {
-        return apiService.post('/billing/generate-xml', data);
+        const result = await apiService.post('/billing/generate-xml', data);
+        dataService.clearCache(); // Invalida el caché para que el nuevo cliente aparezca en la lista
+        return result;
     }
 
     /**
@@ -81,7 +84,9 @@ export class BillingService {
         customDescription?: string;
         taxRate?: number;
     }): Promise<any> {
-        return apiService.post('/credit-notes', data);
+        const result = await apiService.post('/credit-notes', data);
+        dataService.clearCache(); // Invalida el caché de clientes
+        return result;
     }
 
     /**
@@ -120,7 +125,9 @@ export class BillingService {
      * Actualiza los datos y detalles de una factura
      */
     public async updateBill(id: string, data: any): Promise<any> {
-        return apiService.put(`/billing/update-bill/${id}`, data);
+        const result = await apiService.put(`/billing/update-bill/${id}`, data);
+        dataService.clearCache(); // Sincroniza cambios de cliente
+        return result;
     }
 
     /**

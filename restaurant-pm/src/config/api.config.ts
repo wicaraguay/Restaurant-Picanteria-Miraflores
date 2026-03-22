@@ -14,7 +14,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:30
 /**
  * Timeout para requests HTTP (en milisegundos)
  */
-export const API_TIMEOUT = 30000; // 30 segundos
+export const API_TIMEOUT = 60000; // 60 segundos (evitar Operation aborted en producción)
 
 /**
  * Configuración de headers por defecto

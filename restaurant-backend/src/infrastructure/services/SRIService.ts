@@ -414,7 +414,7 @@ export class SRIService {
      * @param maxAttempts Maximum number of polling attempts (default 5)
      * @param delay Delay between attempts in ms (default 3000)
      */
-    public async waitForAuthorization(accessKey: string, isProduction: boolean = false, maxAttempts: number = 5, delay: number = 3000): Promise<any> {
+    public async waitForAuthorization(accessKey: string, isProduction: boolean = false, maxAttempts: number = 5, delay: number = 2000): Promise<any> {
         let authResult;
         let attempts = 0;
 

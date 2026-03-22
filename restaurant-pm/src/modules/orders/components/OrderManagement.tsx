@@ -247,7 +247,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
                 setTempAccessKey(realAccessKey);
                 setTempAuthDate(authDate);
-                setGeneratedInvoiceNumber(result.invoiceId);
+                setGeneratedInvoiceNumber(result.invoiceNumber || result.invoiceId);
 
                 // Verificar si fue autorizada
                 if (sriStatus === 'AUTORIZADO') {
