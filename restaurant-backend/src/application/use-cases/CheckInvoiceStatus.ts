@@ -197,6 +197,7 @@ export class CheckInvoiceStatus {
                 const details = this.billingService.calculateDetails(bill.items);
 
                 const invoiceObj: any = {
+                    creationDate: new Date(bill.date),
                     info: {
                         ambiente: isProd ? '2' : '1',
                         tipoEmision: '1',
@@ -226,9 +227,9 @@ export class CheckInvoiceStatus {
                         logoUrl: this.billingService.getLogoUrl(info),
                         emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM,
                         telefonoComprador: bill.customerPhone || 'S/N',
-                        tasaIva: (info.billing?.taxRate || 15).toString(),
-                        authorizationDate: authResult.fechaAutorizacion // Crucial for PDF
+                        tasaIva: (info.billing?.taxRate || 15).toString()
                     },
+                    authorizationDate: authResult.fechaAutorizacion,
                     detalles: details
                 };
 

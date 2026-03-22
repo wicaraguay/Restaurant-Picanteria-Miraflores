@@ -168,7 +168,8 @@ export class PDFService {
         this.drawClientField(doc, 'Identificación', creditNote.info.identificacionComprador, col2X, currentY, colWidth);
         currentY += 25;
 
-        this.drawClientField(doc, 'Fecha de Emisión', creditNote.info.fechaEmision, col1X, currentY, colWidth);
+        const fechaEmisionText = this.formatDateTime(creditNote.creationDate || creditNote.info.fechaEmision);
+        this.drawClientField(doc, 'Fecha de Emisión', fechaEmisionText, col1X, currentY, colWidth);
         currentY += 25;
 
         // Modified Document Info (Specific to Credit Note)

@@ -136,6 +136,7 @@ export class CheckCreditNoteStatus {
             })),
             billId: entity.billId,
             status: 'AUTHORIZED',
+            creationDate: new Date(entity.date),
             authorizationDate: authDate || entity.authorizationDate
         };
     }
