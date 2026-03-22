@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { ValidationError } from '../../domain/errors/CustomErrors';
 import { RestaurantConfig } from '../../domain/entities/RestaurantConfig';
 import { ICustomerRepository } from '../../domain/repositories/ICustomerRepository';
@@ -263,6 +264,10 @@ export class BillingService {
         address?: string;
         phone?: string;
     }, now: Date): Promise<{ status: string; id?: string }> {
+        // Diagnostic log: which database are we using?
+        const dbName = mongoose.connection.db?.databaseName || 'unknown';
+        console.log(`[BillingService] Attempting auto-learn on DB: ${dbName}`);
+
         if (!this.customerRepository) {
             console.warn('[BillingService] Cannot auto-learn: CustomerRepository not provided.');
             return { status: 'no_repository' };

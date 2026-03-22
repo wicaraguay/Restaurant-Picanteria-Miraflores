@@ -246,6 +246,17 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 customerLearning: result.customerLearning
             });
 
+            // Diagnostic feedback for customer creation
+            if (result.customerLearning) {
+                const { status, id } = result.customerLearning;
+                if (status === 'created') {
+                    console.log(`%c [SUCCESS] Customer created: ${id}`, 'color: green; font-weight: bold');
+                } else if (status === 'error') {
+                    console.error('Customer persistence failed:', id);
+                    alert(`Error al guardar cliente: ${id}`);
+                }
+            }
+
             if (result.success) {
                 // ETAPA 5: Esperando autorización
                 setProcessingState(InvoiceProcessState.WAITING_AUTHORIZATION);
