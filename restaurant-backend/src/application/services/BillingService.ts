@@ -1,5 +1,6 @@
 import { ValidationError } from '../../domain/errors/CustomErrors';
 import { RestaurantConfig } from '../../domain/entities/RestaurantConfig';
+import { ICustomerRepository } from '../../domain/repositories/ICustomerRepository';
 
 export interface TaxDetail {
     codigo: string;
@@ -20,6 +21,8 @@ export interface BillingDetail {
 }
 
 export class BillingService {
+    constructor(private customerRepository?: ICustomerRepository) { }
+
     public calculateDetails(items: any[], taxRate: number = 15): BillingDetail[] {
         const rateDecimal = taxRate / 100;
 
@@ -246,5 +249,62 @@ export class BillingService {
         const resolved = config?.logo || config?.fiscalLogo || providedLogoUrl || process.env.BUSINESS_LOGO_URL || '';
         console.log('[BillingService] Resolved Logo URL (first 50 chars):', resolved.substring(0, 50));
         return resolved;
+    }
+
+    /**
+     * Auto-learn or update customer data from the billing request.
+     * Centralized in BillingService for reuse across Use Cases (GenerateInvoice, UpdateBill).
+     */
+    public async autoLearnCustomer(client: {
+        identification: string;
+        name: string;
+        email?: string;
+        address?: string;
+        phone?: string;
+    }, now: Date): Promise<void> {
+        if (!this.customerRepository) {
+            console.warn('[BillingService] Cannot auto-learn: CustomerRepository not provided.');
+            return;
+        }
+
+        // Validation: skip if no identification or if it is Consumidor Final
+        const rawId = client.identification;
+        if (!rawId || rawId === 'undefined' || rawId === 'null') return;
+
+        const identification = String(rawId).trim();
+        const isConsumidorFinal = identification === '9999999999999';
+
+        if (!identification || isConsumidorFinal) return;
+
+        try {
+            const existingCustomer = await this.customerRepository.findByIdentification(identification);
+            if (existingCustomer) {
+                // Update existing customer info if changed
+                await this.customerRepository.update(existingCustomer.id, {
+                    name: client.name,
+                    email: (client.email && client.email.trim() !== '') ? client.email : existingCustomer.email,
+                    address: (client.address && client.address.trim() !== '') ? client.address : existingCustomer.address,
+                    phone: (client.phone && client.phone.trim() !== '') ? client.phone : existingCustomer.phone,
+                    lastVisit: now
+                });
+                console.log(`[BillingService] Auto-learned: Updated customer ${identification}`);
+            } else {
+                const newCustomerData = {
+                    name: client.name,
+                    identification: identification,
+                    email: (client.email && client.email.trim() !== '') ? client.email : undefined,
+                    address: (client.address && client.address.trim() !== '') ? client.address : undefined,
+                    phone: (client.phone && client.phone.trim() !== '') ? client.phone : undefined,
+                    loyaltyPoints: 0,
+                    lastVisit: now
+                };
+
+                const created = await this.customerRepository.create(newCustomerData as any);
+                console.log(`[BillingService] Auto-learned: Created NEW customer ${identification} (ID: ${created?.id || 'new'})`);
+            }
+        } catch (error: any) {
+            // Silently log error, we don't want customer learning to stop the whole billing process
+            console.error('[BillingService] Failed to auto-learn customer data:', error.message);
+        }
     }
 }

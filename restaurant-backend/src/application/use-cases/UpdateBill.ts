@@ -68,6 +68,18 @@ export class UpdateBill {
             sriStatus: 'BORRADOR', // Reset status to Draft after edit to force re-validation
             sriMessage: 'Datos y detalles corregidos por el usuario. Re-enviar para procesar.'
         });
+        
+        // Auto-learn/Update customer data after bill update
+        // Use current date as 'lastVisit'
+        if (updateData.identification || updateData.name) {
+            await this.billingService.autoLearnCustomer({
+                identification: updateData.identification || bill.customerIdentification,
+                name: updateData.name || bill.customerName,
+                email: updateData.email || bill.customerEmail,
+                address: updateData.address || bill.customerAddress,
+                phone: updateData.phone || bill.customerPhone
+            }, new Date());
+        }
 
         return updatedBill;
     }

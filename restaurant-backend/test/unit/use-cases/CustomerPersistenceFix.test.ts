@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenerateInvoice } from '../../../src/application/use-cases/GenerateInvoice';
-import { OrderStatus } from '../../../src/domain/entities/Order';
 import { BillingService } from '../../../src/application/services/BillingService';
+import { ICustomerRepository } from '../../../src/domain/repositories/ICustomerRepository';
 
-describe('GenerateInvoice Customer Learning Repro', () => {
+describe('GenerateInvoice Customer Persistence (Reproduction)', () => {
     let generateInvoice: GenerateInvoice;
     let mockConfigRepo: any;
     let mockBillRepo: any;
@@ -11,7 +11,7 @@ describe('GenerateInvoice Customer Learning Repro', () => {
     let mockSRIService: any;
     let mockPDFService: any;
     let mockEmailService: any;
-    let mockBillingService: any;
+    let mockBillingService: BillingService;
     let mockCustomerRepo: any;
 
     beforeEach(() => {
@@ -19,25 +19,22 @@ describe('GenerateInvoice Customer Learning Repro', () => {
             get: vi.fn().mockResolvedValue({ businessName: 'Test', ruc: '123' }),
             getNextSequential: vi.fn().mockResolvedValue(1)
         };
-        mockBillRepo = { upsert: vi.fn().mockResolvedValue({}) };
+        mockBillRepo = { upsert: vi.fn().mockResolvedValue({ id: 'bill-1' }) };
         mockOrderRepo = { update: vi.fn().mockResolvedValue({}) };
         mockSRIService = {
             generateInvoiceXML: vi.fn().mockReturnValue('<xml></xml>'),
             signXML: vi.fn().mockResolvedValue('<signed></signed>'),
-            sendToSRI: vi.fn().mockResolvedValue({ estado: 'RECIBIDA' }),
-            waitForAuthorization: vi.fn().mockResolvedValue({ estado: 'AUTORIZADO' })
+            sendToSRI: vi.fn(), // We will mock this to throw
+            waitForAuthorization: vi.fn()
         };
         mockPDFService = { generateInvoicePDF: vi.fn().mockResolvedValue(Buffer.from('pdf')) };
         mockEmailService = { sendInvoiceEmail: vi.fn().mockResolvedValue({}) };
         mockCustomerRepo = {
             findByIdentification: vi.fn(),
-            create: vi.fn(),
-            update: vi.fn()
+            create: vi.fn().mockResolvedValue({ id: 'cust-1' }),
+            update: vi.fn().mockResolvedValue({})
         };
-        mockBillingService = new BillingService(mockCustomerRepo as any);
-        // Note: we might need to mock some of the other methods used in GenerateInvoice
-        // since we are now using the REAL BillingService instance for auto-learn logic.
-        // However, the other methods like calculateDetails are used on the same instance.
+        mockBillingService = new BillingService(mockCustomerRepo as unknown as ICustomerRepository);
         
         // Mock specific methods needed for GenerateInvoice
         mockBillingService.validateEmail = vi.fn();
@@ -59,19 +56,19 @@ describe('GenerateInvoice Customer Learning Repro', () => {
         );
     });
 
-    it('should attempt to create a customer if it does not exist', async () => {
-        const client = { identification: '1234567890', name: 'New Client', email: '' };
+    it('SHOULD save customer even if SRI fails (Failure Case)', async () => {
+        const client = { identification: '1234567890', name: 'New Client', email: 'test@test.com' };
         const order = { id: 'order-1', items: [] };
 
+        // Mock SRI failure (Throws an error)
+        mockSRIService.sendToSRI.mockRejectedValue(new Error('SRI connection failed'));
         mockCustomerRepo.findByIdentification.mockResolvedValue(null);
-        mockCustomerRepo.create.mockResolvedValue({ id: 'cust-1', ...client });
 
-        await generateInvoice.execute({ order, client });
+        // Execute and expect it to throw
+        await expect(generateInvoice.execute({ order, client })).rejects.toThrow('SRI connection failed');
 
-        expect(mockCustomerRepo.create).toHaveBeenCalledWith(expect.objectContaining({
-            identification: '1234567890',
-            email: undefined,
-            phone: undefined
-        }));
+        // VERIFY: Did it try to create the customer?
+        // In the current implementation (BUG), this will FAIL because SRI error happens before customer creation.
+        expect(mockCustomerRepo.create).toHaveBeenCalled();
     });
 });

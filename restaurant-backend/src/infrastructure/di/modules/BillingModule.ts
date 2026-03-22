@@ -68,8 +68,8 @@ export class BillingModule {
 
     public getBillingService(): BillingService {
         if (!this.billingService) {
-            this.billingService = new BillingService();
-            logger.debug('BillingService instantiated');
+            this.billingService = new BillingService(this.repoModule.getCustomerRepository());
+            logger.debug('BillingService instantiated with CustomerRepository');
         }
         return this.billingService;
     }
@@ -83,8 +83,7 @@ export class BillingModule {
                 this.getSRIService(),
                 this.getPDFService(),
                 this.getEmailService(),
-                this.getBillingService(),
-                this.repoModule.getCustomerRepository()
+                this.getBillingService()
             );
             logger.debug('GenerateInvoice use case instantiated');
         }

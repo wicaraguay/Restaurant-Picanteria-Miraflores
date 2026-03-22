@@ -41,8 +41,8 @@ describe('GenerateInvoice Auto-Learning', () => {
         };
         mockPDFService = { generateInvoicePDF: vi.fn().mockResolvedValue(Buffer.from('pdf')) };
         mockEmailService = { sendInvoiceEmail: vi.fn().mockResolvedValue(true) };
-        mockBillingService = new BillingService(); 
         mockCustomerRepo = { findByIdentification: vi.fn(), create: vi.fn(), update: vi.fn() };
+        mockBillingService = new BillingService(mockCustomerRepo as unknown as ICustomerRepository); 
 
         generateInvoice = new GenerateInvoice(
             mockConfigRepo,
@@ -51,8 +51,7 @@ describe('GenerateInvoice Auto-Learning', () => {
             mockSRIService as unknown as SRIService,
             mockPDFService as unknown as PDFService,
             mockEmailService,
-            mockBillingService,
-            mockCustomerRepo
+            mockBillingService
         );
     });
 

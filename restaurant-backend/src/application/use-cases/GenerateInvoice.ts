@@ -19,8 +19,7 @@ export class GenerateInvoice {
         private sriService: SRIService,
         private pdfService: PDFService,
         private emailService: IEmailService,
-        private billingService: BillingService,
-        private customerRepository: ICustomerRepository
+        private billingService: BillingService
     ) { }
 
     async execute(params: { 
@@ -105,6 +104,11 @@ export class GenerateInvoice {
         // Resolution NAC-DGERCGC25-00000017: Invoices must be transmitted immediately upon emission
         // The emission date must correspond to the current date
         this.billingService.validateRealTimeTransmission(invoice.info.fechaEmision);
+
+        // 5. ETAPA 0: Auto-learn Customer Data (Real-time Learning)
+        // CRITICAL: We do this BEFORE any risky SRI/DB operations to ensure 
+        // customer data is captured even if the electronic billing fails.
+        await this.billingService.autoLearnCustomer(client, now);
 
         // Pre-calculate user flags for learning and email logic
         // Pre-calculate user flags for learning and email logic
@@ -228,39 +232,6 @@ export class GenerateInvoice {
         // 9. Update Order
         await this.orderRepository.update(invoice.orderId, { billed: true });
 
-        // 10. Auto-learn Customer Data (Real-time Learning)
-        const identification = String(client.identification).trim();
-        if (identification && identification !== 'undefined' && !isConsumidorFinal) {
-            try {
-                const existingCustomer = await this.customerRepository.findByIdentification(identification);
-                if (existingCustomer) {
-                    // Update existing customer info if changed
-                    await this.customerRepository.update(existingCustomer.id, {
-                        name: client.name,
-                        email: (client.email && client.email.trim() !== '') ? client.email : existingCustomer.email,
-                        address: (client.address && client.address.trim() !== '') ? client.address : existingCustomer.address,
-                        phone: (client.phone && client.phone.trim() !== '') ? client.phone : existingCustomer.phone,
-                        lastVisit: now
-                    });
-                    console.log(`[GenerateInvoice] Updated customer info for: ${identification}`);
-                } else {
-                    const newCustomerData = {
-                        name: client.name,
-                        identification: identification,
-                        email: (client.email && client.email.trim() !== '') ? client.email : undefined,
-                        address: (client.address && client.address.trim() !== '') ? client.address : undefined,
-                        phone: (client.phone && client.phone.trim() !== '') ? client.phone : undefined,
-                        loyaltyPoints: 0,
-                        lastVisit: now
-                    };
-                    
-                    const created = await this.customerRepository.create(newCustomerData as any);
-                    console.log(`[GenerateInvoice] Created NEW customer entry for: ${identification} (ID: ${created?.id || 'mock'})`);
-                }
-            } catch (error: any) {
-                console.error('[GenerateInvoice] Failed to auto-learn customer data:', error);
-            }
-        }
 
         // 11. Send Email
         // Skip email for Consumidor Final or invalid email addresses
@@ -280,13 +251,8 @@ export class GenerateInvoice {
         }
 
         return {
-            success: true,
-            invoiceId: invoice.info.secuencial,
-            accessKey: invoice.info.claveAcceso,
-            sriResponse: result,
-            authorization: authResult,
+            status: authResult?.estado || result.estado,
             xml: xml
         };
     }
-
 }
