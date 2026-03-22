@@ -79,6 +79,9 @@ export class DatabaseConnection {
                 logger.info(`📊 Database: ${mongoose.connection.db.databaseName}`);
             }
 
+            // Run index migrations after connection
+            await this.runIndexMigrations();
+
         } catch (error) {
             logger.warn(`⚠️  Local MongoDB connection failed: ${(error as Error).message}`);
             logger.info('🔄 Starting In-Memory MongoDB for testing...');
@@ -99,6 +102,49 @@ export class DatabaseConnection {
                 logger.error('❌ Failed to start In-Memory MongoDB', memError);
                 throw memError;
             }
+        }
+    }
+
+    /**
+     * Runs index migrations to fix any mismatched index definitions.
+     * Specifically drops and recreates the `identification_1` index on customers
+     * so it is created with `sparse: true`, allowing multiple docs with empty identification.
+     */
+    private async runIndexMigrations(): Promise<void> {
+        try {
+            const db = mongoose.connection.db;
+            if (!db) {
+                logger.warn('⚠️  [Migration] No DB connection, skipping index migrations.');
+                return;
+            }
+
+            const customersCollection = db.collection('customers');
+            const existingIndexes = await customersCollection.listIndexes().toArray();
+
+            const identificationIndex = existingIndexes.find(
+                (idx: any) => idx.name === 'identification_1'
+            );
+
+            if (identificationIndex) {
+                const isSparse = identificationIndex.sparse === true;
+                if (!isSparse) {
+                    logger.warn('🔧 [Migration] Found non-sparse identification_1 index. Dropping and recreating as sparse...');
+                    await customersCollection.dropIndex('identification_1');
+                    logger.info('✅ [Migration] Old identification_1 index dropped. Mongoose will recreate as sparse on next ensureIndexes.');
+                } else {
+                    logger.info('✅ [Migration] identification_1 index is already sparse. No migration needed.');
+                }
+            } else {
+                logger.info('ℹ️  [Migration] identification_1 index not found. Will be created by Mongoose.');
+            }
+
+            // Force Mongoose to sync indexes now
+            await mongoose.model('Customer').ensureIndexes();
+            logger.info('✅ [Migration] Customer indexes synchronized.');
+
+        } catch (error) {
+            // Non-fatal: log but don't crash the server
+            logger.error('❌ [Migration] Failed to run index migrations:', error);
         }
     }
 
