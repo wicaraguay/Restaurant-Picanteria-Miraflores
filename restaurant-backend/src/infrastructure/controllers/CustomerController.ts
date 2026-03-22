@@ -64,7 +64,8 @@ export class CustomerController {
             const customer = await this.lookupCustomer.execute(identification);
             
             if (!customer) {
-                res.status(404).json(ResponseFormatter.error('NOT_FOUND', 'Cliente no encontrado en la base de datos local'));
+                logger.info('Customer not found in local DB', { identification });
+                res.json(ResponseFormatter.success(null));
                 return;
             }
 
