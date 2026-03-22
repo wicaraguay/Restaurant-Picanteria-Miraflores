@@ -141,7 +141,8 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onEdit, onDelete, o
                             <EditIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
                         </button>
                     )}
-                    {(order.status !== OrderStatus.Completed || userRoleName === 'Administrador') && (
+                    {(order.status !== OrderStatus.Completed || 
+                      (userRoleName?.toLowerCase() === 'administrador' || userRoleName?.toLowerCase() === 'admin')) && (
                         <button onClick={onDelete} className="p-2 md:p-2.5 bg-gray-100 dark:bg-dark-700 text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-all active:scale-95">
                             <TrashIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
                         </button>

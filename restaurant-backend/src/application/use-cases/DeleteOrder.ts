@@ -15,11 +15,15 @@
  */
 
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
+import { IRoleRepository } from '../../domain/repositories/IRoleRepository';
 import { NotFoundError, ForbiddenError } from '../../domain/errors/CustomErrors';
 import { OrderStatus } from '../../domain/entities/Order';
 
 export class DeleteOrder {
-    constructor(private orderRepository: IOrderRepository) { }
+    constructor(
+        private orderRepository: IOrderRepository,
+        private roleRepository: IRoleRepository
+    ) { }
 
     async execute(id: string, roleId?: string): Promise<void> {
         const order = await this.orderRepository.findById(id);
@@ -28,9 +32,18 @@ export class DeleteOrder {
             throw new NotFoundError(`Order with ID ${id} not found`);
         }
 
-        // Restricción: Solo Administrador (ID '1') puede borrar pedidos completados
-        if (order.status === OrderStatus.Completed && roleId !== '1') {
-            throw new ForbiddenError('Solo el administrador puede eliminar pedidos del historial');
+        // Restricción: Solo Administrador puede borrar pedidos completados
+        if (order.status === OrderStatus.Completed) {
+            if (!roleId) {
+                throw new ForbiddenError('Debe estar autenticado para eliminar pedidos del historial');
+            }
+
+            const role = await this.roleRepository.findById(roleId);
+            const isAdmin = role?.name === 'Administrador';
+
+            if (!isAdmin) {
+                throw new ForbiddenError('Solo el administrador puede eliminar pedidos del historial');
+            }
         }
 
         const result = await this.orderRepository.delete(id);

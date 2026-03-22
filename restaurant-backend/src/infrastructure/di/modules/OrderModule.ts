@@ -66,7 +66,10 @@ export class OrderModule {
 
     public getDeleteOrderUseCase(): DeleteOrder {
         if (!this.deleteOrderUseCase) {
-            this.deleteOrderUseCase = new DeleteOrder(this.repoModule.getOrderRepository());
+            this.deleteOrderUseCase = new DeleteOrder(
+                this.repoModule.getOrderRepository(),
+                this.repoModule.getRoleRepository()
+            );
             logger.debug('DeleteOrder use case instantiated');
         }
         return this.deleteOrderUseCase;
