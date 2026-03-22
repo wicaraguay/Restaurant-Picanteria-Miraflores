@@ -58,7 +58,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
             }
             setIsCustomerModalOpen(false);
         } catch (error) {
-            ErrorHandler.handle(error, 'Error al guardar el cliente');
+            ErrorHandler.showError(error, 'Error al guardar el cliente');
         } finally {
             setIsSaving(false);
         }
@@ -70,7 +70,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
                 await dataService.deleteCustomer(id);
                 setCustomers(prev => prev.filter(c => c.id !== id));
             } catch (error) {
-                ErrorHandler.handle(error, 'Error al eliminar el cliente');
+                ErrorHandler.showError(error, 'Error al eliminar el cliente');
             }
         }
     };

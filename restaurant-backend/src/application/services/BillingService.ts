@@ -338,7 +338,7 @@ export class BillingService {
                 
                 const newCustomerData = {
                     name: (client.name || 'CLIENTE NUEVO').toUpperCase(),
-                    identification: identification,
+                    identification: (identification && identification.length > 0) ? identification : undefined,
                     email: (client.email && !client.email.includes('consumidor@final')) ? client.email : undefined,
                     address: (client.address && client.address !== 'S/N') ? client.address.toUpperCase() : 'S/N',
                     phone: (client.phone && client.phone !== '9999999999') ? client.phone : undefined,
