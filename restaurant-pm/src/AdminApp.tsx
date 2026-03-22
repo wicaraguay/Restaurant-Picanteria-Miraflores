@@ -116,7 +116,7 @@ const AdminContent: React.FC = () => {
             if (isLoading) return;
 
             try {
-                const response = await api.customers.getAll();
+                const response = await api.customers.getAll({ limit: 1000 });
                 let customers: Customer[] = [];
                 
                 if (response && response.data) {

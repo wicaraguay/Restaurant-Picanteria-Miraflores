@@ -101,7 +101,7 @@ export class DataService {
 
         try {
             logger.debug('Fetching customers from API');
-            const response = await api.customers.getAll();
+            const response = await api.customers.getAll({ limit: 1000 });
             
             // Handle new API response format { success: true, data: { data: Customer[], pagination: ... } }
             // or the simplified { success: true, data: Customer[] }

@@ -215,7 +215,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
                     <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Gestión de Clientes</h1>
                     <p className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-2 mt-1">
                         <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-                        CENTRAL DE FIDELIZACIÓN Y RESERVAS
+                        CENTRAL DE FIDELIZACIÓN ({customers?.length || 0} REGISTROS)
                     </p>
                 </div>
 
@@ -251,6 +251,23 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
                     ) : (
                         <div className="w-full sm:w-64"></div>
                     )}
+
+                    <button 
+                        onClick={async () => {
+                            setIsSaving(true);
+                            try {
+                                await dataService.clearCache();
+                                const fresh = await dataService.getCustomers();
+                                setCustomers(fresh);
+                            } finally {
+                                setIsSaving(false);
+                            }
+                        }}
+                        className="w-full sm:w-auto flex items-center justify-center bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-dark-600 transition-all active:scale-95"
+                        disabled={isSaving}
+                    >
+                        Refrescar
+                    </button>
 
                     <button 
                         onClick={() => activeTab === 'customers' ? handleOpenCustomerForm(null) : handleOpenReservationForm(null)} 
