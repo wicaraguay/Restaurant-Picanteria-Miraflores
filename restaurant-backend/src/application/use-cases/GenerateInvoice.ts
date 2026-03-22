@@ -124,7 +124,7 @@ export class GenerateInvoice {
         // 5. ETAPA 0: Auto-learn Customer Data (Real-time Learning)
         // CRITICAL: We do this BEFORE any risky SRI/DB operations to ensure 
         // customer data is captured even if the electronic billing fails.
-        await this.billingService.autoLearnCustomer(client, now);
+        const autoLearnResult = await this.billingService.autoLearnCustomer(client, now);
 
         // Pre-calculate user flags for learning and email logic
         const isConsumidorFinal = String(client.identification) === '9999999999999';
@@ -275,6 +275,7 @@ export class GenerateInvoice {
             invoiceId: draftBill.id,
             invoiceNumber: draftBill.documentNumber,
             accessKey: invoice.info.claveAcceso,
+            customerLearning: autoLearnResult,
             xml: xml,
             sriResponse: result,
             authorization: authResult

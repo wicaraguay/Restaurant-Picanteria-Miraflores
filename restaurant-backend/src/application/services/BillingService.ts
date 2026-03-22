@@ -262,16 +262,16 @@ export class BillingService {
         email?: string;
         address?: string;
         phone?: string;
-    }, now: Date): Promise<void> {
+    }, now: Date): Promise<{ status: string; id?: string }> {
         if (!this.customerRepository) {
             console.warn('[BillingService] Cannot auto-learn: CustomerRepository not provided.');
-            return;
+            return { status: 'no_repository' };
         }
 
         const rawId = client.identification;
         // Basic validation - skip invalid or anonymous IDs
         if (!rawId || rawId === 'undefined' || rawId === 'null') {
-            return;
+            return { status: 'skipped_invalid_id' };
         }
 
         const identification = String(rawId).trim();
@@ -279,7 +279,7 @@ export class BillingService {
         
         // Skip Consumidor Final and very short IDs (likely invalid)
         if (!identification || isConsumidorFinal || identification.length < 5) {
-            return;
+            return { status: 'skipped_special_id' };
         }
 
         try {
@@ -326,6 +326,7 @@ export class BillingService {
 
                 console.log(`[BillingService] Updating customer ${identification}. Name update: ${shouldUpdateName}. Fields:`, Object.keys(updates));
                 await this.customerRepository.update(existingCustomer.id, updates);
+                return { status: shouldUpdateName ? 'updated' : 'up_to_date', id: existingCustomer.id };
             } else {
                 // New Customer
                 console.log(`[BillingService] Creating NEW customer record for: ${identification}`);
@@ -342,13 +343,16 @@ export class BillingService {
 
                 const created = await this.customerRepository.create(newCustomerData as any);
                 console.log(`[BillingService] Successfully created customer: ${identification} (ID: ${created?.id || 'new'})`);
+                return { status: 'created', id: created?.id };
             }
         } catch (error: any) {
             // Log but don't break the billing flow
             console.error(`[BillingService] Error in auto-learn for ${identification}:`, error.message);
             if (error.code === 11000 || (error.message && error.message.includes('E11000'))) {
                 console.warn(`[BillingService] Duplicate key conflict for ${identification}. This suggests lookup missed it due to inconsistent data in DB.`);
+                return { status: 'conflict_duplicate' };
             }
+            return { status: 'error', id: error.message };
         }
     }
 }

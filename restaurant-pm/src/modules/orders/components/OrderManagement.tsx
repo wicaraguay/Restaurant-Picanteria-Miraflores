@@ -240,6 +240,12 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 logoUrl: config.fiscalLogo || config.logo
             });
 
+            console.log('Billing Result:', {
+                success: result.success,
+                invoiceNumber: result.invoiceNumber,
+                customerLearning: result.customerLearning
+            });
+
             if (result.success) {
                 // ETAPA 5: Esperando autorización
                 setProcessingState(InvoiceProcessState.WAITING_AUTHORIZATION);
