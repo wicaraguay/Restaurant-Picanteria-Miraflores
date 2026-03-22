@@ -352,12 +352,21 @@ export class BillingService {
             }
         } catch (error: any) {
             // Log but don't break the billing flow
-            console.error(`[BillingService] Error in auto-learn for ${identification}:`, error.message);
-            if (error.code === 11000 || (error.message && error.message.includes('E11000'))) {
-                console.warn(`[BillingService] Duplicate key conflict for ${identification}. This suggests lookup missed it due to inconsistent data in DB.`);
-                return { status: 'conflict_duplicate' };
+            console.error(`[BillingService] Error in auto-learn for ${identification}:`, error);
+            
+            // Extract more detail if it's a DatabaseError or has an original error
+            let errorMessage = error.message;
+            if (error.originalError && error.originalError.message) {
+                errorMessage = `${error.message}: ${error.originalError.message}`;
+            } else if (error.details && error.details.message) {
+                errorMessage = `${error.message}: ${error.details.message}`;
             }
-            return { status: 'error', id: error.message };
+
+            if (error.code === 11000 || (errorMessage && errorMessage.includes('E11000'))) {
+                console.warn(`[BillingService] Duplicate key conflict for ${identification}.`);
+                return { status: 'conflict_duplicate', id: errorMessage };
+            }
+            return { status: 'error', id: errorMessage };
         }
     }
 }
