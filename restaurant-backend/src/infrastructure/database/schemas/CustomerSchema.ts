@@ -34,7 +34,17 @@ const CustomerSchema: Schema = new Schema({
     phone: { type: String },
     loyaltyPoints: { type: Number, default: 0 },
     lastVisit: { type: Date, default: Date.now },
-    identification: { type: String, trim: true },
+    identification: {
+        type: String,
+        trim: true,
+        // CRITICAL: Convert empty strings to undefined so the sparse unique index works.
+        // sparse index ignores null/absent fields but NOT empty strings "".
+        // Without this, multiple customers without ID all get identification:"" and collide.
+        set: (v: any): string | undefined => {
+            if (v === '' || v === null || v === undefined) return undefined;
+            return String(v).trim();
+        }
+    },
     address: { type: String },
 }, { timestamps: true });
 

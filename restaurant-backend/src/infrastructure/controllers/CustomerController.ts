@@ -18,8 +18,9 @@ export class CustomerController {
 
     public create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            logger.info('Creating new customer', { name: req.body.name });
-            const customer = await this.createCustomer.execute(req.body);
+            const body = this.normalizeCustomerData(req.body);
+            logger.info('Creating new customer', { name: body.name, identification: body.identification });
+            const customer = await this.createCustomer.execute(body);
             logger.info('Customer created successfully', { id: customer.id });
             res.status(201).json(ResponseFormatter.success(customer));
         } catch (error) {
@@ -60,9 +61,9 @@ export class CustomerController {
         try {
             const { identification } = req.params;
             logger.info('Looking up customer by identification', { identification });
-            
+
             const customer = await this.lookupCustomer.execute(identification);
-            
+
             if (!customer) {
                 logger.info('Customer not found in local DB', { identification });
                 res.json(ResponseFormatter.success(null));
@@ -78,8 +79,9 @@ export class CustomerController {
     public update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { id } = req.params;
-            logger.info('Updating customer', { id, updates: req.body });
-            const customer = await this.updateCustomer.execute(id, req.body);
+            const updates = this.normalizeCustomerData(req.body);
+            logger.info('Updating customer', { id, updates });
+            const customer = await this.updateCustomer.execute(id, updates);
             res.json(ResponseFormatter.success(customer));
         } catch (error) {
             next(error);
@@ -97,4 +99,20 @@ export class CustomerController {
             next(error);
         }
     };
+
+    /**
+     * Normalizes customer data before saving.
+     * - Removes empty identification strings (sparse unique index ignores absent fields, NOT "")
+     * - Uppercases and trims name
+     */
+    private normalizeCustomerData(data: any): any {
+        const normalized = { ...data };
+        if (!normalized.identification || String(normalized.identification).trim() === '') {
+            delete normalized.identification;
+        } else {
+            normalized.identification = String(normalized.identification).trim();
+        }
+        if (normalized.name) normalized.name = String(normalized.name).trim().toUpperCase();
+        return normalized;
+    }
 }

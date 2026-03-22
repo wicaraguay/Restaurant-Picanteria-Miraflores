@@ -138,6 +138,17 @@ export class DatabaseConnection {
                 logger.info('ℹ️  [Migration] identification_1 index not found. Will be created by Mongoose.');
             }
 
+            // CRITICAL: Clean up existing documents with identification:"" or null.
+            // The sparse index ignores absent fields but NOT empty strings.
+            // We must unset the field entirely (not set to null) so it becomes absent.
+            const cleanupResult = await customersCollection.updateMany(
+                { identification: { $in: ['', null] } },
+                { $unset: { identification: '' } }
+            );
+            if (cleanupResult.modifiedCount > 0) {
+                logger.info(`🧹 [Migration] Fixed ${cleanupResult.modifiedCount} customer(s) with empty/null identification (unset field).`);
+            }
+
             // Force Mongoose to sync indexes now
             await mongoose.model('Customer').ensureIndexes();
             logger.info('✅ [Migration] Customer indexes synchronized.');
