@@ -362,6 +362,15 @@ export class BillingService {
                 errorMessage = `${error.message}: ${error.details.message}`;
             }
 
+            // If still generic, try to stringify
+            if (errorMessage === 'Failed to create Customer') {
+                try {
+                    errorMessage = `Detailed Error: ${JSON.stringify(error)}`;
+                } catch (e) {
+                    errorMessage = `Failed to create Customer (unserializable error: ${error.toString()})`;
+                }
+            }
+
             if (error.code === 11000 || (errorMessage && errorMessage.includes('E11000'))) {
                 console.warn(`[BillingService] Duplicate key conflict for ${identification}.`);
                 return { status: 'conflict_duplicate', id: errorMessage };
