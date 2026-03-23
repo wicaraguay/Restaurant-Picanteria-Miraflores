@@ -14,6 +14,7 @@ import { generateInvoiceHtml, ClientData } from '../../billing/utils/invoiceGene
 import InvoiceProcessingModal, { InvoiceProcessState } from '../../billing/components/InvoiceProcessingModal';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { toast } from '../../../components/ui/AlertProvider';
+import { notificationService } from '../../../services/NotificationService';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
 
 interface OrderManagementProps {
@@ -129,6 +130,25 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     const [historyDate, setHistoryDate] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const PAGE_SIZE = 12;
+
+    const prevReadyOrdersCount = React.useRef(0);
+
+    // Initial count to avoid notification on first load
+    useEffect(() => {
+        prevReadyOrdersCount.current = orders.filter(o => o.status === OrderStatus.Ready).length;
+    }, []);
+
+    // Effect to detect READY orders
+    useEffect(() => {
+        const currentReadyCount = orders.filter(o => o.status === OrderStatus.Ready).length;
+        
+        if (currentReadyCount > prevReadyOrdersCount.current) {
+            notificationService.playOrderReadySound();
+            toast.success('¡PEDIDO LISTO PARA SERVIR / COBRAR!', 'TERMINADO');
+        }
+        
+        prevReadyOrdersCount.current = currentReadyCount;
+    }, [orders]);
 
     // Resetear página al cambiar filtros
     useEffect(() => {

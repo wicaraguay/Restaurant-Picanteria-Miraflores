@@ -4,6 +4,8 @@ import { orderService } from '../../orders/services/OrderService';
 import { SetState } from '../../../types';
 import { Order, OrderItem, OrderStatus } from '../../orders/types/order.types';
 import { ChefHatIcon, ClipboardListIcon, CheckCircleIcon, AlertCircleIcon, PlusIcon } from '../../../components/ui/Icons';
+import { toast } from '../../../components/ui/AlertProvider';
+import { notificationService } from '../../../services/NotificationService';
 
 interface KitchenManagementProps {
     orders: Order[];
@@ -201,6 +203,25 @@ const KitchenOrderCard: React.FC<{
 
 const KitchenManagement: React.FC<KitchenManagementProps> = ({ orders, setOrders }) => {
     const safeOrders = Array.isArray(orders) ? orders : [];
+    const prevNewOrdersCount = React.useRef(kitchenOrdersCount(safeOrders));
+
+    function kitchenOrdersCount(ords: Order[]) {
+        return ords.filter(o => o.status === OrderStatus.New).length;
+    }
+
+    // Effect to detect NEW orders
+    useEffect(() => {
+        const currentCount = kitchenOrdersCount(safeOrders);
+        
+        // If count increased, notify!
+        if (currentCount > prevNewOrdersCount.current) {
+            notificationService.playNewOrderSound();
+            toast.info('¡NUEVO PEDIDO RECIBIDO!', 'COCINA');
+        }
+        
+        prevNewOrdersCount.current = currentCount;
+    }, [safeOrders]);
+
 
     const kitchenOrders = safeOrders
         .filter(o => o.status === OrderStatus.New)
