@@ -55,9 +55,17 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         try {
             const exists = orders.some(o => o.id === orderToSave.id);
             if (exists) {
-                const updated = await orderService.update(orderToSave.id, orderToSave);
+                // Si el pedido ya existe y se está actualizando (ej. agregando más platos),
+                // reseteamos el tiempo estimado para que la cocina vuelva a estimar según la nueva carga.
+                const orderToUpdate = {
+                    ...orderToSave,
+                    estimatedMinutes: null,
+                    estimateSetAt: null,
+                    status: OrderStatus.New // Regresar a Nuevo para que aparezca en cocina y se pueda re-estimar
+                };
+                const updated = await orderService.update(orderToSave.id, orderToUpdate);
                 setOrders(prevOrders => prevOrders.map(o => o.id === orderToSave.id ? updated : o));
-                toast.success('Pedido actualizado', 'Éxito');
+                toast.success('Pedido actualizado y enviado a cocina', 'Éxito');
             } else {
                 const orderWithNumber = {
                     ...orderToSave,
