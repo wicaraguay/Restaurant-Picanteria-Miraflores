@@ -4,39 +4,48 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import BillingHistory from '../components/BillingHistory';
-import { billingService } from '../services/BillingService';
-import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
+import BillingHistory from '@/modules/billing/components/BillingHistory';
+import { billingService } from '@/modules/billing/services/BillingService';
+import { useRestaurantConfig } from '@/contexts/RestaurantConfigContext';
+import { API_BASE_URL } from '@/config/api.config';
 
 // Mock de Dependencias
-vi.mock('../services/BillingService', () => ({
+vi.mock('../../../src/modules/billing/services/BillingService', () => ({
     billingService: {
         getAll: vi.fn(),
         checkStatus: vi.fn(),
-        generateCreditNote: vi.fn()
+        generateCreditNote: vi.fn(),
+        generateXML: vi.fn(),
+        reSubmit: vi.fn(),
+        delete: vi.fn(),
+        editBill: vi.fn()
     }
 }));
 
-vi.mock('../../../contexts/RestaurantConfigContext', () => ({
+vi.mock('../../../src/contexts/RestaurantConfigContext', () => ({
     useRestaurantConfig: vi.fn()
 }));
 
-vi.mock('../../../config/api.config', () => ({
+vi.mock('../../../src/config/api.config', () => ({
     API_BASE_URL: 'http://localhost:3000/api'
 }));
 
 const mockBills = [
     {
         id: '1',
+        orderId: 'ORD-1',
         documentNumber: '001-001-000000001',
-        date: '2026-03-21',
-        customerName: 'CONSUMIDOR FINAL',
-        customerIdentification: '9999999999999',
-        total: 10.50,
-        subtotal: 9.38,
+        customerName: 'JUAN PEREZ',
+        customerIdentification: '0999999999',
+        customerAddress: 'Guayaquil',
+        date: '2024-03-20',
+        total: 10.00,
+        subtotal: 8.70,
+        tax: 1.30,
         sriStatus: 'AUTORIZADO',
+        accessKey: '1234567890123456789012345678901234567890123456789',
         environment: '1',
-        accessKey: '1234567890123456789012345678901234567890123456789'
+        items: []
     }
 ];
 
@@ -75,10 +84,10 @@ describe('BillingHistory Redesign', () => {
         render(<BillingHistory />);
         
         await waitFor(() => {
-            expect(screen.getByText('001-001-000000001')).toBeDefined();
-            expect(screen.getByText('CONSUMIDOR FINAL')).toBeDefined();
+            expect(screen.getAllByText('001-001-000000001')[0]).toBeDefined();
+            expect(screen.getAllByText('JUAN PEREZ')[0]).toBeDefined();
             // El badge de estado
-            expect(screen.getByText(/AUTORIZADO/i)).toBeDefined();
+            expect(screen.getAllByText(/AUTORIZADO/i)[0]).toBeDefined();
         });
     });
 
@@ -101,8 +110,16 @@ describe('BillingHistory Redesign', () => {
     });
 
     it('debe mostrar el botón de descarga XML para facturas autorizadas', async () => {
+        vi.mocked(billingService.getAll).mockResolvedValue({ 
+            data: mockBills,
+            pagination: { total: 1, page: 1, limit: 15, pages: 1 }
+        });
+
         render(<BillingHistory />);
         
+        // Debug: verify data is loaded
+        expect(await screen.findByText(/JUAN PEREZ/i)).toBeDefined();
+
         await waitFor(() => {
             // Buscamos el botón por su título (tooltip)
             const xmlBtn = screen.getByTitle(/Descargar XML Firmado/i);

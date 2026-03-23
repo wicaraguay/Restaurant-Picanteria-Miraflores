@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import POSView from '../components/POSView';
-import { MenuItem } from '../../menu/types/menu.types';
-import { OrderStatus } from '../types/order.types';
+import POSView from '@/modules/orders/components/POSView';
+import { MenuItem } from '@/modules/menu/types/menu.types';
+import { OrderStatus } from '@/modules/orders/types/order.types';
 
 const mockMenuItems: MenuItem[] = [
     { id: '1', name: 'Arroz con Pollo', price: 10, category: 'Carnes', available: true, description: 'Test', imageUrl: '' },

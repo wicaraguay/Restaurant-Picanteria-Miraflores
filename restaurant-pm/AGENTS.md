@@ -98,6 +98,10 @@ Para garantizar que el proyecto mantenga su integridad arquitectónica **FSD (Fe
 5.  **Verificación Técnica:** Después de cualquier cambio estructural o implementación de código, ejecuta **SIEMPRE** `npx tsc --noEmit` para garantizar que no hay errores de tipado o importaciones rotas.
 6.  **Actualización de Artefactos:** Si el cambio es significativo, actualiza o crea el `implementation_plan.md` y `walkthrough.md` en la carpeta de la conversación para dejar rastro de la decisión técnica.
 7.  **No Duplicidad:** Antes de crear un nuevo servicio o utilidad, utiliza `grep_search` o `list_dir` para verificar si ya existe una lógica similar en otro módulo.
+8.  **Centralización de Tests del Frontend:** 
+    *   **TODOS** los tests unitarios y de integración del frontend deben residir en la carpeta raíz `/tests/`.
+    *   La estructura interna de `/tests/` debe despejar la de `src/` (ej. `tests/core/`, `tests/components/`, `tests/modules/{nombre}/`).
+    *   **PROHIBIDO** crear carpetas `__tests__` dentro de `src/` para mantener limpio el código de producción.
 
 ---
 

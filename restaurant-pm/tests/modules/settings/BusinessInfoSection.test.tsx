@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import BusinessInfoSection from '../BusinessInfoSection';
+import BusinessInfoSection from '@/modules/settings/components/sections/BusinessInfoSection';
 import React from 'react';
 
 const mockBusinessInfo = {

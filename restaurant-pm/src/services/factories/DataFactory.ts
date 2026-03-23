@@ -91,14 +91,32 @@ export class DataFactory {
      * Crea empleados de ejemplo
      */
     static createDefaultEmployees(): Employee[] {
-        return [];
+        const defaultShifts = {
+            'Lunes': 'AM',
+            'Martes': 'AM',
+            'Miercoles': 'AM',
+            'Jueves': 'AM',
+            'Viernes': 'AM',
+            'Sabado': 'Libre',
+            'Domingo': 'Libre'
+        };
+        return [
+            { id: '1', identification: '0999999991', name: 'Admin User', username: 'admin', roleId: '1', phone: '0999999991', shifts: defaultShifts, salary: 1000, equipment: { uniform: true, epp: true } },
+            { id: '2', identification: '0999999992', name: 'Cajero User', username: 'cajero', roleId: '2', phone: '0999999992', shifts: defaultShifts, salary: 500, equipment: { uniform: true, epp: true } },
+            { id: '3', identification: '0999999993', name: 'Mesero User', username: 'mesero', roleId: '3', phone: '0999999993', shifts: defaultShifts, salary: 450, equipment: { uniform: true, epp: true } },
+            { id: '4', identification: '0999999994', name: 'Cocinero User', username: 'cocinero', roleId: '4', phone: '0999999994', shifts: defaultShifts, salary: 600, equipment: { uniform: true, epp: true } },
+        ];
     }
 
     /**
      * Crea clientes de ejemplo
      */
     static createDefaultCustomers(): Customer[] {
-        return [];
+        return [
+            { id: '1', identification: '0999999991', name: 'Juan Perez', email: 'juan@test.com', phone: '0999123456', address: 'Guayaquil', loyaltyPoints: 0, lastVisit: new Date().toISOString() },
+            { id: '2', identification: '0999999992', name: 'Maria Lopez', email: 'maria@test.com', phone: '0999123457', address: 'Guayaquil', loyaltyPoints: 0, lastVisit: new Date().toISOString() },
+            { id: '9999999999999', identification: '9999999999999', name: 'CONSUMIDOR FINAL', email: 'consumidor@final.com', phone: '9999999999', address: 'S/N', loyaltyPoints: 0, lastVisit: new Date().toISOString() }
+        ];
     }
 
     /**
@@ -112,7 +130,11 @@ export class DataFactory {
      * Crea items del menú de ejemplo
      */
     static createDefaultMenuItems(): MenuItem[] {
-        return [];
+        return [
+            { id: '1', name: 'Arroz con Pollo', description: 'Arroz con pollo clásico', price: 10.50, category: 'Main', available: true, imageUrl: '' },
+            { id: '2', name: 'Ceviche', description: 'Ceviche de camarón', price: 12.00, category: 'Seafood', available: true, imageUrl: '' },
+            { id: '3', name: 'Coca Cola', description: 'Refresca tu día', price: 1.50, category: 'Beverages', available: true, imageUrl: '' }
+        ];
     }
 
     /**

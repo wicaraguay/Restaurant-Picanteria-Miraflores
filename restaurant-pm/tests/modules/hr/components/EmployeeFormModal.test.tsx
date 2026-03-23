@@ -1,9 +1,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EmployeeFormModal } from '../EmployeeFormModal';
+import { EmployeeFormModal } from '@/modules/hr/components/EmployeeFormModal';
 
 // Mock de validadores
-vi.mock('../utils/hrValidators', () => ({
+vi.mock('../../../../src/modules/hr/components/utils/hrValidators', () => ({
     validateEmployeeId: vi.fn((id) => id.length === 10 ? { isValid: true } : { isValid: false, error: 'Cédula inválida' }),
     validateFullName: vi.fn((name) => name.length >= 3 ? { isValid: true } : { isValid: false, error: 'Nombre corto' }),
     validateUsername: vi.fn((user) => user.length >= 4 ? { isValid: true } : { isValid: false, error: 'Usuario corto' }),

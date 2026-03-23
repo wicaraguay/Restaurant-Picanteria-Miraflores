@@ -70,3 +70,8 @@ La cobertura actual es **insuficiente**:
 
 ### 4. Separación de Responsabilidades en Casos de Uso
 - Los casos de uso no deberían conocer detalles de cómo enviar un mail (`EmailService`) o generar un PDF (`PDFService`) directamente si esto infla demasiado su tamaño; se pueden usar eventos de dominio o servicios de aplicación más cohesivos.
+
+## 6. Centralización de Tests del Frontend
+- **TODOS** los tests unitarios y de integración del frontend deben residir en la carpeta raíz `/tests/`.
+- La estructura interna de `/tests/` debe despejar la de `src/` (ej. `tests/core/`, `tests/components/`, `tests/modules/{nombre}/`).
+- **PROHIBIDO** crear carpetas `__tests__` dentro de `src/` para mantener limpio el código de producción.

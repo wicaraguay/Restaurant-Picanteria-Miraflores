@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { BillingModal } from './BillingModal';
-import { OrderStatus } from '../types/order.types';
+import { BillingModal } from '@/modules/orders/components/BillingModal';
+import { OrderStatus } from '@/modules/orders/types/order.types';
 
 // Mock UI Components
-vi.mock('../../../components/ui/Modal', () => ({
+vi.mock('@/components/ui/Modal', () => ({
     default: ({ children, isOpen, title }: any) => isOpen ? (
         <div data-testid="modal">
             <h1>{title}</h1>
@@ -13,7 +13,7 @@ vi.mock('../../../components/ui/Modal', () => ({
     ) : null
 }));
 
-vi.mock('../../../components/ui/Icons', () => ({
+vi.mock('@/components/ui/Icons', () => ({
     UserIcon: () => <span data-testid="icon-user" />,
     MailIcon: () => <span />,
     PhoneIcon: () => <span />,

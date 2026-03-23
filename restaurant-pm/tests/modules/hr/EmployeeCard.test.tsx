@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { EmployeeCard } from '../components/EmployeeCard';
-import { Employee } from '../types/hr.types';
+import { EmployeeCard } from '@/modules/hr/components/EmployeeCard';
+import { Employee } from '../../../src/modules/hr/types/hr.types';
 
 const mockEmployee: Employee = {
     id: '1',

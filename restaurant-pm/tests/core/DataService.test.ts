@@ -1,10 +1,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DataService } from '../src/services/DataService';
-import { api } from '../src/api';
+import { DataService } from '@/services/DataService';
+import { api } from '@/api';
 
 // Mock the API
-vi.mock('../src/api', () => ({
+vi.mock('@/api', () => ({
     api: {
         customers: {
             getAll: vi.fn(),

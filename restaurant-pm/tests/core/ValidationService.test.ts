@@ -9,7 +9,7 @@
  * @layer Tests
  */
 
-import { ValidationService } from '../src/services/ValidationService';
+import { ValidationService } from '../../src/services/ValidationService';
 
 describe('ValidationService', () => {
     describe('validateEmail', () => {

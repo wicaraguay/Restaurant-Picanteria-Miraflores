@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import Dashboard from '../Dashboard';
-import { OrderStatus, Order } from '../../modules/orders/types/order.types';
-import { Reservation } from '../../modules/customers/types/customer.types';
+import Dashboard from '@/components/Dashboard';
+import { useRestaurantConfig } from '@/contexts/RestaurantConfigContext';
+import { OrderStatus, Order } from '@/modules/orders/types/order.types';
+import { Reservation } from '@/modules/customers/types/customer.types';
 
 const mockOrders: Order[] = [
     {

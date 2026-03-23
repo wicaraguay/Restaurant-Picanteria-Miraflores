@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { AnalyticsDashboard } from '../AnalyticsDashboard';
-import { analyticsService } from '../../../services/AnalyticsService';
+import { AnalyticsDashboard } from '@/components/analytics/AnalyticsDashboard';
+import { analyticsService } from '@/services/AnalyticsService';
+import { useRestaurantConfig } from '@/contexts/RestaurantConfigContext';
 
 // Mock the AnalyticsService
-vi.mock('../../../services/AnalyticsService', () => ({
+vi.mock('@/services/AnalyticsService', () => ({
     analyticsService: {
         getDashboardAnalysis: vi.fn()
     }

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import HRManagement from '../components/HRManagement';
-import { Employee, Role } from '../types/hr.types';
-import { api } from '../../../api';
+import HRManagement from '@/modules/hr/components/HRManagement';
+import { Employee, Role } from '../../../src/modules/hr/types/hr.types';
+import { api } from '../../../src/api';
 
 // Mock simple de la API
-vi.mock('../../../api', () => ({
+vi.mock('../../../src/api', () => ({
     api: {
         employees: {
             getAll: vi.fn(),
