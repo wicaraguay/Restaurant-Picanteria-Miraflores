@@ -13,7 +13,10 @@ export class ResendEmailService implements IEmailService {
             console.warn('[ResendEmailService] RESEND_API_KEY is not defined in environment variables.');
         }
         this.resend = new Resend(apiKey);
-        this.fromEmail = process.env.SMTP_FROM || 'onboarding@resend.dev';
+        const email = process.env.SMTP_FROM || 'onboarding@resend.dev';
+        const name = process.env.BUSINESS_NAME;
+        // Format: "Business Name <email@domain.com>" — named senders are more trusted by spam filters
+        this.fromEmail = name ? `${name} <${email}>` : email;
     }
 
     public async sendInvoiceEmail(to: string, invoice: Invoice, pdfBuffer: Buffer, xmlContent?: string): Promise<void> {
@@ -44,6 +47,7 @@ export class ResendEmailService implements IEmailService {
             const { data, error } = await this.resend.emails.send({
                 from: this.fromEmail,
                 to: [to],
+                replyTo: this.fromEmail,
                 subject: `Factura Electrónica ${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}`,
                 html: htmlContent,
                 attachments: attachments,
@@ -117,8 +121,11 @@ export class ResendEmailService implements IEmailService {
             logoUrl = publicLogo;
         }
 
-        const d = invoice.creationDate || new Date();
-        const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+        const d = invoice.creationDate ? new Date(invoice.creationDate) : new Date();
+        const dateStr = new Intl.DateTimeFormat('es-EC', {
+            timeZone: 'America/Guayaquil',
+            day: '2-digit', month: '2-digit', year: 'numeric'
+        }).format(d);
 
         return `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; padding: 20px;">
@@ -151,8 +158,11 @@ export class ResendEmailService implements IEmailService {
             logoUrl = publicLogo;
         }
 
-        const d = creditNote.creationDate || new Date();
-        const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+        const d = creditNote.creationDate ? new Date(creditNote.creationDate) : new Date();
+        const dateStr = new Intl.DateTimeFormat('es-EC', {
+            timeZone: 'America/Guayaquil',
+            day: '2-digit', month: '2-digit', year: 'numeric'
+        }).format(d);
 
         return `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; padding: 20px;">
