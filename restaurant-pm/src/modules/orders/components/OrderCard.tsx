@@ -5,7 +5,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
-import { EditIcon, TrashIcon } from '../../../components/ui/Icons';
+import { EditIcon, TrashIcon, ClockIcon } from '../../../components/ui/Icons';
 
 interface OrderCardProps {
     order: Order;
@@ -89,13 +89,24 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, onEdit, onDelete, o
                 </div>
 
                 <div className="flex justify-between items-center mb-3 md:mb-4">
-                    <span className="text-[9px] md:text-[10px] font-black bg-gray-100 dark:bg-dark-900 px-2 py-1 rounded-lg text-gray-500 dark:text-gray-400 uppercase tracking-widest">{order.type}</span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[9px] md:text-[10px] font-black bg-gray-100 dark:bg-dark-900 px-2 py-1 rounded-lg text-gray-500 dark:text-gray-400 uppercase tracking-widest">{order.type}</span>
+                        
+                        {/* Tiempo Estimado (Solo si es Nuevo y tiene tiempo seteado) */}
+                        {order.status === OrderStatus.New && order.estimatedMinutes && (
+                            <div className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg animate-pulse">
+                                <ClockIcon className="w-3 h-3" />
+                                <span className="text-[10px] font-black uppercase tracking-tighter">{order.estimatedMinutes}' MIN</span>
+                            </div>
+                        )}
+                    </div>
+
                     <button 
                         onClick={handleStatusClick} 
                         disabled={order.status === OrderStatus.Completed}
                         className={`text-[9px] md:text-[10px] font-black py-1 px-3 rounded-xl uppercase tracking-widest transition-all ${order.status !== OrderStatus.Completed ? 'active:scale-95' : 'cursor-default'} ${getStatusBadgeColor()}`}
                     >
-                        {order.status}
+                        {order.status === OrderStatus.Ready ? '¡LISTO PARA COBRO!' : order.status}
                     </button>
                 </div>
 

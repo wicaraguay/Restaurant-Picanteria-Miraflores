@@ -150,6 +150,29 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         prevReadyOrdersCount.current = currentReadyCount;
     }, [orders]);
 
+    const prevEstimatedOrders = React.useRef<Record<string, number | null>>({});
+
+    // Effect to detect ESTIMATED time changes from kitchen
+    useEffect(() => {
+        orders.forEach(order => {
+            const prevEstimate = prevEstimatedOrders.current[order.id];
+            const currentEstimate = order.estimatedMinutes;
+
+            // If estimate was set or changed (and it's not the initial load)
+            if (currentEstimate && currentEstimate !== prevEstimate && prevEstimate !== undefined) {
+                toast.info(`Pedido #${order.orderNumber || order.id.slice(-6)}: Cocina estima ${currentEstimate} min`, 'TIEMPO ESTIMADO');
+            }
+            
+            prevEstimatedOrders.current[order.id] = currentEstimate;
+        });
+
+        // Cleanup old orders from ref
+        const currentIds = new Set(orders.map(o => o.id));
+        Object.keys(prevEstimatedOrders.current).forEach(id => {
+            if (!currentIds.has(id)) delete prevEstimatedOrders.current[id];
+        });
+    }, [orders]);
+
     // Resetear página al cambiar filtros
     useEffect(() => {
         setCurrentPage(1);

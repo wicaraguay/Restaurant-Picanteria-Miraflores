@@ -271,6 +271,9 @@ const KitchenManagement: React.FC<KitchenManagementProps> = ({ orders, setOrders
                 estimatedMinutes: newMinutes,
                 estimateSetAt: newSetAt
             });
+            if (newMinutes) {
+                toast.success(`Tiempo estimado: ${newMinutes} min`, 'NOTIFICADO');
+            }
         } catch (error) {
             console.error('Failed to update estimate:', error);
             setOrders(originalOrders);
@@ -286,10 +289,12 @@ const KitchenManagement: React.FC<KitchenManagementProps> = ({ orders, setOrders
                 // Ensure all items are marked as prepared
                 items: order.items.map(i => ({ ...i, prepared: true }))
             });
+            // Update state locally so it disappears immediately from the filtered list
             setOrders(prev => prev.map(o => o.id === order.id ? updated : o));
+            toast.success(`Pedido de ${order.customerName} despachado`, '¡LISTO!');
         } catch (error) {
             console.error('Failed to update status:', error);
-            alert('Error al enviar pedido a mesa.');
+            toast.error('Error al enviar pedido a mesa.', 'ERROR');
         }
     };
 
