@@ -788,17 +788,27 @@ export class PDFService {
         doc.strokeColor(color).lineWidth(lineWidth).moveTo(startX, y).lineTo(endX, y).stroke();
     }
 
+    /**
+     * Formats a date to local Ecuador time (America/Guayaquil, UTC-5).
+     * 
+     * IMPORTANT: The server runs in UTC (e.g. on Render.com). Using d.getHours() would
+     * return UTC hours, showing times 5 hours ahead for Ecuador users.
+     * We always convert to America/Guayaquil (UTC-5) explicitly.
+     */
     private formatDateTime(input: string | Date | undefined): string {
         if (!input) return '';
 
         let d: Date;
+
         if (input instanceof Date) {
             d = input;
         } else {
-            // Try SRI format: DD/MM/YYYY HH:mm:ss
+            // Handle SRI date string format: DD/MM/YYYY HH:mm:ss
+            // These are already in Ecuador local time (SRI uses Ecuador timezone)
             const sriPattern = /^(\d{2})\/(\d{2})\/(\d{4})\s(\d{2}):(\d{2}):(\d{2})$/;
             const match = input.match(sriPattern);
             if (match) {
+                // SRI already sends Ecuador local time — just reformat to 12h, no conversion needed
                 let hours = parseInt(match[4], 10);
                 const ampm = hours >= 12 ? 'pm' : 'am';
                 hours = hours % 12 || 12;
@@ -808,18 +818,31 @@ export class PDFService {
         }
 
         if (isNaN(d.getTime())) {
-            // If it's just a date DD/MM/YYYY, return it as is
-            return input instanceof Date ? '' : input;
+            return input instanceof Date ? '' : String(input);
         }
 
-        const day = d.getDate().toString().padStart(2, '0');
-        const month = (d.getMonth() + 1).toString().padStart(2, '0');
-        const year = d.getFullYear();
-        let hours = d.getHours();
-        const mins = d.getMinutes().toString().padStart(2, '0');
-        const ampm = hours >= 12 ? 'pm' : 'am';
-        hours = hours % 12 || 12;
+        // Use Intl.DateTimeFormat to get the correct Ecuador local time
+        // This works correctly regardless of server timezone
+        const formatter = new Intl.DateTimeFormat('es-EC', {
+            timeZone: 'America/Guayaquil',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+        });
 
-        return `${day}/${month}/${year} ${hours.toString().padStart(2, '0')}:${mins} ${ampm}`;
+        const parts = formatter.formatToParts(d);
+        const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+
+        const day = get('day');
+        const month = get('month');
+        const year = get('year');
+        const hour = get('hour');
+        const minute = get('minute');
+        const dayPeriod = (get('dayPeriod') || '').toLowerCase().replace('.', '').replace(' ', '');
+
+        return `${day}/${month}/${year} ${hour}:${minute} ${dayPeriod}`;
     }
 }

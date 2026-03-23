@@ -116,8 +116,12 @@ export class NodemailerEmailService implements IEmailService {
             logoUrl = publicLogo;
         }
 
-        const d = invoice.creationDate || new Date();
-        const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+        const d = invoice.creationDate ? new Date(invoice.creationDate) : new Date();
+        // IMPORTANT: Server runs in UTC (Render.com). Always format in Ecuador time.
+        const dateStr = new Intl.DateTimeFormat('es-EC', {
+            timeZone: 'America/Guayaquil',
+            day: '2-digit', month: '2-digit', year: 'numeric'
+        }).format(d);
 
         return `
             <div style="font-family: 'Helvetica', 'Arial', sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
@@ -173,8 +177,12 @@ export class NodemailerEmailService implements IEmailService {
             logoUrl = publicLogo;
         }
 
-        const d = creditNote.creationDate || new Date();
-        const dateStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+        const d = creditNote.creationDate ? new Date(creditNote.creationDate) : new Date();
+        // IMPORTANT: Server runs in UTC (Render.com). Always format in Ecuador time.
+        const dateStr = new Intl.DateTimeFormat('es-EC', {
+            timeZone: 'America/Guayaquil',
+            day: '2-digit', month: '2-digit', year: 'numeric'
+        }).format(d);
 
         return `
             <div style="font-family: 'Helvetica', 'Arial', sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
