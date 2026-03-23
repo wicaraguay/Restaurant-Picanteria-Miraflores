@@ -106,56 +106,65 @@ export class DatabaseConnection {
     }
 
     /**
-     * Runs index migrations to fix any mismatched index definitions.
-     * Specifically drops and recreates the `identification_1` index on customers
-     * so it is created with `sparse: true`, allowing multiple docs with empty identification.
+     * Runs index migrations using DIRECT MongoDB API (no Mongoose model needed).
+     *
+     * WHY: mongoose.model('Customer').ensureIndexes() fails in production because
+     * the CustomerModel is not imported/registered yet when DatabaseConnection runs.
+     * Using the collection API directly avoids this dependency.
+     *
+     * WHAT IT DOES:
+     * 1. Drops the old non-sparse identification_1 index if present
+     * 2. Cleans documents with identification:'' or null (unsets the field)
+     * 3. Creates the correct sparse+unique index via collection.createIndex()
      */
     private async runIndexMigrations(): Promise<void> {
         try {
             const db = mongoose.connection.db;
             if (!db) {
-                logger.warn('⚠️  [Migration] No DB connection, skipping index migrations.');
+                logger.warn('[Migration] No DB connection, skipping.');
                 return;
             }
 
-            const customersCollection = db.collection('customers');
-            const existingIndexes = await customersCollection.listIndexes().toArray();
+            const col = db.collection('customers');
 
-            const identificationIndex = existingIndexes.find(
-                (idx: any) => idx.name === 'identification_1'
-            );
+            // Step 1: Check current state of the identification index
+            const indexes = await col.listIndexes().toArray();
+            const idxInfo = indexes.find((i: any) => i.name === 'identification_1');
 
-            if (identificationIndex) {
-                const isSparse = identificationIndex.sparse === true;
-                if (!isSparse) {
-                    logger.warn('🔧 [Migration] Found non-sparse identification_1 index. Dropping and recreating as sparse...');
-                    await customersCollection.dropIndex('identification_1');
-                    logger.info('✅ [Migration] Old identification_1 index dropped. Mongoose will recreate as sparse on next ensureIndexes.');
-                } else {
-                    logger.info('✅ [Migration] identification_1 index is already sparse. No migration needed.');
-                }
-            } else {
-                logger.info('ℹ️  [Migration] identification_1 index not found. Will be created by Mongoose.');
+            if (idxInfo && idxInfo.sparse !== true) {
+                logger.warn('[Migration] Dropping old non-sparse identification_1 index...');
+                await col.dropIndex('identification_1');
+                logger.info('[Migration] Old index dropped.');
             }
 
-            // CRITICAL: Clean up existing documents with identification:"" or null.
-            // The sparse index ignores absent fields but NOT empty strings.
-            // We must unset the field entirely (not set to null) so it becomes absent.
-            const cleanupResult = await customersCollection.updateMany(
+            // Step 2: Clean up documents with identification:'' or null
+            // Sparse index ignores ABSENT fields, not empty strings
+            const cleanup = await col.updateMany(
                 { identification: { $in: ['', null] } },
                 { $unset: { identification: '' } }
             );
-            if (cleanupResult.modifiedCount > 0) {
-                logger.info(`🧹 [Migration] Fixed ${cleanupResult.modifiedCount} customer(s) with empty/null identification (unset field).`);
+            if (cleanup.modifiedCount > 0) {
+                logger.info(`[Migration] Cleaned ${cleanup.modifiedCount} customer(s) with empty identification.`);
             }
 
-            // Force Mongoose to sync indexes now
-            await mongoose.model('Customer').ensureIndexes();
-            logger.info('✅ [Migration] Customer indexes synchronized.');
+            // Step 3: Create the correct index using direct MongoDB API (idempotent)
+            const refreshedIndexes = await col.listIndexes().toArray();
+            const hasCorrectIndex = refreshedIndexes.some(
+                (i: any) => i.name === 'identification_1' && i.sparse === true
+            );
+
+            if (!hasCorrectIndex) {
+                await col.createIndex(
+                    { identification: 1 },
+                    { unique: true, sparse: true, name: 'identification_1' }
+                );
+                logger.info('[Migration] Sparse unique index on identification created.');
+            } else {
+                logger.info('[Migration] Sparse unique index already correct.');
+            }
 
         } catch (error) {
-            // Non-fatal: log but don't crash the server
-            logger.error('❌ [Migration] Failed to run index migrations:', error);
+            logger.error('[Migration] Failed (non-fatal):', error);
         }
     }
 
