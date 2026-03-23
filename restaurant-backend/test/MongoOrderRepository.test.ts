@@ -65,6 +65,7 @@ describe('MongoOrderRepository Integration Tests', () => {
             type: 'En Local',
             status: OrderStatus.Completed,
             billed: true,
+            billingType: 'Factura',
             orderNumber: 'A1',
             createdAt: today
         } as any);
@@ -107,5 +108,45 @@ describe('MongoOrderRepository Integration Tests', () => {
         // Sales by category (Order Type in our implementation)
         const local = stats.salesByCategory.find(c => c.category === 'En Local');
         expect(local?.total).toBe(30.00);
+
+        // Sales by billing type
+        const sinFactura = stats.salesByBillingType.find(b => b.type === 'Sin Factura');
+        const factura = stats.salesByBillingType.find(b => b.type === 'Factura');
+        expect(sinFactura?.total).toBe(15.00);
+        expect(factura?.total).toBe(30.00);
+    });
+
+    it('should group revenue by month for ranges larger than 32 days', async () => {
+        const date1 = new Date('2026-01-15T12:00:00Z');
+        const date2 = new Date('2026-02-15T12:00:00Z');
+
+        await repository.create({
+            customerName: 'Jan Client',
+            items: [{ name: 'Item', quantity: 1, price: 100 }],
+            type: 'En Local',
+            status: OrderStatus.Completed,
+            createdAt: date1
+        } as any);
+
+        await repository.create({
+            customerName: 'Feb Client',
+            items: [{ name: 'Item', quantity: 1, price: 200 }],
+            type: 'En Local',
+            status: OrderStatus.Completed,
+            createdAt: date2
+        } as any);
+
+        const start = new Date('2026-01-01T00:00:00Z');
+        const end = new Date('2026-12-31T23:59:59Z');
+
+        const stats = await repository.getDashboardStats(start, end);
+
+        // Check revenueByDay (which should be revenueByMonth in this case)
+        // Grouping format is %Y-%m
+        const jan = stats.revenueByDay.find(r => r.date === '2026-01');
+        const feb = stats.revenueByDay.find(r => r.date === '2026-02');
+
+        expect(jan?.total).toBe(100);
+        expect(feb?.total).toBe(200);
     });
 });

@@ -56,13 +56,16 @@ export class MongoOrderRepository extends BaseRepository<Order> implements IOrde
 
         const stats = revenueAggregation[0] || { totalRevenue: 0, totalOrders: 0, averageTicket: 0 };
 
-        // 2. Revenue by Day
+        // 2. Revenue Trend (by Day or by Month depending on range)
+        const durationDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+        const dateFormat = durationDays > 32 ? "%Y-%m" : "%Y-%m-%d";
+
         const revenueByDay = await this.model.aggregate([
             { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
             { $unwind: "$items" },
             {
                 $group: {
-                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    _id: { $dateToString: { format: dateFormat, date: "$createdAt", timezone: "America/Guayaquil" } },
                     total: { $sum: { $multiply: ["$items.quantity", { $ifNull: ["$items.price", 0] }] } }
                 }
             },
@@ -114,6 +117,19 @@ export class MongoOrderRepository extends BaseRepository<Order> implements IOrde
             { $project: { category: "$_id", total: 1, _id: 0 } }
         ]);
 
+        // 7. Sales by Billing Type
+        const salesByBillingType = await this.model.aggregate([
+            { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+            { $unwind: "$items" },
+            {
+                $group: {
+                    _id: { $ifNull: ["$billingType", "Sin Factura"] },
+                    total: { $sum: { $multiply: ["$items.quantity", { $ifNull: ["$items.price", 0] }] } }
+                }
+            },
+            { $project: { type: "$_id", total: 1, _id: 0 } }
+        ]);
+
 
         return {
             totalRevenue: stats.totalRevenue,
@@ -123,7 +139,8 @@ export class MongoOrderRepository extends BaseRepository<Order> implements IOrde
             ordersByStatus,
             topSellingItems,
             activityByHour,
-            salesByCategory
+            salesByCategory,
+            salesByBillingType
         };
     }
 }

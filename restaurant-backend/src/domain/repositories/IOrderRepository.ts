@@ -26,6 +26,7 @@ export interface DashboardStatsDTO {
     topSellingItems: { name: string; quantity: number }[];
     salesByCategory: { category: string; total: number }[];
     activityByHour: { hour: number; count: number }[];
+    salesByBillingType: { type: string; total: number }[];
 }
 
 export interface IOrderRepository {

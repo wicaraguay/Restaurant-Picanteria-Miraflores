@@ -14,7 +14,7 @@ export class DashboardController {
 
     getStats = async (req: Request, res: Response): Promise<void> => {
         try {
-            const range = req.query.range as 'today' | 'week' | 'month' || 'today';
+            const range = req.query.range as 'today' | 'week' | 'month' | 'year' || 'today';
             console.log(`[DashboardController] Getting stats for range: ${range}`);
             const stats = await this.dashboardStatsUseCase.execute(range);
             console.log(`[DashboardController] Stats result:`, JSON.stringify(stats, null, 2));

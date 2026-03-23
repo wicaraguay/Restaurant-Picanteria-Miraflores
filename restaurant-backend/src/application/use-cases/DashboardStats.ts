@@ -6,7 +6,7 @@ import { IOrderRepository, DashboardStatsDTO } from '../../domain/repositories/I
 export class DashboardStats {
     constructor(private orderRepository: IOrderRepository) { }
 
-    async execute(range: 'today' | 'week' | 'month' = 'today'): Promise<DashboardStatsDTO> {
+    async execute(range: 'today' | 'week' | 'month' | 'year' = 'today'): Promise<DashboardStatsDTO> {
         const endDate = new Date();
         let startDate = new Date();
 
@@ -25,6 +25,11 @@ export class DashboardStats {
             case 'month':
                 // Start of current month
                 startDate.setDate(1);
+                startDate.setHours(0, 0, 0, 0);
+                break;
+            case 'year':
+                // Start of current year
+                startDate.setMonth(0, 1);
                 startDate.setHours(0, 0, 0, 0);
                 break;
         }
