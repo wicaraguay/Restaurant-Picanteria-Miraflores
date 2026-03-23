@@ -108,14 +108,12 @@ export class DatabaseConnection {
     /**
      * Runs index migrations using DIRECT MongoDB API (no Mongoose model needed).
      *
-     * WHY: mongoose.model('Customer').ensureIndexes() fails in production because
-     * the CustomerModel is not imported/registered yet when DatabaseConnection runs.
-     * Using the collection API directly avoids this dependency.
+     * WHY: mongoose.model().ensureIndexes() fails in production because the model
+     * is not registered yet when DatabaseConnection runs. Direct collection API avoids this.
      *
-     * WHAT IT DOES:
-     * 1. Drops the old non-sparse identification_1 index if present
-     * 2. Cleans documents with identification:'' or null (unsets the field)
-     * 3. Creates the correct sparse+unique index via collection.createIndex()
+     * FIXES:
+     * 1. identification_1: Was unique+non-sparse -> must be unique+sparse (allows multiple without ID)
+     * 2. email_1: Was unique -> must be non-unique (email is optional, not a unique key for customers)
      */
     private async runIndexMigrations(): Promise<void> {
         try {
@@ -126,47 +124,69 @@ export class DatabaseConnection {
             }
 
             const col = db.collection('customers');
-
-            // Step 1: Check current state of the identification index
             const indexes = await col.listIndexes().toArray();
-            const idxInfo = indexes.find((i: any) => i.name === 'identification_1');
 
-            if (idxInfo && idxInfo.sparse !== true) {
+            // ── FIX 1: identification_1 must be unique + sparse ──────────────────
+            const identificationIdx = indexes.find((i: any) => i.name === 'identification_1');
+            if (identificationIdx && identificationIdx.sparse !== true) {
                 logger.warn('[Migration] Dropping old non-sparse identification_1 index...');
                 await col.dropIndex('identification_1');
-                logger.info('[Migration] Old index dropped.');
+                logger.info('[Migration] identification_1 dropped.');
             }
 
-            // Step 2: Clean up documents with identification:'' or null
-            // Sparse index ignores ABSENT fields, not empty strings
-            const cleanup = await col.updateMany(
+            // Clean up documents with identification:'' or null so the sparse index works
+            const idCleanup = await col.updateMany(
                 { identification: { $in: ['', null] } },
                 { $unset: { identification: '' } }
             );
-            if (cleanup.modifiedCount > 0) {
-                logger.info(`[Migration] Cleaned ${cleanup.modifiedCount} customer(s) with empty identification.`);
+            if (idCleanup.modifiedCount > 0) {
+                logger.info(`[Migration] Cleaned ${idCleanup.modifiedCount} customer(s) with empty identification.`);
             }
 
-            // Step 3: Create the correct index using direct MongoDB API (idempotent)
-            const refreshedIndexes = await col.listIndexes().toArray();
-            const hasCorrectIndex = refreshedIndexes.some(
+            // Recreate identification index correctly (idempotent)
+            const indexesAfterDrop = await col.listIndexes().toArray();
+            const hasCorrectIdIdx = indexesAfterDrop.some(
                 (i: any) => i.name === 'identification_1' && i.sparse === true
             );
-
-            if (!hasCorrectIndex) {
+            if (!hasCorrectIdIdx) {
                 await col.createIndex(
                     { identification: 1 },
                     { unique: true, sparse: true, name: 'identification_1' }
                 );
                 logger.info('[Migration] Sparse unique index on identification created.');
             } else {
-                logger.info('[Migration] Sparse unique index already correct.');
+                logger.info('[Migration] identification_1 already correct.');
+            }
+
+            // ── FIX 2: email_1 must be unique + sparse ───────────────────────────
+            // Email is optional but must be unique when provided (same pattern as identification).
+            // Production MongoDB had it as unique WITHOUT sparse -> blocks multiple customers without email.
+            const emailIdx = indexesAfterDrop.find((i: any) => i.name === 'email_1');
+            if (emailIdx && (emailIdx.sparse !== true)) {
+                logger.warn('[Migration] Dropping old email_1 index (needs to be unique+sparse)...');
+                await col.dropIndex('email_1');
+                // Also clean up documents with email:'' or null so sparse index works
+                const emailCleanup = await col.updateMany(
+                    { email: { $in: ['', null] } },
+                    { $unset: { email: '' } }
+                );
+                if (emailCleanup.modifiedCount > 0) {
+                    logger.info(`[Migration] Cleaned ${emailCleanup.modifiedCount} customer(s) with empty email.`);
+                }
+                await col.createIndex({ email: 1 }, { unique: true, sparse: true, name: 'email_1' });
+                logger.info('[Migration] email_1 recreated as unique+sparse index.');
+            } else if (!emailIdx) {
+                await col.createIndex({ email: 1 }, { unique: true, sparse: true, name: 'email_1' });
+                logger.info('[Migration] email_1 unique+sparse index created.');
+            } else {
+                logger.info('[Migration] email_1 already correct (unique+sparse).');
             }
 
         } catch (error) {
             logger.error('[Migration] Failed (non-fatal):', error);
         }
     }
+
 
     public async disconnect(): Promise<void> {
         if (!this.isConnected) {

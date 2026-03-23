@@ -145,6 +145,20 @@ describe('CREATE customer', () => {
         expect(c1.id).toBeDefined();
         expect(c2.id).toBeDefined();
     });
+
+    it('creates MULTIPLE customers WITHOUT email — sparse index allows it', async () => {
+        const c1 = await createCustomer.execute({ name: 'SIN EMAIL UNO', email: '', loyaltyPoints: 0, lastVisit: new Date() } as any);
+        const c2 = await createCustomer.execute({ name: 'SIN EMAIL DOS', email: '', loyaltyPoints: 0, lastVisit: new Date() } as any);
+        expect(c1.id).toBeDefined();
+        expect(c2.id).toBeDefined();
+    });
+
+    it('fails when two customers share the SAME email', async () => {
+        await createCustomer.execute({ name: 'EMAIL UNO', email: 'test@test.com', loyaltyPoints: 0, lastVisit: new Date() } as any);
+        await expect(
+            createCustomer.execute({ name: 'EMAIL DOS', email: 'test@test.com', loyaltyPoints: 0, lastVisit: new Date() } as any)
+        ).rejects.toThrow();
+    });
 });
 
 // ─────────────────────────────────────────────

@@ -93,7 +93,6 @@ export class CustomerController {
             const { id } = req.params;
             logger.info('Deleting customer', { id });
             await this.deleteCustomer.execute(id);
-            // Return success with null data to indicate it's done
             res.json(ResponseFormatter.success(null));
         } catch (error) {
             next(error);
@@ -102,17 +101,29 @@ export class CustomerController {
 
     /**
      * Normalizes customer data before saving.
-     * - Removes empty identification strings (sparse unique index ignores absent fields, NOT "")
-     * - Uppercases and trims name
+     * Both email and identification are optional but unique when provided (sparse unique index).
+     * Empty strings must be removed entirely so the sparse index treats them as absent.
      */
     private normalizeCustomerData(data: any): any {
         const normalized = { ...data };
+
+        // identification: empty → absent (sparse index ignores absent, NOT "")
         if (!normalized.identification || String(normalized.identification).trim() === '') {
             delete normalized.identification;
         } else {
             normalized.identification = String(normalized.identification).trim();
         }
+
+        // email: empty → absent (sparse index ignores absent, NOT ""), lowercase for consistency
+        if (!normalized.email || String(normalized.email).trim() === '') {
+            delete normalized.email;
+        } else {
+            normalized.email = String(normalized.email).trim().toLowerCase();
+        }
+
+        // name: uppercase and trim
         if (normalized.name) normalized.name = String(normalized.name).trim().toUpperCase();
+
         return normalized;
     }
 }

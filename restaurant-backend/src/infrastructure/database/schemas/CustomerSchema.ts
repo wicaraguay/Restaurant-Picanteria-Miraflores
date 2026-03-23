@@ -30,7 +30,16 @@ export interface CustomerDocument extends Document {
 
 const CustomerSchema: Schema = new Schema({
     name: { type: String, required: true },
-    email: { type: String }, // optional? types.ts didn't specify, assume required or optional based on frontend mocks
+    email: {
+        type: String,
+        trim: true,
+        // Same pattern as identification: email is optional but unique when provided.
+        // Sparse index ignores absent fields so multiple customers can omit email.
+        set: (v: any): string | undefined => {
+            if (v === '' || v === null || v === undefined) return undefined;
+            return String(v).trim().toLowerCase();
+        }
+    },
     phone: { type: String },
     loyaltyPoints: { type: Number, default: 0 },
     lastVisit: { type: Date, default: Date.now },
@@ -48,12 +57,13 @@ const CustomerSchema: Schema = new Schema({
     address: { type: String },
 }, { timestamps: true });
 
-// ==================== INDEXES FOR PERFORMANCE ====================
-CustomerSchema.index({ email: 1 }); // For searching by email
-CustomerSchema.index({ phone: 1 }); // For searching by phone
-CustomerSchema.index({ name: 1 }); // For searching by name
-CustomerSchema.index({ lastVisit: -1 }); // For sorting by last visit
-CustomerSchema.index({ loyaltyPoints: -1 }); // For sorting by loyalty points
-CustomerSchema.index({ identification: 1 }, { unique: true, sparse: true }); // Each RUC/CI must be unique if present
+// ── UNIQUE SPARSE indexes: optional fields that must be unique when present ──
+CustomerSchema.index({ email: 1 }, { unique: true, sparse: true });         // Email unique when provided
+CustomerSchema.index({ identification: 1 }, { unique: true, sparse: true }); // RUC/CI unique when provided
+// ── Performance indexes ──
+CustomerSchema.index({ phone: 1 });          // Search by phone
+CustomerSchema.index({ name: 1 });           // Search by name
+CustomerSchema.index({ lastVisit: -1 });     // Sort by last visit
+CustomerSchema.index({ loyaltyPoints: -1 }); // Sort by loyalty
 
 export const CustomerModel = mongoose.model<CustomerDocument>('Customer', CustomerSchema);
