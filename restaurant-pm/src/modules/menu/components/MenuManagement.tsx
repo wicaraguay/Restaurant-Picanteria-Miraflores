@@ -9,6 +9,8 @@ import { MenuItem } from '../types/menu.types';
 import { PlusIcon, EditIcon, TrashIcon } from '../../../components/ui/Icons';
 import { menuService } from '../services/MenuService';
 import { logger } from '../../../utils/logger';
+import { toast } from '../../../components/ui/AlertProvider';
+import ConfirmModal from '../../../components/ui/ConfirmModal';
 
 // Componentes locales y globales
 import Card from '../../../components/ui/Card';
@@ -24,6 +26,7 @@ interface MenuManagementProps {
 const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
 
     const handleOpenModal = (item: MenuItem | null = null) => {
         setEditingItem(item);
@@ -39,31 +42,37 @@ const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems
                 logger.info('Updating menu item', { id: itemToSave.id, name: itemToSave.name });
                 savedItem = await menuService.update(itemToSave.id, itemToSave);
                 setMenuItems(prev => prev.map(item => item.id === itemToSave.id ? savedItem : item));
+                toast.success('Plato actualizado correctamente', 'Éxito');
                 logger.info('Menu item updated successfully');
             } else {
                 const { id, ...newItemData } = itemToSave;
                 logger.info('Creating new menu item', { name: newItemData.name });
                 savedItem = await menuService.create(newItemData);
                 setMenuItems(prev => [...prev, savedItem]);
+                toast.success('Nuevo plato añadido al menú', 'Éxito');
                 logger.info('Menu item created successfully');
             }
         } catch (error) {
             logger.error('Failed to save menu item', error);
-            alert('Error al guardar el plato. Por favor, intenta de nuevo.');
+            toast.error('No se pudo guardar el plato. Intenta nuevamente.', 'Error');
         }
     };
 
-    const handleDeleteItem = async (id: string) => {
-        if (window.confirm('¿Seguro que quieres eliminar este plato?')) {
-            try {
-                logger.info('Deleting menu item', { id });
-                await menuService.delete(id);
-                setMenuItems(prev => prev.filter(item => item.id !== id));
-                logger.info('Menu item deleted successfully');
-            } catch (error) {
-                logger.error('Failed to delete menu item', error);
-                alert('Error al eliminar el plato. Por favor, intenta de nuevo.');
-            }
+    const handleDeleteItem = (id: string) => {
+        setConfirmDelete({ isOpen: true, id });
+    };
+
+    const confirmDeleteItem = async () => {
+        if (!confirmDelete.id) return;
+        try {
+            logger.info('Deleting menu item', { id: confirmDelete.id });
+            await menuService.delete(confirmDelete.id);
+            setMenuItems(prev => prev.filter(item => item.id !== confirmDelete.id));
+            toast.success('Plato eliminado del menú', 'Éxito');
+            logger.info('Menu item deleted successfully');
+        } catch (error) {
+            logger.error('Failed to delete menu item', error);
+            toast.error('No se pudo eliminar el plato.', 'Error');
         }
     };
 
@@ -77,12 +86,13 @@ const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems
         try {
             logger.info('Updating menu item availability', { id: itemToToggle.id, available: updatedItem.available });
             await menuService.update(itemToToggle.id, updatedItem);
+            toast.info(`Plato ${updatedItem.available ? 'activado' : 'desactivado'}`, 'Estado');
             logger.info('Menu item updated successfully');
         } catch (error) {
             logger.error('Failed to update menu item', error);
             // Revertir el cambio si falla
             setMenuItems(prev => prev.map(item => item.id === itemToToggle.id ? itemToToggle : item));
-            alert('Error al actualizar el plato. Por favor, intenta de nuevo.');
+            toast.error('No se pudo actualizar el estado del plato.', 'Error');
         }
     };
 
@@ -96,6 +106,16 @@ const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <MenuFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveItem} item={editingItem} />
+            
+            <ConfirmModal
+                isOpen={confirmDelete.isOpen}
+                onClose={() => setConfirmDelete({ isOpen: false, id: null })}
+                onConfirm={confirmDeleteItem}
+                title="Eliminar Plato"
+                message="¿Estás seguro de que deseas eliminar este plato del menú? Esta acción no se puede deshacer."
+                confirmText="Eliminar"
+                type="danger"
+            />
             
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
                 <div>

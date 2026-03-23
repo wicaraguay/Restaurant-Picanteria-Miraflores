@@ -8,6 +8,8 @@ import { MenuItem } from '../../menu/types/menu.types';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
 import Modal from '../../../components/ui/Modal';
 import { SearchIcon, ClipboardListIcon, MinusIcon, PlusIcon, TrashIcon } from '../../../components/ui/Icons';
+import { toast } from '../../../components/ui/AlertProvider';
+import { Validators } from '../../../utils/validators';
 
 const inputClass = "w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-gray-900 text-sm focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700/50 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:bg-gray-700 dark:focus:ring-blue-500/20";
 
@@ -27,6 +29,7 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
     // Local type for items with UI state
     type LocalOrderItem = OrderItem & { isNew?: boolean };
     const [items, setItems] = useState<LocalOrderItem[]>([]);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     // UI State
     const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +51,7 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
 
     useEffect(() => {
         if (isOpen) {
+            setErrors({});
             if (order) {
                 setCustomerName(order.customerName);
                 setType(order.type);
@@ -112,12 +116,19 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
     const handleSubmit = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
 
-        if (!customerName.trim()) {
-            alert('Por favor, ingrese el nombre del cliente o mesa.');
+        const newErrors: Record<string, string> = {};
+        if (!Validators.required(customerName)) {
+            newErrors.customerName = 'El nombre del cliente o mesa es obligatorio.';
+        }
+        
+        if (items.length === 0) {
+            toast.warning('El pedido debe tener al menos un ítem.', 'Pedido Vacío');
             return;
         }
-        if (items.length === 0) {
-            alert('El pedido debe tener al menos un í­tem.');
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            toast.error('Por favor, corrija los errores en el formulario.', 'Error de Validación');
             return;
         }
 
@@ -135,7 +146,7 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
 
         const newOrder: Order = {
             id: order?.id || Date.now().toString(),
-            customerName,
+            customerName: customerName.trim(),
             type,
             status: finalStatus,
             items: cleanItems,
@@ -223,18 +234,24 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
                     <div className="p-4 border-b dark:border-dark-700 bg-gray-50 dark:bg-dark-900/50">
                         <div className="space-y-3">
                             <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={customerName}
-                                    onChange={e => setCustomerName(e.target.value)}
-                                    placeholder="Nombre / Mesa *"
-                                    className="flex-1 bg-white dark:bg-dark-800 border border-gray-300 dark:border-dark-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
+                                <div className="flex-1 flex flex-col">
+                                    <input
+                                        type="text"
+                                        value={customerName}
+                                        onChange={e => {
+                                            setCustomerName(e.target.value);
+                                            if (errors.customerName) setErrors(prev => ({ ...prev, customerName: '' }));
+                                        }}
+                                        placeholder="Nombre / Mesa *"
+                                        className={`${inputClass} ${errors.customerName ? 'border-red-500 ring-4 ring-red-500/10' : ''}`}
+                                    />
+                                    {errors.customerName && <p className="text-[10px] text-red-500 mt-1 font-bold pl-1">{errors.customerName}</p>}
+                                </div>
                                 <button
                                     className="md:hidden p-2 text-gray-500"
                                     onClick={() => setShowCartOnMobile(false)}
                                 >
-                                    âœ•
+                                    ✕
                                 </button>
                             </div>
                             <div className="flex gap-2">

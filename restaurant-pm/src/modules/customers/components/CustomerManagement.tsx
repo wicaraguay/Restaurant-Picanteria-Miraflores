@@ -12,6 +12,8 @@ import { CustomerFormModal } from './CustomerFormModal';
 import { ReservationFormModal } from './ReservationFormModal';
 import { dataService } from '../../../services/DataService';
 import { ErrorHandler } from '../../../utils/errorHandler';
+import { toast } from '../../../components/ui/AlertProvider';
+import ConfirmModal from '../../../components/ui/ConfirmModal';
 
 interface CustomerManagementProps {
     customers: Customer[];
@@ -28,6 +30,9 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
     const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    
+    // Confirmations
+    const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
     
     // UI State
     const [activeTab, setActiveTab] = useState<'customers' | 'reservations'>('customers');
@@ -52,9 +57,11 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
             if (editingCustomer) {
                 const updated = await dataService.updateCustomer(editingCustomer.id, customerData);
                 setCustomers(prev => prev.map(c => c.id === editingCustomer.id ? updated : c));
+                toast.success('Cliente actualizado correctamente', 'Éxito');
             } else {
                 const created = await dataService.createCustomer(customerData);
                 setCustomers(prev => [...prev, created]);
+                toast.success('Cliente registrado correctamente', 'Éxito');
             }
             setIsCustomerModalOpen(false);
         } catch (error) {
@@ -64,14 +71,18 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
         }
     };
 
-    const handleDeleteCustomer = async (id: string) => {
-        if (window.confirm('¿Seguro que quieres eliminar este cliente?')) {
-            try {
-                await dataService.deleteCustomer(id);
-                setCustomers(prev => prev.filter(c => c.id !== id));
-            } catch (error) {
-                ErrorHandler.showError(error, 'Error al eliminar el cliente');
-            }
+    const handleDeleteCustomer = (id: string) => {
+        setConfirmDelete({ isOpen: true, id });
+    };
+
+    const confirmDeleteCustomer = async () => {
+        if (!confirmDelete.id) return;
+        try {
+            await dataService.deleteCustomer(confirmDelete.id);
+            setCustomers(prev => prev.filter(c => c.id !== confirmDelete.id));
+            toast.success('Cliente eliminado correctamente', 'Éxito');
+        } catch (error) {
+            ErrorHandler.showError(error, 'Error al eliminar el cliente');
         }
     };
 
@@ -207,6 +218,16 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
                 onClose={() => setIsReservationModalOpen(false)}
                 onSave={handleSaveReservation}
                 reservation={editingReservation}
+            />
+
+            <ConfirmModal
+                isOpen={confirmDelete.isOpen}
+                onClose={() => setConfirmDelete({ isOpen: false, id: null })}
+                onConfirm={confirmDeleteCustomer}
+                title="Eliminar Cliente"
+                message="¿Estás seguro de que deseas eliminar este cliente? Esta acción no se puede deshacer."
+                confirmText="Eliminar"
+                type="danger"
             />
 
             {/* Premium Header */}

@@ -34,6 +34,7 @@ import { ErrorBoundary } from './components/fallback/ErrorBoundary';
 import { AppStateProvider, useAppState } from './contexts/AppStateContext';
 import { AuthProvider, useAuth } from './modules/auth/contexts/AuthContext';
 import { RestaurantConfigProvider } from './contexts/RestaurantConfigContext';
+import { AlertProvider } from './components/ui/AlertProvider';
 
 // Hooks
 import { useAppData } from './hooks/useAppData';
@@ -290,11 +291,13 @@ const AdminContent: React.FC = () => {
 const AdminApp: React.FC = () => {
     return (
         <AuthProvider>
-            <RestaurantConfigProvider>
-                <AppStateProvider>
-                    <AdminAppContent />
-                </AppStateProvider>
-            </RestaurantConfigProvider>
+            <AlertProvider>
+                <RestaurantConfigProvider>
+                    <AppStateProvider>
+                        <AdminAppContent />
+                    </AppStateProvider>
+                </RestaurantConfigProvider>
+            </AlertProvider>
         </AuthProvider>
     );
 };

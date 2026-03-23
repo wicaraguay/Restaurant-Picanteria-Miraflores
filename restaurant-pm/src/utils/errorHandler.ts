@@ -7,6 +7,7 @@
  */
 
 import { logger } from './logger';
+import { toast } from '../components/ui/AlertProvider';
 
 /**
  * Clase para manejo centralizado de errores en el frontend
@@ -84,7 +85,7 @@ export class ErrorHandler {
      */
     static showError(error: unknown, context?: string): void {
         const message = this.handle(error, context);
-        // Por ahora usar alert, pero se puede reemplazar con un toast/notification system
-        alert(message);
+        // Usar el sistema de notificaciones premium en lugar de alert
+        toast.error(message, context || 'Error');
     }
 }

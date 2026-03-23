@@ -9,6 +9,8 @@ import { MenuItem } from '../types/menu.types';
 import Modal from '../../../components/ui/Modal';
 import { uploadToCloudinary } from '../../../utils/cloudinary';
 import { logger } from '../../../utils/logger';
+import { Validators } from '../../../utils/validators';
+import { toast } from '../../../components/ui/AlertProvider';
 
 const inputClass = "w-full rounded-2xl border border-gray-200 bg-gray-50 p-4 text-gray-900 text-sm font-medium focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none transition-all dark:border-gray-700 dark:bg-dark-900/50 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-500 dark:focus:bg-dark-900 dark:focus:ring-blue-500/10";
 
@@ -23,6 +25,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
     const [formData, setFormData] = useState<Partial<MenuItem>>({});
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
     const isEditing = item !== null;
 
     React.useEffect(() => {
@@ -30,6 +33,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
             setFormData(isEditing ? { ...item } : { name: '', category: '', price: 0, description: '', available: true, imageUrl: '' });
             setImageFile(null);
             setIsUploading(false);
+            setErrors({});
         }
     }, [isOpen, item, isEditing]);
 
@@ -49,9 +53,25 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
         }
     };
 
+    const validate = (): boolean => {
+        const newErrors: Record<string, string> = {};
+        
+        const nameVal = Validators.required(formData.name, 'Nombre');
+        if (!nameVal.valid) newErrors.name = nameVal.error!;
+
+        const categoryVal = Validators.required(formData.category, 'Categoría');
+        if (!categoryVal.valid) newErrors.category = categoryVal.error!;
+
+        const priceVal = Validators.positiveNumber(formData.price || 0, 'Precio');
+        if (!priceVal.valid) newErrors.price = priceVal.error!;
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.name || !formData.category || formData.price === undefined) return alert('Nombre, Categoría y Precio son obligatorios.');
+        if (!validate()) return;
 
         setIsUploading(true);
         let finalImageUrl = formData.imageUrl || '';
@@ -64,9 +84,9 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                     logger.error('Error Cloudinary:', error);
                     setIsUploading(false);
                     if (error.message === 'CONFIG_MISSING') {
-                        alert('¡FALTAN LAS CREDENCIALES DE CLOUDINARY!\n\nPor favor, verifica la configuración del servicio.');
+                        toast.error('Faltan las credenciales de Cloudinary. Verifica la configuración.', 'Error de Configuración');
                     } else {
-                        alert('Error al subir la imagen: ' + error.message);
+                        toast.error('Error al subir la imagen: ' + error.message, 'Error de Imagen');
                     }
                     return;
                 }
@@ -86,7 +106,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
             onClose();
         } catch (error) {
             logger.error('Error in form submission', error);
-            alert('Ocurrió un error inesperado.');
+            toast.error('No se pudo guardar el plato. Intenta nuevamente.', 'Error');
         } finally {
             setIsUploading(false);
         }
@@ -97,17 +117,20 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
             <form onSubmit={handleSubmit} className="space-y-5 py-2">
                 <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 block ml-1">Nombre del Plato</label>
-                    <input type="text" name="name" value={formData.name || ''} onChange={handleChange} required placeholder="Ej: Ceviche Mixto" className={inputClass} />
+                    <input type="text" name="name" value={formData.name || ''} onChange={handleChange} required placeholder="Ej: Ceviche Mixto" className={`${inputClass} ${errors.name ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
+                    {errors.name && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1 uppercase">{errors.name}</p>}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 block ml-1">Categoría</label>
-                        <input type="text" name="category" value={formData.category || ''} onChange={handleChange} required placeholder="Ej: Entradas" className={inputClass} />
+                        <input type="text" name="category" value={formData.category || ''} onChange={handleChange} required placeholder="Ej: Entradas" className={`${inputClass} ${errors.category ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
+                        {errors.category && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1 uppercase">{errors.category}</p>}
                     </div>
                     <div>
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 block ml-1">Precio ($)</label>
-                        <input type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} required placeholder="0.00" className={inputClass} />
+                        <input type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} required placeholder="0.00" className={`${inputClass} ${errors.price ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
+                        {errors.price && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1 uppercase">{errors.price}</p>}
                     </div>
                 </div>
 

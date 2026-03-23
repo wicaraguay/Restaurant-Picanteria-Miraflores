@@ -3,6 +3,20 @@ import Modal from '../../../components/ui/Modal';
 import { Order } from '../types/order.types';
 import { RestaurantConfig } from '../../../types';
 import { ClientData } from '../../billing/utils/invoiceGenerator';
+import {
+    UserIcon,
+    MailIcon,
+    PhoneIcon,
+    MapPinIcon,
+    IdCardIcon,
+    CreditCardIcon,
+    FileTextIcon,
+    UsersIcon,
+    PrinterIcon,
+    CheckCircleIcon,
+    ChevronDownIcon,
+    ClipboardListIcon
+} from '../../../components/ui/Icons';
 
 interface BillingModalProps {
     isOpen: boolean;
@@ -14,9 +28,11 @@ interface BillingModalProps {
     searchingIdentity: boolean;
     onProcess: () => void;
     onManualComplete: () => void;
+    manualCompleteLabel?: string;
 }
 
-const inputClass = "w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-gray-900 text-sm focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700/50 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:bg-gray-700 dark:focus:ring-blue-500/20";
+const inputClass = "w-full rounded-2xl border border-gray-200 bg-gray-50/50 p-4 text-gray-900 text-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 focus:outline-none transition-all dark:border-dark-700 dark:bg-dark-800/50 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-500";
+const labelClass = "flex items-center gap-2 text-[11px] font-black text-gray-400 dark:text-dark-500 uppercase tracking-widest mb-2 ml-1";
 
 export const BillingModal: React.FC<BillingModalProps> = ({
     isOpen,
@@ -27,204 +43,217 @@ export const BillingModal: React.FC<BillingModalProps> = ({
     setBillingData,
     searchingIdentity,
     onProcess,
-    onManualComplete
+    onManualComplete,
+    manualCompleteLabel = "Cerrar sin Facturar"
 }) => {
     if (!billingOrder) return null;
 
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Emitir Factura Electrónica (SRI)" maxWidth="max-w-4xl">
-            <div className="flex flex-col md:flex-row gap-6 p-2">
-                {/* Left Column: Invoice Preview (Visual Representation) */}
-                <div className="flex-1 bg-white dark:bg-dark-900 border border-gray-200 dark:border-dark-700 shadow-sm rounded-sm p-6 text-xs text-gray-800 dark:text-gray-300 font-mono relative overflow-hidden">
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-[100px] text-gray-100 dark:text-dark-800 -rotate-45 pointer-events-none font-sans font-bold opacity-50">
-                        VISTA PREVIA
-                    </div>
+    const total = billingOrder.items.reduce((s, i) => s + (i.price || 0) * i.quantity, 0);
+    const subtotal = total / 1.15;
+    const iva = total - subtotal;
 
-                    <div className="relative mb-6 flex justify-between items-start border-b border-gray-300 dark:border-dark-600 pb-4">
-                        <div>
-                            {config.fiscalLogo || config.logo ? (
-                                <div className="mb-6 flex justify-center">
-                                    <img
-                                        src={config.fiscalLogo || config.logo}
-                                        alt="Logo"
-                                        className="max-w-[240px] max-h-[120px] w-auto h-auto object-contain rounded-lg"
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Cobro y Facturación" maxWidth="max-w-4xl">
+            <div className="bg-white dark:bg-dark-950 -m-6 flex flex-col min-h-0">
+                
+                {/* 1. TOP SUMMARY BAR */}
+                <div className="bg-blue-600 p-8 pt-10 text-white rounded-b-[2rem] shadow-xl shadow-blue-500/20 z-10">
+                    <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+                        <div className="text-center sm:text-left">
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80 mb-1">Monto de la Orden</p>
+                            <h2 className="text-5xl font-black tracking-tighter">${total.toFixed(2)}</h2>
+                        </div>
+                        <button
+                            onClick={() => setBillingData({
+                                identification: '9999999999999',
+                                name: 'CONSUMIDOR FINAL',
+                                email: 'consumidor@final.com',
+                                address: 'S/N',
+                                phone: '9999999999',
+                                paymentMethod: '01'
+                            })}
+                            className="bg-white text-blue-600 px-6 py-3 rounded-2xl transition-all active:scale-95 flex items-center gap-2 text-xs font-black uppercase shadow-lg shadow-white/10"
+                        >
+                            <UsersIcon className="w-5 h-5" />
+                            Consumidor Final
+                        </button>
+                    </div>
+                </div>
+
+                {/* 2. SCROLLABLE CONTENT */}
+                <div className="flex-1 overflow-y-auto max-h-[70vh] p-6 sm:p-10 custom-scrollbar">
+                    <div className="max-w-2xl mx-auto space-y-12">
+                        
+                        {/* Compact Summary Info (Visual Check) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-dark-900/50 p-6 rounded-[2rem] border border-gray-100 dark:border-dark-800">
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <UserIcon className="w-5 h-5 text-blue-500" />
+                                    <span className="text-sm font-black text-gray-900 dark:text-white uppercase">{billingData.name || 'SIN CLIENTE'}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <IdCardIcon className="w-4 h-4 text-gray-400" />
+                                    <span className="text-xs font-bold text-gray-500">{billingData.identification || '---'}</span>
+                                </div>
+                            </div>
+                            <div className="space-y-3">
+                                {billingData.phone && (
+                                    <div className="flex items-center gap-3">
+                                        <PhoneIcon className="w-4 h-4 text-gray-400" />
+                                        <span className="text-xs font-bold text-gray-500">{billingData.phone}</span>
+                                    </div>
+                                )}
+                                {billingData.address && (
+                                    <div className="flex items-center gap-3">
+                                        <MapPinIcon className="w-4 h-4 text-gray-400" />
+                                        <span className="text-xs font-bold text-gray-500 uppercase truncate">{billingData.address}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Form Section */}
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-3 border-b dark:border-dark-800 pb-4">
+                                <EditIcon className="w-5 h-5 text-gray-400" />
+                                <h3 className="text-xs font-black uppercase tracking-widest text-gray-400">Completar Datos</h3>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div className="sm:col-span-2">
+                                    <label htmlFor="identification" className={labelClass}>RUC / Cédula / Pasaporte</label>
+                                    <input
+                                        id="identification"
+                                        type="text"
+                                        value={billingData.identification}
+                                        onChange={e => setBillingData({ ...billingData, identification: e.target.value })}
+                                        className={inputClass}
+                                        placeholder="Ingrese Identificación"
+                                    />
+                                    {searchingIdentity && <p className="text-[10px] text-blue-500 mt-2 font-black animate-pulse px-1">Consultando SRI...</p>}
+                                </div>
+
+                                <div className="sm:col-span-2">
+                                    <label htmlFor="name" className={labelClass}>Nombre completo / Razón Social</label>
+                                    <input
+                                        id="name"
+                                        type="text"
+                                        value={billingData.name}
+                                        onChange={e => setBillingData({ ...billingData, name: e.target.value.toUpperCase() })}
+                                        className={inputClass}
+                                        placeholder="Nombre del Cliente"
                                     />
                                 </div>
-                            ) : (
-                                <div className="w-20 h-20 bg-gray-200 dark:bg-dark-700 rounded mb-4 flex items-center justify-center text-3xl mx-auto">🍽️</div>
-                            )}
-                            <h2 className="font-bold text-lg uppercase text-gray-900 dark:text-white leading-tight">{config.name || 'NOMBRE COMERCIAL'}</h2>
-                            <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase mb-1">{config.businessName || 'CLIENTE'}</h3>
-                            <p>{config.address || 'Dirección Matriz, Ciudad, Ecuador'}</p>
-                            <p>RUC: {config.ruc || '9999999999001'}</p>
-                            <p>{config.fiscalEmail || config.email || 'correo@ejemplo.com'}</p>
-                            <p>Obligado a llevar contabilidad: {config.obligadoContabilidad ? 'SI' : 'NO'}</p>
-                        </div>
-                        <div className="text-right">
-                            <h3 className="font-bold text-sm">FACTURA</h3>
-                            <p className="font-mono text-lg font-bold text-red-600 dark:text-red-400">No. {config.billing?.establishment || '001'}-{config.billing?.emissionPoint || '001'}-{((config.billing?.currentSequenceFactura || 0) + 1).toString().padStart(9, '0')}</p>
-                            <p><span className="font-bold">FECHA EMISIÓN:</span> {new Date().toLocaleDateString('es-EC')}</p>
-                        </div>
-                    </div>
 
-                    <div className="relative mb-4 border border-gray-800 dark:border-gray-500 rounded p-3 bg-transparent text-[10px]">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                            <div><span className="font-bold">Cliente:</span> {billingData.name || 'ANÓNIMO'}</div>
-                            <div><span className="font-bold">RUC/CI:</span> {billingData.identification || '9999999999999'}</div>
-                            <div><span className="font-bold">Dirección:</span> {billingData.address || 'S/N'}</div>
-                            <div><span className="font-bold">Teléfono:</span> {billingData.phone || 'S/N'}</div>
-                            <div className="col-span-2"><span className="font-bold">Forma de Pago:</span> {
-                                billingData.paymentMethod === '01' ? 'SIN UTILIZACION DEL SISTEMA FINANCIERO' :
-                                billingData.paymentMethod === '16' ? 'TARJETA DE DEBITO' :
-                                billingData.paymentMethod === '19' ? 'TARJETA DE CREDITO' :
-                                billingData.paymentMethod === '20' ? 'OTROS CON UTILIZACION DEL SISTEMA FINANCIERO' : 'EFECTIVO'
-                            }</div>
-                        </div>
-                    </div>
+                                <div className="sm:col-span-1">
+                                    <label htmlFor="email" className={labelClass}>Correo Electrónico</label>
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        value={billingData.email}
+                                        onChange={e => setBillingData({ ...billingData, email: e.target.value })}
+                                        className={inputClass}
+                                        placeholder="email@ejemplo.com"
+                                    />
+                                </div>
 
-                    <div className="relative">
-                        <div className="border border-gray-200 dark:border-dark-700 rounded-sm overflow-hidden mb-4">
-                            <table className="w-full text-[10px]">
-                                <thead className="bg-gray-100 dark:bg-dark-800 text-left font-bold border-b border-gray-200 dark:border-dark-700">
-                                    <tr>
-                                        <th className="px-2 py-1">Cant</th>
-                                        <th className="px-2 py-1">Descripción</th>
-                                        <th className="px-2 py-1 text-right">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-dark-800">
-                                    {billingOrder.items.map((item, idx) => (
-                                        <tr key={idx}>
-                                            <td className="px-2 py-1">{item.quantity}</td>
-                                            <td className="px-2 py-1">{item.name}</td>
-                                            <td className="px-2 py-1 text-right">${((item.price || 0) * item.quantity).toFixed(2)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                <div className="sm:col-span-1">
+                                    <label htmlFor="phone" className={labelClass}>Teléfono Móvil</label>
+                                    <input
+                                        id="phone"
+                                        type="text"
+                                        value={billingData.phone}
+                                        onChange={e => setBillingData({ ...billingData, phone: e.target.value })}
+                                        className={inputClass}
+                                        placeholder="09XXXXXXXX"
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-2">
+                                    <label htmlFor="address" className={labelClass}>Dirección de Domicilio</label>
+                                    <input
+                                        id="address"
+                                        type="text"
+                                        value={billingData.address}
+                                        onChange={e => setBillingData({ ...billingData, address: e.target.value.toUpperCase() })}
+                                        className={inputClass}
+                                        placeholder="Dirección completa"
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-2 relative">
+                                    <label htmlFor="paymentMethod" className={labelClass}>Método de Pago</label>
+                                    <select
+                                        id="paymentMethod"
+                                        value={billingData.paymentMethod}
+                                        onChange={e => setBillingData({ ...billingData, paymentMethod: e.target.value })}
+                                        className={`${inputClass} appearance-none pr-10`}
+                                    >
+                                        <option value="01">EFECTIVO / SIN UTILIZACIÓN DEL SISTEMA FINANCIERO</option>
+                                        <option value="16">TARJETA DE DÉBITO</option>
+                                        <option value="19">TARJETA DE CRÉDITO</option>
+                                        <option value="20">TRANSFERENCIA / OTROS</option>
+                                    </select>
+                                    <div className="absolute right-4 bottom-4 pointer-events-none text-gray-400">
+                                        <ChevronDownIcon className="w-5 h-5" />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex justify-end">
-                            <div className="w-1/2 border border-gray-200 dark:border-dark-700 rounded-sm">
-                                <table className="w-full text-[10px]">
-                                    <tbody>
-                                        <tr>
-                                            <td className="px-2 py-1 font-bold bg-gray-50 dark:bg-dark-800">TOTAL</td>
-                                            <td className="px-2 py-1 text-right font-bold">${billingOrder.items.reduce((s, i) => s + (i.price || 0) * i.quantity, 0).toFixed(2)}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+
+                        {/* Order Details (Secondary) */}
+                        <div className="space-y-4 pt-4 pb-4">
+                            <div className="flex items-center gap-3 border-b dark:border-dark-800 pb-4">
+                                <ClipboardListIcon className="w-5 h-5 text-gray-400" />
+                                <h3 className="text-xs font-black uppercase tracking-widest text-gray-400">Detalles de Orden</h3>
+                            </div>
+                            <div className="space-y-2">
+                                {billingOrder.items.map((item, idx) => (
+                                    <div key={idx} className="flex justify-between text-sm py-2 px-1 border-b border-gray-50 dark:border-dark-900">
+                                        <div className="flex gap-4">
+                                            <span className="font-black text-blue-500 w-4">{item.quantity}</span>
+                                            <span className="font-bold text-gray-700 dark:text-gray-300 uppercase">{item.name}</span>
+                                        </div>
+                                        <span className="font-black text-gray-900 dark:text-white">${((item.price || 0) * item.quantity).toFixed(2)}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Column: Client Data Form */}
-                <div className="md:w-1/3 space-y-4 border-l dark:border-dark-700 md:pl-6">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Datos del Cliente</h3>
-                    <button
-                        onClick={() => setBillingData({
-                            identification: '9999999999999',
-                            name: 'CONSUMIDOR FINAL',
-                            email: 'consumidor@final.com',
-                            address: 'S/N',
-                            phone: '9999999999',
-                            paymentMethod: '01'
-                        })}
-                        className="w-full py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-dark-700 dark:hover:bg-dark-600 text-xs font-semibold text-gray-600 dark:text-gray-300 rounded border border-gray-300 dark:border-dark-600 transition-colors"
-                    >
-                        Usar "Consumidor Final"
-                    </button>
-
-                    <div className="space-y-3">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Identificación</label>
-                            <input
-                                type="text"
-                                value={billingData.identification}
-                                onChange={e => setBillingData({ ...billingData, identification: e.target.value })}
-                                className={inputClass}
-                                placeholder="RUC / Cédula"
-                            />
-                            {searchingIdentity && <p className="text-[10px] text-blue-500 mt-1 animate-pulse">Buscando datos...</p>}
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Nombre / Razón Social</label>
-                            <input
-                                type="text"
-                                value={billingData.name}
-                                onChange={e => setBillingData({ ...billingData, name: e.target.value.toUpperCase() })}
-                                className={inputClass}
-                                placeholder="Nombre del cliente"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Email</label>
-                            <input
-                                type="email"
-                                value={billingData.email}
-                                onChange={e => setBillingData({ ...billingData, email: e.target.value })}
-                                className={inputClass}
-                                placeholder="cliente@email.com"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Teléfono</label>
-                            <input
-                                type="text"
-                                value={billingData.phone}
-                                onChange={e => setBillingData({ ...billingData, phone: e.target.value })}
-                                className={inputClass}
-                                placeholder="0999999999"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Dirección</label>
-                            <input
-                                type="text"
-                                value={billingData.address}
-                                onChange={e => setBillingData({ ...billingData, address: e.target.value.toUpperCase() })}
-                                className={inputClass}
-                                placeholder="Av. Amazonas y Colón"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Forma de Pago</label>
-                            <select
-                                value={billingData.paymentMethod}
-                                onChange={e => setBillingData({ ...billingData, paymentMethod: e.target.value })}
-                                className={inputClass}
-                            >
-                                <option value="01">01 - SIN UTILIZACION DEL SISTEMA FINANCIERO</option>
-                                <option value="16">16 - TARJETA DE DEBITO</option>
-                                <option value="19">19 - TARJETA DE CREDITO</option>
-                                <option value="20">20 - OTROS CON UTILIZACION DEL SISTEMA FINANCIERO</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="pt-4 space-y-2">
+                {/* 3. FOOTER ACTIONS */}
+                <div className="bg-gray-50 dark:bg-dark-900/50 p-6 sm:p-10 border-t dark:border-dark-800">
+                    <div className="max-w-2xl mx-auto flex flex-col sm:flex-row gap-4">
                         <button
                             onClick={onProcess}
                             disabled={!billingData.identification || !billingData.name}
-                            className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg active:scale-95"
+                            className="flex-[2] py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-3 group"
                         >
-                            Emitir Factura
+                            <CheckCircleIcon className="w-6 h-6" />
+                            Confirmar y Facturar
                         </button>
                         <button
                             onClick={onManualComplete}
-                            className="w-full py-2 bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-200 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-dark-600 transition-all border border-gray-300 dark:border-dark-600"
+                            className="flex-1 py-5 bg-white dark:bg-dark-800 text-gray-700 dark:text-gray-300 rounded-2xl font-black text-[10px] uppercase border border-gray-200 dark:border-dark-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
                         >
-                            Completar sin Factura
+                            <PrinterIcon className="w-4 h-4" />
+                            {manualCompleteLabel}
                         </button>
                         <button
                             onClick={onClose}
-                            className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm"
+                            className="py-5 px-6 text-gray-400 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest"
                         >
                             Cancelar
                         </button>
                     </div>
                 </div>
+
             </div>
         </Modal>
     );
 };
+
+// Internal EditIcon since it wasn't in Icons.tsx imports but we can use FileText or similar if needed.
+// Actually, I'll use FileTextIcon for the form section.
+const EditIcon = FileTextIcon;

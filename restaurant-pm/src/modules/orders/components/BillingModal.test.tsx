@@ -54,11 +54,11 @@ describe('BillingModal Component', () => {
             />
         );
 
-        expect(screen.getByPlaceholderText('RUC / Cédula')).toBeDefined();
-        expect(screen.getByPlaceholderText('Nombre del cliente')).toBeDefined();
-        expect(screen.getByPlaceholderText('cliente@email.com')).toBeDefined();
-        expect(screen.getByPlaceholderText('0999999999')).toBeDefined();
-        expect(screen.getByPlaceholderText('Av. Amazonas y Colón')).toBeDefined();
+        expect(screen.getByLabelText(/RUC \/ Cédula \/ Pasaporte/i)).toBeDefined();
+        expect(screen.getByLabelText(/Nombre completo \/ Razón Social/i)).toBeDefined();
+        expect(screen.getByLabelText(/Correo Electrónico/i)).toBeDefined();
+        expect(screen.getByLabelText(/Teléfono Móvil/i)).toBeDefined();
+        expect(screen.getByLabelText(/Dirección de Domicilio/i)).toBeDefined();
         expect(screen.getByRole('combobox')).toBeDefined();
     });
 
@@ -77,11 +77,11 @@ describe('BillingModal Component', () => {
             />
         );
 
-        const phoneInput = screen.getByPlaceholderText('0999999999');
+        const phoneInput = screen.getByLabelText(/Teléfono Móvil/i);
         fireEvent.change(phoneInput, { target: { value: '0987654321' } });
         expect(mockSetBillingData).toHaveBeenCalled();
-        
-        const addressInput = screen.getByPlaceholderText('Av. Amazonas y Colón');
+
+        const addressInput = screen.getByLabelText(/Dirección de Domicilio/i);
         fireEvent.change(addressInput, { target: { value: 'Calle Nueva' } });
         expect(mockSetBillingData).toHaveBeenCalled();
     });
@@ -101,7 +101,7 @@ describe('BillingModal Component', () => {
             />
         );
 
-        const cfButton = screen.getByText(/Usar "Consumidor Final"/i);
+        const cfButton = screen.getByRole('button', { name: /CONSUMIDOR FINAL/i });
         fireEvent.click(cfButton);
 
         expect(mockSetBillingData).toHaveBeenCalledWith({
@@ -137,6 +137,12 @@ describe('BillingModal Component', () => {
         );
 
         // Preview section checks
+        // In the form (inputs)
+        expect(screen.getByDisplayValue(/JUAN PEREZ/i)).toBeDefined();
+        expect(screen.getByDisplayValue(/0991234567/i)).toBeDefined();
+        expect(screen.getByDisplayValue(/ALBORADA 5/i)).toBeDefined();
+
+        // In the ticket (text elements)
         expect(screen.getAllByText(/JUAN PEREZ/i).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/0991234567/i).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/ALBORADA 5/i).length).toBeGreaterThan(0);
