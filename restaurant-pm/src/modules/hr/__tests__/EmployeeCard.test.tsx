@@ -6,6 +6,7 @@ import { Employee } from '../types/hr.types';
 const mockEmployee: Employee = {
     id: '1',
     name: 'JUAN PEREZ',
+    identification: '1234567890',
     username: 'jperez',
     roleId: 'role-1',
     phone: '0987654321',

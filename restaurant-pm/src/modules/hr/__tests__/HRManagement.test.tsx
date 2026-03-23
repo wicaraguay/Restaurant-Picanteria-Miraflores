@@ -26,6 +26,7 @@ const mockEmployees: Employee[] = [
     {
         id: '1',
         name: 'JUAN PEREZ',
+        identification: '1234567890',
         username: 'jperez',
         roleId: 'r1',
         phone: '123',
