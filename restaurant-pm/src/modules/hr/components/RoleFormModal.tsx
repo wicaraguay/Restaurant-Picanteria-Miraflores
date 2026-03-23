@@ -10,6 +10,7 @@ import Modal from '../../../components/ui/Modal';
 
 const inputClass = "w-full rounded-2xl border border-gray-100 bg-gray-50 p-4 text-gray-900 text-sm font-bold focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none transition-all dark:border-dark-700 dark:bg-dark-900/50 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-500 dark:focus:bg-dark-900 dark:focus:ring-blue-500/10";
 const labelClass = "block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-2 ml-1";
+const errorClass = "text-[10px] font-bold text-red-500 mt-1 ml-1 animate-pulse";
 
 export interface RoleFormModalProps {
     isOpen: boolean;
@@ -20,10 +21,14 @@ export interface RoleFormModalProps {
 
 export const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, role }) => {
     const [formData, setFormData] = useState<Partial<Role>>({});
+    const [error, setError] = useState<string | null>(null);
     const isEditing = role !== null;
 
     useEffect(() => {
-        if (isOpen) setFormData(isEditing ? { ...role } : { name: '', permissions: {} });
+        if (isOpen) {
+            setError(null);
+            setFormData(isEditing ? { ...role } : { name: '', permissions: {} });
+        }
     }, [isOpen, role, isEditing]);
 
     const handlePermissionChange = (view: ViewType, isChecked: boolean) => {
@@ -31,19 +36,22 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, o
     };
 
     const handleSave = () => {
-        if (formData.name) {
-            const roleToSave: any = {
-                name: formData.name,
-                permissions: formData.permissions || {},
-            };
+        if (!formData.name?.trim()) {
+            setError('El nombre del rol es obligatorio.');
+            return;
+        }
 
-            if (isEditing && role?.id) {
-                roleToSave.id = role.id;
-            }
+        const roleToSave: any = {
+            name: formData.name.trim(),
+            permissions: formData.permissions || {},
+        };
 
-            onSave(roleToSave);
-            onClose();
-        } else alert('El nombre del rol es obligatorio.');
+        if (isEditing && role?.id) {
+            roleToSave.id = role.id;
+        }
+
+        onSave(roleToSave);
+        onClose();
     };
 
     if (!isOpen) return null;
@@ -56,12 +64,16 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, o
                     <input 
                         type="text" 
                         value={formData.name || ''} 
-                        onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))} 
+                        onChange={(e) => {
+                            setFormData(p => ({ ...p, name: e.target.value }));
+                            if (error) setError(null);
+                        }} 
                         disabled={isEditing && role?.name === 'Administrador'} 
                         required 
                         placeholder="Ej: Administrador, Cocinero, Mesero" 
-                        className={inputClass} 
+                        className={`${inputClass} ${error ? 'border-red-400 focus:border-red-500' : ''}`} 
                     />
+                    {error && <p className={errorClass}>{error}</p>}
                 </div>
 
                 <div>

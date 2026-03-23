@@ -85,6 +85,7 @@ export class MongoEmployeeRepository extends BaseRepository<Employee> implements
         return {
             id: doc.id || doc._id.toString(),
             name: doc.name,
+            identification: doc.identification,
             username: doc.username,
             password: doc.password,
             roleId: doc.roleId,

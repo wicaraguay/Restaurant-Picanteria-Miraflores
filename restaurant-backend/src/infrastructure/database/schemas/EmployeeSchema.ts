@@ -19,6 +19,7 @@ import { Employee } from '../../../domain/entities/Employee';
 
 export interface EmployeeDocument extends Document {
     name: string;
+    identification: string;
     username: string;
     password?: string;
     roleId: string;
@@ -32,6 +33,7 @@ export interface EmployeeDocument extends Document {
 
 const EmployeeSchema: Schema = new Schema({
     name: { type: String, required: true },
+    identification: { type: String },
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     roleId: { type: String, required: true },

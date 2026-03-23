@@ -197,6 +197,7 @@ const seedData = async () => {
         const employees = [
             {
                 name: 'Administrador',
+                identification: '1700000001',
                 username: process.env.SEED_ADMIN_USERNAME || 'admin',
                 password: process.env.SEED_ADMIN_PASSWORD || 'admin123',
                 roleId: rolesMap['Administrador'], // Use real ID
@@ -207,6 +208,7 @@ const seedData = async () => {
             },
             {
                 name: 'Carlos Mesero',
+                identification: '1700000002',
                 username: process.env.SEED_WAITER_USERNAME || 'cmesero',
                 password: process.env.SEED_WAITER_PASSWORD || 'mesero123',
                 roleId: rolesMap['Mesero'],
@@ -217,6 +219,7 @@ const seedData = async () => {
             },
             {
                 name: 'Ana Cocinera',
+                identification: '1700000003',
                 username: process.env.SEED_CHEF_USERNAME || 'acocinera',
                 password: process.env.SEED_CHEF_PASSWORD || 'cocina123',
                 roleId: rolesMap['Chef'],

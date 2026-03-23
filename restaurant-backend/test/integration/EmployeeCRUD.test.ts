@@ -33,9 +33,10 @@ describe('Employee CRUD Integration Tests', () => {
         }
     });
 
-    it('should create an employee with shifts', async () => {
+    it('should create an employee with identification and shifts', async () => {
         const employeeData = {
             name: 'Test Employee',
+            identification: '1722222222',
             username: 'testuser',
             password: 'password123',
             roleId: roleId,
@@ -52,10 +53,12 @@ describe('Employee CRUD Integration Tests', () => {
         const created = await createEmployee.execute(employeeData as any);
         
         expect(created.id).toBeDefined();
+        expect(created.identification).toBe('1722222222');
         expect(created.shifts['Lunes']).toBe('AM');
         expect(created.shifts['Miercoles']).toBe('Libre');
 
         const found = await employeeRepo.findById(created.id);
+        expect(found?.identification).toBe('1722222222');
         expect(found?.shifts['Lunes']).toBe('AM');
     });
 

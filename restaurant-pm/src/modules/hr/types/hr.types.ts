@@ -8,6 +8,7 @@ import { ViewType } from '../../../types';
 export interface Employee {
     id: string;
     name: string;
+    identification: string; // Cédula o RUC
     username: string;
     password?: string;
     roleId: string;

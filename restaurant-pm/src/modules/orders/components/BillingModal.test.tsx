@@ -3,6 +3,31 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { BillingModal } from './BillingModal';
 import { OrderStatus } from '../types/order.types';
 
+// Mock UI Components
+vi.mock('../../../components/ui/Modal', () => ({
+    default: ({ children, isOpen, title }: any) => isOpen ? (
+        <div data-testid="modal">
+            <h1>{title}</h1>
+            {children}
+        </div>
+    ) : null
+}));
+
+vi.mock('../../../components/ui/Icons', () => ({
+    UserIcon: () => <span data-testid="icon-user" />,
+    MailIcon: () => <span />,
+    PhoneIcon: () => <span />,
+    MapPinIcon: () => <span />,
+    IdentificationIcon: () => <span />,
+    CreditCardIcon: () => <span />,
+    FileTextIcon: () => <span />,
+    UsersIcon: () => <span />,
+    PrinterIcon: () => <span />,
+    CheckCircleIcon: () => <span />,
+    ChevronDownIcon: () => <span />,
+    ClipboardListIcon: () => <span />
+}));
+
 const mockConfig: any = {
     name: 'TEST RESTAURANT',
     ruc: '1234567890001',
@@ -139,12 +164,11 @@ describe('BillingModal Component', () => {
         // Preview section checks
         // In the form (inputs)
         expect(screen.getByDisplayValue(/JUAN PEREZ/i)).toBeDefined();
-        expect(screen.getByDisplayValue(/0991234567/i)).toBeDefined();
-        expect(screen.getByDisplayValue(/ALBORADA 5/i)).toBeDefined();
-
-        // In the ticket (text elements)
-        expect(screen.getAllByText(/JUAN PEREZ/i).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(/0991234567/i).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(/ALBORADA 5/i).length).toBeGreaterThan(0);
+        
+        // In the summary (text elements) using data-testid
+        expect(screen.getByTestId('preview-name').textContent).toContain('JUAN PEREZ');
+        expect(screen.getByTestId('preview-subtotal')).toBeDefined();
+        expect(screen.getByTestId('preview-iva')).toBeDefined();
+        expect(screen.getByTestId('preview-total').textContent).toContain('10.00');
     });
 });

@@ -8,7 +8,7 @@ import {
     MailIcon,
     PhoneIcon,
     MapPinIcon,
-    IdCardIcon,
+    IdentificationIcon,
     CreditCardIcon,
     FileTextIcon,
     UsersIcon,
@@ -55,7 +55,7 @@ export const BillingModal: React.FC<BillingModalProps> = ({
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Cobro y Facturación" maxWidth="max-w-4xl">
             <div className="bg-white dark:bg-dark-950 -m-6 flex flex-col min-h-0">
-                
+
                 {/* 1. TOP SUMMARY BAR */}
                 <div className="bg-blue-600 p-8 pt-10 text-white rounded-b-[2rem] shadow-xl shadow-blue-500/20 z-10">
                     <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
@@ -83,16 +83,16 @@ export const BillingModal: React.FC<BillingModalProps> = ({
                 {/* 2. SCROLLABLE CONTENT */}
                 <div className="flex-1 overflow-y-auto max-h-[70vh] p-6 sm:p-10 custom-scrollbar">
                     <div className="max-w-2xl mx-auto space-y-12">
-                        
+
                         {/* Compact Summary Info (Visual Check) */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-dark-900/50 p-6 rounded-[2rem] border border-gray-100 dark:border-dark-800">
                             <div className="space-y-3">
                                 <div className="flex items-center gap-3">
                                     <UserIcon className="w-5 h-5 text-blue-500" />
-                                    <span className="text-sm font-black text-gray-900 dark:text-white uppercase">{billingData.name || 'SIN CLIENTE'}</span>
+                                    <span className="text-sm font-black text-gray-900 dark:text-white uppercase" data-testid="preview-name">{billingData.name || 'SIN CLIENTE'}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <IdCardIcon className="w-4 h-4 text-gray-400" />
+                                    <IdentificationIcon className="w-4 h-4 text-gray-400" />
                                     <span className="text-xs font-bold text-gray-500">{billingData.identification || '---'}</span>
                                 </div>
                             </div>
@@ -115,7 +115,7 @@ export const BillingModal: React.FC<BillingModalProps> = ({
                         {/* Form Section */}
                         <div className="space-y-6">
                             <div className="flex items-center gap-3 border-b dark:border-dark-800 pb-4">
-                                <EditIcon className="w-5 h-5 text-gray-400" />
+                                <FileTextIcon className="w-5 h-5 text-gray-400" />
                                 <h3 className="text-xs font-black uppercase tracking-widest text-gray-400">Completar Datos</h3>
                             </div>
 
@@ -218,6 +218,22 @@ export const BillingModal: React.FC<BillingModalProps> = ({
                                     </div>
                                 ))}
                             </div>
+
+                            {/* Totals Breakdown Section (Added for clarity and testing) */}
+                            <div className="mt-6 bg-gray-50 dark:bg-dark-900/50 p-6 rounded-3xl space-y-3 border border-gray-100 dark:border-dark-800">
+                                <div className="flex justify-between text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    <span>Subtotal 15%</span>
+                                    <span data-testid="preview-subtotal">${subtotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                    <span>IVA 15%</span>
+                                    <span data-testid="preview-iva">${iva.toFixed(2)}</span>
+                                </div>
+                                <div className="pt-3 border-t border-gray-200 dark:border-dark-700 flex justify-between items-center">
+                                    <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Total a Pagar</span>
+                                    <span className="text-xl font-black text-blue-600 dark:text-blue-400" data-testid="preview-total">${total.toFixed(2)}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -253,7 +269,3 @@ export const BillingModal: React.FC<BillingModalProps> = ({
         </Modal>
     );
 };
-
-// Internal EditIcon since it wasn't in Icons.tsx imports but we can use FileText or similar if needed.
-// Actually, I'll use FileTextIcon for the form section.
-const EditIcon = FileTextIcon;

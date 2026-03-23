@@ -329,7 +329,7 @@ export const CreditCardIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-export const IdCardIcon = (props: React.SVGProps<SVGSVGElement>) => (
+export const IdentificationIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg {...iconProps} {...props}>
     <rect width="20" height="14" x="2" y="5" rx="2" />
     <path d="M7 10h1" />
@@ -338,3 +338,20 @@ export const IdCardIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <circle cx="10" cy="10" r="2" />
   </svg>
 );
+
+export const WalletIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...iconProps} {...props}>
+    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v2" />
+    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+    <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+  </svg>
+);
+
+export const ShieldCheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg {...iconProps} {...props}>
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+
+export const IdCardIcon = IdentificationIcon;

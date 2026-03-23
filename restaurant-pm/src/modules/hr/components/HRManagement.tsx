@@ -8,13 +8,15 @@ import { DAYS_OF_WEEK, NAV_ITEMS } from '../../../constants';
 import { SetState, ViewType } from '../../../types';
 import { Employee, Role } from '../types/hr.types';
 import { api } from '../../../api';
-import { PlusIcon, EditIcon, TrashIcon } from '../../../components/ui/Icons';
+import { PlusIcon, EditIcon, TrashIcon, UsersIcon, ShieldCheckIcon } from '../../../components/ui/Icons';
+import { toast } from '../../../components/ui/AlertProvider';
+import ConfirmModal from '../../../components/ui/ConfirmModal';
 
 // Componentes locales y globales
 import Card from '../../../components/ui/Card';
 import { EmployeeFormModal } from './EmployeeFormModal';
 import { RoleFormModal } from './RoleFormModal';
-import { EmployeeCard } from './EmployeeCard';
+import { EmployeeCard } from './EmployeeCard';
 
 interface HRManagementProps {
     employees: Employee[];
@@ -29,13 +31,17 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
     const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
     const [editingRole, setEditingRole] = useState<Role | null>(null);
     const [loading, setLoading] = useState(false);
+    
+    // Estados para Modales de Confirmación
+    const [confirmDeleteEmployee, setConfirmDeleteEmployee] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
+    const [confirmDeleteRole, setConfirmDeleteRole] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
 
     // Los datos iniciales ya son cargados por useAppData en AdminApp
     // y pasados aquí como props. Esto evita bucles infinitos.
 
     const handleOpenEmployeeModal = (employee: Employee | null) => {
         if (roles.length === 0) {
-            alert('Debes crear al menos un rol antes de agregar empleados.');
+            toast.warning('Debes crear al menos un rol antes de agregar empleados.', 'RRHH');
             return;
         }
         setEditingEmployee(employee);
@@ -55,30 +61,37 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
             if (isEditing) {
                 const updated = await api.employees.update(employeeToSave.id, employeeToSave);
                 setEmployees(prev => prev.map(e => e.id === updated.id ? updated : e));
+                toast.success('Perfil de empleado actualizado', 'Éxito');
             } else {
                 const created = await api.employees.create(employeeToSave);
                 setEmployees(prev => [...prev, created]);
+                toast.success(`${created.name} ha sido registrado`, 'Éxito');
             }
         } catch (error: any) {
             console.error('Error saving employee:', error);
-            alert(`Error al guardar empleado: ${error.message || 'Error desconocido'}`);
+            toast.error(`Error: ${error.message || 'No se pudo guardar'}`, 'ERROR');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDeleteEmployee = async (employeeId: string) => {
-        if (!window.confirm('¿Seguro que quieres eliminar a este empleado?')) return;
+    const handleDeleteEmployee = (employeeId: string) => {
+        setConfirmDeleteEmployee({ isOpen: true, id: employeeId });
+    };
 
+    const handleConfirmDeleteEmployee = async () => {
+        if (!confirmDeleteEmployee.id) return;
         try {
             setLoading(true);
-            await api.employees.delete(employeeId);
-            setEmployees(prev => prev.filter(e => e.id !== employeeId));
+            await api.employees.delete(confirmDeleteEmployee.id);
+            setEmployees(prev => prev.filter(e => e.id !== confirmDeleteEmployee.id));
+            toast.success('Empleado removido del equipo', 'Eliminado');
         } catch (error: any) {
             console.error('Error deleting employee:', error);
-            alert(`Error al eliminar empleado: ${error.message || 'Error desconocido'}`);
+            toast.error('No se pudo eliminar el empleado', 'Error');
         } finally {
             setLoading(false);
+            setConfirmDeleteEmployee({ isOpen: false, id: null });
         }
     };
 
@@ -90,35 +103,47 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
             if (isEditing) {
                 const updated = await api.roles.update(roleToSave.id, roleToSave);
                 setRoles(prev => prev.map(r => r.id === updated.id ? updated : r));
+                toast.success('Rol actualizado correctamente', 'Éxito');
             } else {
                 const created = await api.roles.create(roleToSave);
                 setRoles(prev => [...prev, created]);
+                toast.success(`Nuevo rol "${created.name}" creado`, 'Éxito');
             }
         } catch (error: any) {
             console.error('Error saving role:', error);
-            alert(`Error al guardar rol: ${error.message || 'Error desconocido'}`);
+            toast.error('No se pudo guardar el rol', 'Error');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDeleteRole = async (roleId: string) => {
+    const handleDeleteRole = (roleId: string) => {
         const roleToDelete = roles.find(r => r.id === roleId);
         if (!roleToDelete) return;
-        if (roleToDelete.name === 'Administrador') return alert('El rol de Administrador no se puede eliminar.');
-        if (employees.some(e => e.roleId === roleId)) return alert('No se puede eliminar un rol asignado a un empleado.');
+        if (roleToDelete.name === 'Administrador') {
+            toast.error('El rol de Administrador es vital y no se puede eliminar.', 'Denegado');
+            return;
+        }
+        if (employees.some(e => e.roleId === roleId)) {
+            toast.warning('No puedes eliminar un rol que ya está asignado a empleados.', 'RRHH');
+            return;
+        }
+        setConfirmDeleteRole({ isOpen: true, id: roleId });
+    };
 
-        if (!window.confirm(`¿Seguro que quieres eliminar el rol "${roleToDelete.name}"?`)) return;
-
+    const handleConfirmDeleteRole = async () => {
+        if (!confirmDeleteRole.id) return;
         try {
             setLoading(true);
-            await api.roles.delete(roleId);
-            setRoles(prev => prev.filter(r => r.id !== roleId));
+            await api.roles.delete(confirmDeleteRole.id);
+            setRoles(prev => prev.filter(r => r.id !== confirmDeleteRole.id));
+            toast.success('Rol eliminado con éxito', 'Eliminado');
         } catch (error: any) {
             console.error('Error deleting role:', error);
-            alert(`Error al eliminar rol: ${error.message || 'Error desconocido'}`);
+            toast.error('Error al realizar la operación', 'Error');
         } finally {
             setLoading(false);
+            setConfirmDeleteRole({ isOpen: false, id: null });
         }
     };
 
@@ -133,9 +158,25 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
     const actualDay = getActualDayName();
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <EmployeeFormModal isOpen={isEmployeeModalOpen} onClose={() => setIsEmployeeModalOpen(false)} onSave={handleSaveEmployee} employee={editingEmployee} roles={roles} />
             <RoleFormModal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} onSave={handleSaveRole} role={editingRole} />
+            
+            <ConfirmModal 
+                isOpen={confirmDeleteEmployee.isOpen} 
+                onClose={() => setConfirmDeleteEmployee({ isOpen: false, id: null })} 
+                onConfirm={handleConfirmDeleteEmployee} 
+                title="¿ELIMINAR EMPLEADO?" 
+                message="Esta acción es irreversible y el empleado perderá acceso inmediato al sistema." 
+            />
+
+            <ConfirmModal 
+                isOpen={confirmDeleteRole.isOpen} 
+                onClose={() => setConfirmDeleteRole({ isOpen: false, id: null })} 
+                onConfirm={handleConfirmDeleteRole} 
+                title="¿ELIMINAR ROL?" 
+                message="Confirmas que deseas eliminar este rol permanentemente del sistema." 
+            />
 
             {/* Encabezado Principal */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
@@ -159,10 +200,10 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
                 {/* Sección de Equipo */}
                 <section className="space-y-8">
                     <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest bg-gray-100 dark:bg-dark-700 px-4 py-2 rounded-xl border border-gray-200 dark:border-dark-600">
-                            Equipo de Trabajo
+                        <h2 className="flex items-center gap-2 text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest bg-white dark:bg-dark-800 px-5 py-3 rounded-2xl border border-gray-100 dark:border-dark-700 shadow-sm">
+                            <UsersIcon className="w-5 h-5 text-blue-600" /> Equipo de Trabajo
                         </h2>
-                        <div className="h-px flex-1 bg-gradient-to-r from-gray-200 dark:from-dark-600 to-transparent"></div>
+                        <div className="h-px flex-1 bg-gradient-to-r from-gray-200 dark:from-dark-700 to-transparent"></div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
@@ -191,10 +232,10 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
                 {/* Sección de Roles */}
                 <section className="space-y-8">
                     <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest bg-gray-100 dark:bg-dark-700 px-4 py-2 rounded-xl border border-gray-200 dark:border-dark-600">
-                            Roles y Permisos
+                        <h2 className="flex items-center gap-2 text-xl font-black text-gray-900 dark:text-white uppercase tracking-widest bg-white dark:bg-dark-800 px-5 py-3 rounded-2xl border border-gray-100 dark:border-dark-700 shadow-sm">
+                            <ShieldCheckIcon className="w-5 h-5 text-green-600" /> Roles y Permisos
                         </h2>
-                        <div className="h-px flex-1 bg-gradient-to-r from-gray-200 dark:from-dark-600 to-transparent"></div>
+                        <div className="h-px flex-1 bg-gradient-to-r from-gray-200 dark:from-dark-700 to-transparent"></div>
                         <button 
                             onClick={() => handleOpenRoleModal(null)}
                             className="p-2 bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all active:scale-95"
