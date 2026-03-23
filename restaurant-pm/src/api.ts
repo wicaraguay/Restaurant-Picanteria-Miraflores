@@ -135,6 +135,16 @@ export class ApiService {
         const data: ApiResponse<T> = await response.json();
 
         if (!response.ok) {
+            // Manejo especial para 401 Unauthorized (Sesión expirada o inválida)
+            if (response.status === 401) {
+                logger.warn('Unauthorized request - session may be expired', { url: response.url });
+                
+                // Si no es el endpoint de login, limpiar el token para forzar re-login
+                if (!response.url.includes(API_ENDPOINTS.AUTH.LOGIN)) {
+                    this.setToken(null);
+                }
+            }
+
             const errorMessage = data.success === false
                 ? data.error.message
                 : `HTTP error! status: ${response.status}`;

@@ -68,9 +68,15 @@ export class AuthService {
 
             return user;
         } catch (error) {
+            // Si falla la validación, nos aseguramos de limpiar el token
+            apiService.setToken(null);
             return null;
         } finally {
-            apiService.setToken(originalToken);
+            // Solo restaurar si el token original era distinto al que validamos
+            // (evita restaurar un token inválido si token === originalToken)
+            if (originalToken !== token && apiService.getToken() === token) {
+                apiService.setToken(originalToken);
+            }
         }
     }
 
