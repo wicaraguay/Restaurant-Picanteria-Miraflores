@@ -241,7 +241,9 @@ export class CheckInvoiceStatus {
                 }
 
                 // Regenerate XML & Sign (Required for email attachment)
-                const xml = this.sriService.generateInvoiceXML(invoiceObj);
+                // CRITICAL: Pass the EXISTING authorized access key to avoid generating a new random one.
+                // Without this, the PDF/XML in the email would have a different (unauthorized) access key.
+                const xml = this.sriService.generateInvoiceXML(invoiceObj, bill.accessKey);
                 const signedXml = await this.sriService.signXML(xml);
 
                 // Generate PDF
