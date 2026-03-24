@@ -83,10 +83,30 @@ export class GenerateCreditNote {
         const config = await this.configRepository.get();
         const info = config || {} as any;
 
-        // 4. Get Next Sequential for Credit Notes (we'll use the same method for now)
-        // In a production system, you might want a separate sequential counter for credit notes
-        const nextSequential = await this.configRepository.getNextCreditNoteSequential();
-        const secuencial = nextSequential.toString().padStart(9, '0');
+        // 4. Get Sequential for Credit Note
+        // CRITICAL: If a PENDING credit note already exists for this bill (e.g. SRI was down),
+        // reuse its sequential and access key to avoid gaps and duplicate entries in the DB.
+        let secuencial: string;
+        let existingPendingAccessKey: string | undefined;
+
+        const existingCreditNotes = await this.creditNoteRepository.findByBillId(billId);
+        const pendingNC = existingCreditNotes.find(
+            nc => nc.sriStatus === 'PENDIENTE' || nc.sriStatus === 'PENDING' || nc.sriStatus === 'PENDING_RETRY'
+            // NOTE: DEVUELTA and NO AUTORIZADO are NOT reused — they were explicitly rejected by SRI
+            // and need a new sequential + corrected data to retry.
+        );
+
+        if (pendingNC) {
+            // Reuse the existing sequential and access key — do NOT consume a new number
+            const parts = pendingNC.documentNumber.split('-');
+            secuencial = parts[parts.length - 1];
+            existingPendingAccessKey = pendingNC.accessKey || undefined;
+            console.log(`[GenerateCreditNote] ♻️ Found PENDING credit note. Reusing sequential: ${secuencial} | accessKey: ${existingPendingAccessKey}`);
+        } else {
+            const nextSequential = await this.configRepository.getNextCreditNoteSequential();
+            secuencial = nextSequential.toString().padStart(9, '0');
+            console.log(`[GenerateCreditNote] New sequential generated: ${secuencial}`);
+        }
 
         // 5. Build Credit Note Object
         const now = new Date();
@@ -157,7 +177,10 @@ export class GenerateCreditNote {
                 creditNote.info.secuencial = currentSequential;
 
                 // Generate XML
-                const xml = this.sriService.generateCreditNoteXML(creditNote);
+                // On the first attempt, pass existingPendingAccessKey (may be undefined for new NCs).
+                // On subsequent attempts (duplicate sequential error), always generate a new key.
+                const reuseKey = attempts === 1 ? existingPendingAccessKey : undefined;
+                const xml = this.sriService.generateCreditNoteXML(creditNote, reuseKey);
                 currentAccessKey = creditNote.info.claveAcceso!; // Access key is generated in generateCreditNoteXML
 
                 // Sign XML
