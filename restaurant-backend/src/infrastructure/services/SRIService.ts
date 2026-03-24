@@ -113,7 +113,10 @@ export class SRIService {
         invoice.info.claveAcceso = claveAcceso;
         console.log('Generated/Used Access Key:', claveAcceso);
 
-        // Mock XML structure for now (Reused from previous implementation)
+        // FIX: Derive the tax percentage code dynamically from the first detail item
+        // instead of hardcoding '4' (15%). This ensures correctness for all tax rates.
+        const invoiceTaxCode = invoice.detalles[0]?.impuestos[0]?.codigoPorcentaje ?? '4';
+
         const xml = `
 <?xml version="1.0" encoding="UTF-8"?>
 <factura id="comprobante" version="1.1.0">
@@ -143,7 +146,7 @@ export class SRIService {
         <totalConImpuestos>
             <totalImpuesto>
                 <codigo>2</codigo>
-                <codigoPorcentaje>4</codigoPorcentaje>
+                <codigoPorcentaje>${invoiceTaxCode}</codigoPorcentaje>
                 <baseImponible>${invoice.info.totalSinImpuestos.toFixed(2)}</baseImponible>
                 <valor>${(invoice.info.importeTotal - invoice.info.totalSinImpuestos).toFixed(2)}</valor>
             </totalImpuesto>
@@ -162,7 +165,7 @@ export class SRIService {
     </infoFactura>
     <detalles>
         ${invoice.detalles.map((d: InvoiceDetail) => {
-            const imp = d.impuestos[0]; // Assuming single tax for now
+            const imp = d.impuestos[0];
             return `
         <detalle>
             <codigoPrincipal>${this.escapeXML(d.codigoPrincipal)}</codigoPrincipal>
@@ -170,14 +173,14 @@ export class SRIService {
             <cantidad>${d.cantidad}</cantidad>
             <precioUnitario>${d.precioUnitario}</precioUnitario>
             <descuento>0.00</descuento>
-            <precioTotalSinImpuesto>${d.precioTotalSinImpuesto}</precioTotalSinImpuesto>
+            <precioTotalSinImpuesto>${d.precioTotalSinImpuesto.toFixed(2)}</precioTotalSinImpuesto>
             <impuestos>
                 <impuesto>
                     <codigo>${imp.codigo}</codigo>
                     <codigoPorcentaje>${imp.codigoPorcentaje}</codigoPorcentaje>
                     <tarifa>${imp.tarifa}</tarifa>
-                    <baseImponible>${imp.baseImponible}</baseImponible>
-                    <valor>${imp.valor}</valor>
+                    <baseImponible>${imp.baseImponible.toFixed(2)}</baseImponible>
+                    <valor>${imp.valor.toFixed(2)}</valor>
                 </impuesto>
             </impuestos>
         </detalle>`;
@@ -190,8 +193,6 @@ export class SRIService {
         ${invoice.info.contribuyenteEspecial ? `<campoAdicional nombre="Contribuyente Especial">${invoice.info.contribuyenteEspecial}</campoAdicional>` : ''}
     </infoAdicional>
 </factura>`;
-
-
 
         return xml.trim();
     }
@@ -554,8 +555,9 @@ export class SRIService {
 
     /**
      * Genera el XML de una Nota de Crédito en formato string
+     * @param existingAccessKey - (Opcional) Reutilizar clave existente en reintentos
      */
-    public generateCreditNoteXML(creditNote: CreditNote): string {
+    public generateCreditNoteXML(creditNote: CreditNote, existingAccessKey?: string): string {
         console.log('[SRIService] Generating Credit Note XML...');
         console.log('[SRIService] Credit Note RUC:', creditNote.info.ruc);
         console.log('[SRIService] Certificate should be for RUC:', process.env.RUC);
@@ -569,33 +571,43 @@ export class SRIService {
 
         console.log('Generating Credit Note XML for bill', creditNote.billId);
 
-        // 1. Generate Access Key (Clave de Acceso)
-        const dateParts = creditNote.info.fechaEmision.split('/');
-        const day = dateParts[0].padStart(2, '0');
-        const month = dateParts[1].padStart(2, '0');
-        const year = dateParts[2];
-        const fechaSimple = `${day}${month}${year}`;
+        let claveAcceso = existingAccessKey;
 
-        // Generate random 8-digit numeric code (CRITICAL for unique access keys)
-        const codigoNumerico = Math.floor(10000000 + Math.random() * 90000000).toString();
+        if (!claveAcceso) {
+            // 1. Generate Access Key (Clave de Acceso)
+            const dateParts = creditNote.info.fechaEmision.split('/');
+            const day = dateParts[0].padStart(2, '0');
+            const month = dateParts[1].padStart(2, '0');
+            const year = dateParts[2];
+            const fechaSimple = `${day}${month}${year}`;
 
-        const keyPayload =
-            fechaSimple +
-            '04' + // CodDoc (Nota de Crédito)
-            creditNote.info.ruc +
-            creditNote.info.ambiente +
-            creditNote.info.estab +
-            creditNote.info.ptoEmi +
-            creditNote.info.secuencial +
-            codigoNumerico +
-            '1'; // Tipo Emision (Normal)
+            // Generate random 8-digit numeric code (CRITICAL for unique access keys)
+            const codigoNumerico = Math.floor(10000000 + Math.random() * 90000000).toString();
 
-        const digitoVerificador = this.calculateMod11(keyPayload);
-        const claveAcceso = keyPayload + digitoVerificador;
+            const keyPayload =
+                fechaSimple +
+                '04' + // CodDoc (Nota de Crédito)
+                creditNote.info.ruc +
+                creditNote.info.ambiente +
+                creditNote.info.estab +
+                creditNote.info.ptoEmi +
+                creditNote.info.secuencial +
+                codigoNumerico +
+                '1'; // Tipo Emision (Normal)
 
-        // Save generated key to credit note
+            const digitoVerificador = this.calculateMod11(keyPayload);
+            claveAcceso = keyPayload + digitoVerificador;
+        } else {
+            console.log('[SRIService] Using EXISTING Access Key for Credit Note regeneration:', claveAcceso);
+        }
+
+        // Save key to credit note
         creditNote.info.claveAcceso = claveAcceso;
-        console.log('Generated Credit Note Access Key:', claveAcceso);
+        console.log('Generated/Used Credit Note Access Key:', claveAcceso);
+
+        // FIX: Derive the tax percentage code dynamically from the first detail item
+        // instead of hardcoding '4' (15%). This ensures correctness for all tax rates.
+        const cnTaxCode = creditNote.detalles[0]?.impuestos[0]?.codigoPorcentaje ?? '4';
 
         // Build XML structure for Credit Note with PROPERLY ESCAPED TEXT
         const xml = `
@@ -631,7 +643,7 @@ export class SRIService {
         <totalConImpuestos>
             <totalImpuesto>
                 <codigo>2</codigo>
-                <codigoPorcentaje>4</codigoPorcentaje>
+                <codigoPorcentaje>${cnTaxCode}</codigoPorcentaje>
                 <baseImponible>${creditNote.info.totalSinImpuestos.toFixed(2)}</baseImponible>
                 <valor>${(creditNote.info.importeTotal - creditNote.info.totalSinImpuestos).toFixed(2)}</valor>
             </totalImpuesto>
@@ -640,7 +652,7 @@ export class SRIService {
     </infoNotaCredito>
     <detalles>
         ${creditNote.detalles.map((d: CreditNoteDetail) => {
-            const imp = d.impuestos[0]; // Assuming single tax for now
+            const imp = d.impuestos[0];
             return `
         <detalle>
             <codigoInterno>${this.escapeXML(d.codigoPrincipal)}</codigoInterno>
@@ -648,14 +660,14 @@ export class SRIService {
             <cantidad>${d.cantidad}</cantidad>
             <precioUnitario>${d.precioUnitario}</precioUnitario>
             <descuento>0.00</descuento>
-            <precioTotalSinImpuesto>${d.precioTotalSinImpuesto}</precioTotalSinImpuesto>
+            <precioTotalSinImpuesto>${d.precioTotalSinImpuesto.toFixed(2)}</precioTotalSinImpuesto>
             <impuestos>
                 <impuesto>
                     <codigo>${imp.codigo}</codigo>
                     <codigoPorcentaje>${imp.codigoPorcentaje}</codigoPorcentaje>
                     <tarifa>${imp.tarifa}</tarifa>
-                    <baseImponible>${imp.baseImponible}</baseImponible>
-                    <valor>${imp.valor}</valor>
+                    <baseImponible>${imp.baseImponible.toFixed(2)}</baseImponible>
+                    <valor>${imp.valor.toFixed(2)}</valor>
                 </impuesto>
             </impuestos>
         </detalle>`;
