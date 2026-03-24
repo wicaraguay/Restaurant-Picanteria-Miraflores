@@ -133,27 +133,37 @@ export class BillController {
     private mapBillToInvoice = async (billData: any): Promise<any> => {
         const config: any = await RestaurantConfigModel.findOne();
         const [estab, ptoEmi, secuencial] = billData.documentNumber.split('-');
+        const taxRate: number = config?.billing?.taxRate || 15;
 
         return {
             orderId: billData.orderId,
             authorizationDate: billData.authorizationDate,
             creationDate: billData.createdAt,
-            detalles: billData.items.map((item: any) => ({
-                descripcion: item.name,
-                cantidad: item.quantity,
-                precioUnitario: item.price,
-                precioTotalSinImpuesto: item.price * item.quantity,
-                impuestos: [{
-                    codigo: '2',
-                    tarifa: config?.billing?.taxRate || 15,
-                    valor: Math.max(0, item.total - (item.price * item.quantity))
-                }]
-            })),
+            detalles: billData.items.map((item: any) => {
+                const subtotal = parseFloat((item.price * item.quantity).toFixed(2));
+                const taxValue = parseFloat(Math.max(0, (item.total || 0) - subtotal).toFixed(2));
+                return {
+                    codigoPrincipal: item.id || item.name || 'ITEM',
+                    descripcion: item.name,
+                    cantidad: item.quantity,
+                    precioUnitario: parseFloat((subtotal / item.quantity).toFixed(6)),
+                    descuento: 0,
+                    precioTotalSinImpuesto: subtotal,
+                    impuestos: [{
+                        codigo: '2',
+                        codigoPorcentaje: this.billingService.getTaxCode(taxRate),
+                        tarifa: taxRate,
+                        baseImponible: subtotal,
+                        valor: taxValue
+                    }]
+                };
+            }),
             info: {
                 estab, ptoEmi, secuencial,
                 fechaEmision: billData.date,
                 razonSocialComprador: billData.customerName,
                 identificacionComprador: billData.customerIdentification,
+                tipoIdentificacionComprador: this.billingService.getIdentificacionType(billData.customerIdentification),
                 direccionComprador: billData.customerAddress || 'S/N',
                 emailComprador: billData.customerEmail,
                 importeTotal: billData.total,
@@ -166,16 +176,17 @@ export class BillController {
                 nombreComercial: config?.name || process.env.COMMERCIAL_NAME,
                 dirMatriz: config?.address || process.env.DIR_MATRIZ || 'Guayaquil, Ecuador',
                 dirEstablecimiento: config?.address || process.env.DIR_ESTABLECIMIENTO || process.env.DIR_MATRIZ,
-                tasaIva: (config?.billing?.taxRate || 15).toString(),
+                tasaIva: taxRate.toString(),
                 obligadoContabilidad: config?.obligadoContabilidad ? 'SI' : 'NO',
                 moneda: 'DOLAR',
-                formaPago: '01',
-                telefonoComprador: 'S/N',
+                formaPago: billData.paymentMethod || '01',
+                telefonoComprador: billData.customerPhone || 'S/N',
                 emailMatriz: config?.fiscalEmail || config?.email || process.env.SMTP_FROM,
                 logoUrl: this.billingService.getLogoUrl(config)
             }
         };
     };
+
 
     public delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {

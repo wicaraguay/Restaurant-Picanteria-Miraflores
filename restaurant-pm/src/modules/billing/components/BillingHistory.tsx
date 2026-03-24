@@ -591,132 +591,119 @@ const BillingHistory: React.FC = () => {
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex justify-end items-center gap-1">
-                                                    {/* PRIMARY ACTIONS (Print & Status) */}
+                                            <td className="px-4 py-4">
+                                                {/* ── Acciones agrupadas en un solo pill ── */}
+                                                <div className="flex justify-end">
+                                                    <div className="inline-flex items-center gap-0.5 bg-gray-100 dark:bg-dark-700 rounded-2xl p-1 border border-gray-200 dark:border-dark-600">
 
-                                                    {/* Edit Client Data (Only for failed/draft) */}
-                                                    {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                        {/* ── GRUPO 1: Documentos ── */}
                                                         <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedBillForEdit(bill);
-                                                                setIsEditModalOpen(true);
-                                                            }}
-                                                            className="p-2 bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-600 dark:bg-dark-700 dark:text-gray-400 rounded-xl transition-all"
-                                                            title="Editar datos del cliente"
+                                                            onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf`, '_blank')}
+                                                            className="p-1.5 rounded-xl text-gray-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
+                                                            title="Ver RIDE (PDF)"
                                                         >
-                                                            <EditIcon className="w-4 h-4" />
+                                                            <PrinterIcon className="w-3.5 h-3.5" />
                                                         </button>
-                                                    )}
 
-                                                    {/* Check Status / Retry */}
-                                                    {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                        <button
+                                                            onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf?format=ticket`, '_blank')}
+                                                            className="p-1.5 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
+                                                            title="Imprimir Ticket"
+                                                        >
+                                                            <div className="flex items-center justify-center w-3.5 h-3.5 border border-current rounded-[3px] text-[7px] font-bold leading-none">T</div>
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/xml`, '_blank')}
+                                                            disabled={!bill.accessKey}
+                                                            className="p-1.5 rounded-xl text-orange-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                                            title={bill.accessKey ? 'Descargar XML Firmado' : 'XML no disponible (factura no enviada al SRI)'}
+                                                        >
+                                                            <div className="flex items-center justify-center w-3.5 h-3.5 border border-current rounded-[3px] text-[6px] font-bold leading-none">XML</div>
+                                                        </button>
+
+                                                        {/* ── Divisor ── */}
+                                                        <div className="w-px h-4 bg-gray-300 dark:bg-dark-500 mx-0.5" />
+
+                                                        {/* ── GRUPO 2: Gestión ── */}
+
+                                                        {/* Editar — solo si no está autorizado/cancelado */}
+                                                        {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedBillForEdit(bill); setIsEditModalOpen(true); }}
+                                                                className="p-1.5 rounded-xl text-gray-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
+                                                                title="Editar datos del cliente"
+                                                            >
+                                                                <EditIcon className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+
+                                                        {/* Reintentar / Verificar estado */}
+                                                        {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                            <button
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    if (!bill.accessKey || bill.sriStatus === 'BORRADOR' || bill.sriStatus === 'ERROR') {
+                                                                        await handleReSubmit(bill);
+                                                                    } else {
+                                                                        await handleCheckStatus(bill);
+                                                                    }
+                                                                }}
+                                                                className={`p-1.5 rounded-xl transition-all ${(!bill.accessKey || bill.sriStatus === 'BORRADOR')
+                                                                    ? 'text-orange-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600'
+                                                                    : 'text-blue-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600'}`}
+                                                                title={(!bill.accessKey || bill.sriStatus === 'BORRADOR') ? 'Re-intentar envío SRI' : 'Verificar estado SRI'}
+                                                            >
+                                                                <RefreshCcwIcon className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+
+                                                        {/* Nota de Crédito */}
+                                                        <button
+                                                            disabled={
+                                                                bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ||
+                                                                bill.hasCreditNote ||
+                                                                bill.customerIdentification?.trim() === '9999999999999'
+                                                            }
+                                                            onClick={(e) => { e.stopPropagation(); setSelectedBillForCreditNote(bill); }}
+                                                            className={`p-1.5 rounded-xl transition-all ${
+                                                                bill.sriStatus?.trim().toUpperCase() === 'AUTORIZADO' && !bill.hasCreditNote && bill.customerIdentification?.trim() !== '9999999999999'
+                                                                    ? 'text-gray-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 cursor-pointer'
+                                                                    : 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-40'
+                                                            }`}
+                                                            title={
+                                                                bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ? 'Solo facturas AUTORIZADAS'
+                                                                    : bill.hasCreditNote ? 'Ya tiene Nota de Crédito'
+                                                                    : bill.customerIdentification?.trim() === '9999999999999' ? 'No aplica para Consumidor Final'
+                                                                    : 'Emitir Nota de Crédito'
+                                                            }
+                                                        >
+                                                            <FileTextIcon className="w-3.5 h-3.5" />
+                                                        </button>
+
+                                                        {/* Eliminar */}
                                                         <button
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
-                                                                if (!bill.accessKey || bill.sriStatus === 'BORRADOR' || bill.sriStatus === 'ERROR') {
-                                                                    await handleReSubmit(bill);
-                                                                } else {
-                                                                    await handleCheckStatus(bill);
+                                                                if (confirm('¿Eliminar factura?')) {
+                                                                    try {
+                                                                        setIsLoading(true);
+                                                                        await billingService.delete(bill.id);
+                                                                        await fetchBills();
+                                                                    } catch (error) {
+                                                                        console.error('Error:', error);
+                                                                    } finally {
+                                                                        setIsLoading(false);
+                                                                    }
                                                                 }
                                                             }}
-                                                            className={`p-2 rounded-xl transition-all shadow-sm ${(!bill.accessKey || bill.sriStatus === 'BORRADOR')
-                                                                ? 'bg-orange-50 text-orange-600 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400'
-                                                                : 'bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400'
-                                                                }`}
-                                                            title={(!bill.accessKey || bill.sriStatus === 'BORRADOR') ? "Re-intentar envío SRI" : "Actualizar Estado SRI"}
+                                                            className="p-1.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-dark-600 transition-all"
+                                                            title="Eliminar Registro"
                                                         >
-                                                            <RefreshCcwIcon className="w-4 h-4" />
+                                                            <TrashIcon className="w-3.5 h-3.5" />
                                                         </button>
-                                                    )}
 
-                                                    <button
-                                                        onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf`, '_blank')}
-                                                        className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 dark:text-gray-400 dark:hover:bg-dark-700 rounded-xl transition-all"
-                                                        title="Ver RIDE (PDF)"
-                                                    >
-                                                        <PrinterIcon className="w-4 h-4" />
-                                                    </button>
-
-                                                    <button
-                                                        onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf?format=ticket`, '_blank')}
-                                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-dark-700 rounded-xl transition-all"
-                                                        title="Imprimir Ticket"
-                                                    >
-                                                        <div className="flex items-center justify-center w-4 h-4 border border-current rounded-[4px] text-[8px] font-bold">
-                                                            T
-                                                        </div>
-                                                    </button>
-
-                                                    {/* Download XML */}
-                                                    <button
-                                                        onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/xml`, '_blank')}
-                                                        className="p-2 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-xl transition-all"
-                                                        title="Descargar XML Firmado (Legal)"
-                                                        disabled={bill.sriStatus !== 'AUTORIZADO'}
-                                                    >
-                                                        <div className="flex items-center justify-center w-4 h-4 border border-current rounded-[4px] text-[8px] font-bold">
-                                                            XML
-                                                        </div>
-                                                    </button>
-
-                                                    {/* DIVIDER */}
-                                                    <div className="w-px h-4 bg-gray-200 dark:bg-dark-700 mx-1"></div>
-
-                                                    {/* SECONDARY ACTIONS (Manage) */}
-
-                                                    {/* Credit Note (Always visible, disabled if not applicable) */}
-                                                    <button
-                                                        disabled={
-                                                            bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ||
-                                                            bill.hasCreditNote ||
-                                                            bill.customerIdentification?.trim() === '9999999999999'
-                                                        }
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedBillForCreditNote(bill);
-                                                        }}
-                                                        className={`p-2 rounded-xl transition-all ${bill.sriStatus?.trim().toUpperCase() === 'AUTORIZADO' &&
-                                                            !bill.hasCreditNote &&
-                                                            bill.customerIdentification?.trim() !== '9999999999999'
-                                                            ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 cursor-pointer'
-                                                            : 'text-gray-200 dark:text-gray-700 cursor-not-allowed opacity-50'
-                                                            }`}
-                                                        title={
-                                                            bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO'
-                                                                ? "Solo facturas AUTORIZADAS pueden tener Nota de Crédito"
-                                                                : bill.hasCreditNote
-                                                                    ? "Ya tiene Nota de Crédito"
-                                                                    : bill.customerIdentification?.trim() === '9999999999999'
-                                                                        ? "No se puede emitir Nota de Crédito a Consumidor Final"
-                                                                        : "Emitir Nota de Crédito"
-                                                        }
-                                                    >
-                                                        <FileTextIcon className="w-4 h-4" />
-                                                    </button>
-
-                                                    {/* Delete */}
-                                                    <button
-                                                        onClick={async (e) => {
-                                                            e.stopPropagation();
-                                                            if (confirm('¿Eliminar factura?')) {
-                                                                try {
-                                                                    setIsLoading(true);
-                                                                    await billingService.delete(bill.id);
-                                                                    await fetchBills();
-                                                                } catch (error) {
-                                                                    console.error('Error:', error);
-                                                                } finally {
-                                                                    setIsLoading(false);
-                                                                }
-                                                            }
-                                                        }}
-                                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
-                                                        title="Eliminar Registro"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
