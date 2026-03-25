@@ -42,6 +42,8 @@ export class MongoBillRepository extends BaseRepository<Bill> implements IBillRe
             doc.paymentMethod,
             doc.sriMessage,
             doc.xmlContent,
+            doc.retryCount || 0,
+            doc.lastRetryDate,
             doc.createdAt
         );
     }

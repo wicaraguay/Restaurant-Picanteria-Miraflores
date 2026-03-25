@@ -53,6 +53,8 @@ export class Bill {
         public readonly paymentMethod?: string,
         public readonly sriMessage?: string,
         public readonly xmlContent?: string,
+        public readonly retryCount: number = 0,
+        public readonly lastRetryDate?: string,
         public readonly createdAt?: Date
     ) { }
 }

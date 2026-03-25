@@ -162,7 +162,9 @@ export class GenerateInvoice {
             environment: invoice.info.ambiente,
             customerPhone: invoice.info.telefonoComprador,
             paymentMethod: invoice.info.formaPago,
-            regime: info.billing?.regime || 'General'
+            regime: info.billing?.regime || 'General',
+            retryCount: 0,
+            lastRetryDate: this.billingService.getCurrentDateEcuador().split('/').reverse().join('-') // YYYY-MM-DD
         };
 
         const draftBill = await this.billRepository.upsert(billData);

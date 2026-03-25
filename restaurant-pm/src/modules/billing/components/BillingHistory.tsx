@@ -666,16 +666,15 @@ const BillingHistory: React.FC = () => {
                                                                 bill.customerIdentification?.trim() === '9999999999999'
                                                             }
                                                             onClick={(e) => { e.stopPropagation(); setSelectedBillForCreditNote(bill); }}
-                                                            className={`p-1.5 rounded-xl transition-all ${
-                                                                bill.sriStatus?.trim().toUpperCase() === 'AUTORIZADO' && !bill.hasCreditNote && bill.customerIdentification?.trim() !== '9999999999999'
+                                                            className={`p-1.5 rounded-xl transition-all ${bill.sriStatus?.trim().toUpperCase() === 'AUTORIZADO' && !bill.hasCreditNote && bill.customerIdentification?.trim() !== '9999999999999'
                                                                     ? 'text-gray-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 cursor-pointer'
                                                                     : 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-40'
-                                                            }`}
+                                                                }`}
                                                             title={
                                                                 bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ? 'Solo facturas AUTORIZADAS'
                                                                     : bill.hasCreditNote ? 'Ya tiene Nota de Crédito'
-                                                                    : bill.customerIdentification?.trim() === '9999999999999' ? 'No aplica para Consumidor Final'
-                                                                    : 'Emitir Nota de Crédito'
+                                                                        : bill.customerIdentification?.trim() === '9999999999999' ? 'No aplica para Consumidor Final'
+                                                                            : 'Emitir Nota de Crédito'
                                                             }
                                                         >
                                                             <FileTextIcon className="w-3.5 h-3.5" />

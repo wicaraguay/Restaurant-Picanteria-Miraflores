@@ -49,7 +49,9 @@ const BillSchema = new Schema({
     customerPhone: { type: String },
     paymentMethod: { type: String },
     sriMessage: { type: String },
-    xmlContent: { type: String }
+    xmlContent: { type: String },
+    retryCount: { type: Number, default: 0 },
+    lastRetryDate: { type: String }
 }, {
     timestamps: true
 });

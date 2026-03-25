@@ -38,9 +38,9 @@ export class CronService {
         logger.info('[CronService] Initializing Cron Jobs...');
 
 
-        // 1. Retry Invoices Cron (Every 15 minutes)
-        // Adjust schedule as needed. '*/15 * * * *' = every 15 minutes
-        const retryJob = cron.schedule('*/15 * * * *', async () => {
+        // 1. Retry Invoices Cron (Every 3 hours)
+        // Adjust schedule as needed. '0 */3 * * *' = every 3 hours
+        const retryJob = cron.schedule('0 */3 * * *', async () => {
             logger.info('[CronService] Running scheduled task: RetryInvoices');
             try {
                 const results = await this.retryInvoices.execute();

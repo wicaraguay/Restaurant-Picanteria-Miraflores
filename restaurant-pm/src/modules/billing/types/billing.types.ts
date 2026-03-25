@@ -31,4 +31,6 @@ export interface Bill {
     sriMessage?: string;
     xmlContent?: string;
     hasCreditNote?: boolean;
+    retryCount?: number;
+    lastRetryDate?: string;
 }

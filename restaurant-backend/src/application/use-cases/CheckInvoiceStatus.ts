@@ -51,6 +51,42 @@ export class CheckInvoiceStatus {
 
             if (fullBill) {
                 try {
+                    const todayEcuador = this.billingService.getCurrentDateEcuador();
+                    const todayISO = todayEcuador.split('/').reverse().join('-'); // YYYY-MM-DD
+                    const lastRetryDate = fullBill.lastRetryDate || '';
+                    
+                    let newRetryCount = (fullBill.retryCount || 0);
+                    let shouldGenerateNewKey = false;
+                    
+                    if (lastRetryDate !== todayISO) {
+                        // NEW DAY: Reset everything and force NEW key (because date in key must match emission date)
+                        console.log(`[CheckInvoiceStatus] New day detected (${lastRetryDate} -> ${todayISO}). Resetting retries and forcing NEW key.`);
+                        newRetryCount = 1; // First attempt of the new day
+                        shouldGenerateNewKey = true;
+                    } else {
+                        // SAME DAY: Increment and check limit
+                        newRetryCount++;
+                        console.log(`[CheckInvoiceStatus] Incrementing daily retryCount for ${fullBill.documentNumber}: ${fullBill.retryCount} -> ${newRetryCount}`);
+                        
+                        if (newRetryCount > 2) {
+                            console.log(`[CheckInvoiceStatus] Daily limit reached (2 attempts) for today (${todayISO}). Stopping.`);
+                            return { 
+                                success: false, 
+                                error: 'Límite de 2 intentos diarios alcanzado para esta factura. Intente mañana.',
+                                authorization: authResult 
+                            };
+                        }
+                        
+                        // If it's the 2nd attempt of the same day, we also use a NEW key if the 1st one failed?
+                        // User said: "despues de los 2 intentos son diarios... la unica manera es generando con nueva clave"
+                        // Usually 1st fail -> Retry same key. 2nd fail -> Stop. 
+                        // But if 1st attempt ever failed, maybe Key A is "tainted" in SRI.
+                        // Let's stick to: 2 attempts with SAME key per day.
+                        shouldGenerateNewKey = false; 
+                    }
+
+                    const nextRetryCount = newRetryCount;
+
                     // Reconstruct Invoice Object
                     const config = await this.configRepository.get();
                     const info = config || {} as any;
@@ -90,32 +126,38 @@ export class CheckInvoiceStatus {
                         detalles: details
                     };
 
-                    // Generate XML using EXISTING Access Key
-                    const useNewKey = true;
-                    const xml = this.sriService.generateInvoiceXML(invoiceToResend, useNewKey ? undefined : fullBill.accessKey);
+                    // Generate XML: 
+                    // If shouldGenerateNewKey is true, we pass undefined to generate a fresh random key.
+                    // Otherwise we pass the existing key to maintain it for the retry.
+                    const xml = this.sriService.generateInvoiceXML(invoiceToResend, shouldGenerateNewKey ? undefined : fullBill.accessKey);
                     const signedXml = await this.sriService.signXML(xml);
+                    const finalKey = invoiceToResend.info.claveAcceso;
 
-                    // Update DB with NEW Key immediately
-                    console.log(`[CheckInvoiceStatus] Generated NEW Access Key for recovery: ${invoiceToResend.info.claveAcceso}`);
+                    // Update DB with results and NEW/SAME Key + Retry Count
+                    console.log(`[CheckInvoiceStatus] ${shouldGenerateNewKey ? 'NEW' : 'SAME'} Access Key for attempt: ${finalKey}`);
+                    
                     await this.billRepository.upsert({
                         id: fullBill.id,
-                        accessKey: invoiceToResend.info.claveAcceso,
-                        date: new Date().toISOString(), // CRITICAL: Sync DB date with new Invoice Date
+                        accessKey: finalKey,
+                        date: new Date().toISOString(), // CRITICAL: Sync DB date with new Invoice Date if key changed
                         sriStatus: 'PENDING_RETRY',
-                        sriMessage: (authResult?.mensajes || []).join(' ')
+                        retryCount: nextRetryCount,
+                        lastRetryDate: todayISO,
+                        sriMessage: `Intento ${newRetryCount}: ${(authResult?.mensajes || []).join(' ')}`
                     });
-                    // Update local ref
-                    (fullBill as any).accessKey = invoiceToResend.info.claveAcceso;
+                    
+                    // Update local ref for following operations
+                    (fullBill as any).accessKey = finalKey;
 
                     // Resend to Reception
-                    console.log('[CheckInvoiceStatus] Resending to Reception...');
+                    console.log(`[CheckInvoiceStatus] Resending to Reception (Attempt ${newRetryCount})...`);
                     const receptionResult = await this.sriService.sendToSRI(signedXml, isProd);
 
                     const responseStr = JSON.stringify(receptionResult);
                     const isProcessing = receptionResult.estado === 'DEVUELTA' && responseStr.includes('CLAVE DE ACCESO EN PROCESAMIENTO');
 
                     if (receptionResult.estado === 'RECIBIDA' || isProcessing) {
-                        const newAuthResult = await this.sriService.waitForAuthorization(fullBill.accessKey!, isProd);
+                        const newAuthResult = await this.sriService.waitForAuthorization(finalKey!, isProd);
                         if (newAuthResult && newAuthResult.estado === 'AUTORIZADO') {
                             return await this.handleSuccess(fullBill, newAuthResult, isProd);
                         }
@@ -136,6 +178,7 @@ export class CheckInvoiceStatus {
                                 accessKey: finalXmlKey,
                                 documentNumber: `${estab}-${ptoEmi}-${newSecuencial}`,
                                 sriStatus: 'PENDING_RETRY',
+                                retryCount: 0, // Reset since we are using a brand new sequence
                                 sriMessage: (retryResult?.mensajes || []).join(' ')
                             });
                             const retryAuth = await this.sriService.waitForAuthorization(finalXmlKey!, isProd);
