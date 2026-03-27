@@ -132,7 +132,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
     const [tempAccessKey, setTempAccessKey] = useState<string | undefined>();
     const [tempAuthDate, setTempAuthDate] = useState<string | undefined>();
-    
+
     // Estados para Paginación y Filtros de Historial
     const [historySearch, setHistorySearch] = useState('');
     const [historyDate, setHistoryDate] = useState('');
@@ -149,12 +149,12 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     // Effect to detect READY orders
     useEffect(() => {
         const currentReadyCount = orders.filter(o => o.status === OrderStatus.Ready).length;
-        
+
         if (currentReadyCount > prevReadyOrdersCount.current) {
             notificationService.playOrderReadySound();
             toast.success('¡PEDIDO LISTO PARA SERVIR / COBRAR!', 'TERMINADO');
         }
-        
+
         prevReadyOrdersCount.current = currentReadyCount;
     }, [orders]);
 
@@ -170,7 +170,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
             if (currentEstimate && currentEstimate !== prevEstimate && prevEstimate !== undefined) {
                 toast.info(`Pedido #${order.orderNumber || order.id.slice(-6)}: Cocina estima ${currentEstimate} min`, 'TIEMPO ESTIMADO');
             }
-            
+
             prevEstimatedOrders.current[order.id] = currentEstimate;
         });
 
@@ -316,7 +316,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 await refreshConfig();
 
                 const finalBillingType = data.identification === '9999999999999' ? 'Consumidor Final' : 'Factura';
-                await handleStatusChange(order.id, OrderStatus.Completed, { 
+                await handleStatusChange(order.id, OrderStatus.Completed, {
                     billed: true,
                     billingType: finalBillingType
                 });
@@ -337,7 +337,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
     const handleManualComplete = async () => {
         if (!billingOrder) return;
-        
+
         try {
             await handleStatusChange(billingOrder.id, OrderStatus.Completed, {
                 billingType: 'Sin Factura'
@@ -396,12 +396,12 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 const isCompleted = order.status === OrderStatus.Completed;
                 if (!isCompleted) return false;
 
-                const matchesSearch = historySearch === '' || 
+                const matchesSearch = historySearch === '' ||
                     order.customerName.toLowerCase().includes(historySearch.toLowerCase()) ||
                     (order.orderNumber && order.orderNumber.toString().includes(historySearch)) ||
                     order.id.toLowerCase().includes(historySearch.toLowerCase());
-                
-                const matchesDate = historyDate === '' || 
+
+                const matchesDate = historyDate === '' ||
                     (order.createdAt && order.createdAt.startsWith(historyDate));
 
                 return matchesSearch && matchesDate;
@@ -411,7 +411,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
     // Paginación
     const totalPages = Math.ceil(filteredOrders.length / PAGE_SIZE);
-    const paginatedOrders = activeTab === 'history' 
+    const paginatedOrders = activeTab === 'history'
         ? filteredOrders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
         : filteredOrders;
 
@@ -473,7 +473,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                     <div className="flex flex-col sm:flex-row gap-3 w-full lg:flex-1 lg:max-w-xl">
                         <div className="relative flex-1">
                             <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                            <input 
+                            <input
                                 type="text"
                                 placeholder="Buscar cliente o # pedido..."
                                 value={historySearch}
@@ -481,7 +481,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:border-gray-700 dark:bg-dark-800 dark:text-white"
                             />
                         </div>
-                        <input 
+                        <input
                             type="date"
                             value={historyDate}
                             onChange={e => setHistoryDate(e.target.value)}
@@ -491,11 +491,11 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 )}
 
                 {viewMode === 'dashboard' && (
-                    <button 
-                        onClick={() => handleOpenModal(null)} 
+                    <button
+                        onClick={() => handleOpenModal(null)}
                         className="w-full sm:w-auto flex items-center justify-center bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/25 active:scale-95 group"
                     >
-                        <PlusIcon className="w-4 h-4 mr-2 group-hover:rotate-90 transition-transform" /> 
+                        <PlusIcon className="w-4 h-4 mr-2 group-hover:rotate-90 transition-transform" />
                         NUEVO PEDIDO
                     </button>
                 )}
@@ -503,9 +503,9 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
             {/* Content Rendering */}
             {viewMode === 'pos' ? (
-                <POSView 
-                    menuItems={menuItems} 
-                    onSave={handleSaveOrder} 
+                <POSView
+                    menuItems={menuItems}
+                    onSave={handleSaveOrder}
                     onCancel={() => {
                         setViewMode('dashboard');
                         setEditingOrder(null);
@@ -514,107 +514,107 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 />
             ) : (
                 <>
-            {isBillingModalOpen && billingOrder && (
-                <BillingModal
-                    isOpen={isBillingModalOpen}
-                    onClose={() => setIsBillingModalOpen(false)}
-                    config={config}
-                    billingOrder={billingOrder}
-                    billingData={billingData}
-                    setBillingData={setBillingData}
-                    searchingIdentity={searchingIdentity}
-                    onProcess={handleProcessBilling}
-                    onManualComplete={() => {/* Handled by ConfirmModal or separate flow if needed */}}
-                    manualCompleteLabel="Registrar sin Factura"
-                />
-            )}
-            <OrderFormModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveOrder} order={editingOrder} menuItems={menuItems} />
-
-            <ConfirmModal
-                isOpen={confirmDelete.isOpen}
-                onClose={() => setConfirmDelete({ isOpen: false, id: null })}
-                onConfirm={confirmDeleteOrder}
-                title="Eliminar Pedido"
-                message="¿Estás seguro de que deseas eliminar este pedido? Esta acción no se puede deshacer."
-                confirmText="Eliminar"
-                type="danger"
-            />
-
-            <ConfirmModal
-                isOpen={confirmBillingNoEmail.isOpen}
-                onClose={() => setConfirmBillingNoEmail({ isOpen: false, order: null, data: null })}
-                onConfirm={() => {
-                    if (confirmBillingNoEmail.order && confirmBillingNoEmail.data) {
-                        executeBillingProcess(confirmBillingNoEmail.order, confirmBillingNoEmail.data);
-                        setConfirmBillingNoEmail({ isOpen: false, order: null, data: null });
-                    }
-                }}
-                title="Factura sin Email"
-                message="No se ha ingresado un email válido. La factura se generará pero NO se enviará automáticamente. ¿Deseas continuar?"
-                confirmText="Continuar sin Email"
-                type="warning"
-            />
-
-            {/* Invoice Processing Modal */}
-            <InvoiceProcessingModal
-                isOpen={isProcessingModalOpen}
-                currentState={processingState}
-                message={processingMessage}
-                details={processingDetails}
-                invoiceNumber={generatedInvoiceNumber}
-                onClose={handleCloseProcessingModal}
-                onPrint={handlePrintFromProcessingModal}
-                onGoToHistory={handleGoToHistory}
-            />
-
-            {/* Billing Modal Integration */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-8">
-                {filteredOrders.length === 0 ? (
-                    <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
-                        {activeTab === 'active' ? 'No hay pedidos en curso.' : 'No hay historial de pedidos completados.'}
-                    </div>
-                ) : (
-                    paginatedOrders.map(order => (
-                        <OrderCard
-                            key={order.id}
-                            order={order}
-                            userRoleName={currentUser?.role.name}
-                            onEdit={() => handleOpenModal(order)}
-                            onDelete={() => handleDeleteOrder(order.id)}
-                            onStatusChange={(newStatus) => handleStatusChange(order.id, newStatus)}
-                            onPayment={handleOpenBilling}
-                            onBilling={() => handleOpenBilling(order)}
+                    {isBillingModalOpen && billingOrder && (
+                        <BillingModal
+                            isOpen={isBillingModalOpen}
+                            onClose={() => setIsBillingModalOpen(false)}
+                            config={config}
+                            billingOrder={billingOrder}
+                            billingData={billingData}
+                            setBillingData={setBillingData}
+                            searchingIdentity={searchingIdentity}
+                            onProcess={handleProcessBilling}
+                            onManualComplete={() => {/* Handled by ConfirmModal or separate flow if needed */ }}
+                            manualCompleteLabel="Registrar sin Factura"
                         />
-                    ))
-                )}
-            </div>
+                    )}
+                    <OrderFormModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveOrder} order={editingOrder} menuItems={menuItems} />
 
-            {/* Pagination Controls (only for history) */}
-            {viewMode === 'dashboard' && activeTab === 'history' && totalPages > 1 && (
-                <div className="flex justify-center items-center gap-4 mt-12 pb-8">
-                    <button 
-                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                        disabled={currentPage === 1}
-                        className="p-2.5 rounded-xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm active:scale-90"
-                    >
-                        <ChevronLeftIcon className="w-5 h-5" />
-                    </button>
-                    
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-black text-gray-900 dark:text-white bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-xl border border-blue-100 dark:border-blue-800">
-                            Página {currentPage} de {totalPages}
-                        </span>
+                    <ConfirmModal
+                        isOpen={confirmDelete.isOpen}
+                        onClose={() => setConfirmDelete({ isOpen: false, id: null })}
+                        onConfirm={confirmDeleteOrder}
+                        title="Eliminar Pedido"
+                        message="¿Estás seguro de que deseas eliminar este pedido? Esta acción no se puede deshacer."
+                        confirmText="Eliminar"
+                        type="danger"
+                    />
+
+                    <ConfirmModal
+                        isOpen={confirmBillingNoEmail.isOpen}
+                        onClose={() => setConfirmBillingNoEmail({ isOpen: false, order: null, data: null })}
+                        onConfirm={() => {
+                            if (confirmBillingNoEmail.order && confirmBillingNoEmail.data) {
+                                executeBillingProcess(confirmBillingNoEmail.order, confirmBillingNoEmail.data);
+                                setConfirmBillingNoEmail({ isOpen: false, order: null, data: null });
+                            }
+                        }}
+                        title="Factura sin Email"
+                        message="No se ha ingresado un email válido. La factura se generará pero NO se enviará automáticamente. ¿Deseas continuar?"
+                        confirmText="Continuar sin Email"
+                        type="warning"
+                    />
+
+                    {/* Invoice Processing Modal */}
+                    <InvoiceProcessingModal
+                        isOpen={isProcessingModalOpen}
+                        currentState={processingState}
+                        message={processingMessage}
+                        details={processingDetails}
+                        invoiceNumber={generatedInvoiceNumber}
+                        onClose={handleCloseProcessingModal}
+                        onPrint={handlePrintFromProcessingModal}
+                        onGoToHistory={handleGoToHistory}
+                    />
+
+                    {/* Billing Modal Integration */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-8">
+                        {filteredOrders.length === 0 ? (
+                            <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
+                                {activeTab === 'active' ? 'No hay pedidos en curso.' : 'No hay historial de pedidos completados.'}
+                            </div>
+                        ) : (
+                            paginatedOrders.map(order => (
+                                <OrderCard
+                                    key={order.id}
+                                    order={order}
+                                    userRoleName={currentUser?.role.name}
+                                    onEdit={() => handleOpenModal(order)}
+                                    onDelete={() => handleDeleteOrder(order.id)}
+                                    onStatusChange={(newStatus) => handleStatusChange(order.id, newStatus)}
+                                    onPayment={handleOpenBilling}
+                                    onBilling={() => handleOpenBilling(order)}
+                                />
+                            ))
+                        )}
                     </div>
 
-                    <button 
-                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                        disabled={currentPage === totalPages}
-                        className="p-2.5 rounded-xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm active:scale-90"
-                    >
-                        <ChevronLeftIcon className="w-5 h-5 rotate-180" />
-                    </button>
-                </div>
-            )}
+                    {/* Pagination Controls (only for history) */}
+                    {viewMode === 'dashboard' && activeTab === 'history' && totalPages > 1 && (
+                        <div className="flex justify-center items-center gap-4 mt-12 pb-8">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                className="p-2.5 rounded-xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm active:scale-90"
+                            >
+                                <ChevronLeftIcon className="w-5 h-5" />
+                            </button>
+
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-black text-gray-900 dark:text-white bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-xl border border-blue-100 dark:border-blue-800">
+                                    Página {currentPage} de {totalPages}
+                                </span>
+                            </div>
+
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                disabled={currentPage === totalPages}
+                                className="p-2.5 rounded-xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 hover:bg-gray-50 transition-all shadow-sm active:scale-90"
+                            >
+                                <ChevronLeftIcon className="w-5 h-5 rotate-180" />
+                            </button>
+                        </div>
+                    )}
                 </>
             )}
         </div>

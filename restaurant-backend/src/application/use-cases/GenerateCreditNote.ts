@@ -72,6 +72,16 @@ export class GenerateCreditNote {
 
         console.log(`[GenerateCreditNote] Bill validated: ${originalBill.documentNumber}`);
 
+        // --- RETRY LIMIT CHECK ---
+        const todayISO = this.billingService.getCurrentDateEcuador().split('/').reverse().join('-');
+        const existingCreditNotes = await this.creditNoteRepository.findByBillId(billId);
+        const todayNC = existingCreditNotes.find(nc => nc.lastRetryDate === todayISO);
+
+        if (todayNC && (todayNC.retryCount || 0) >= 3) {
+            throw new Error('SRI_LIMIT_REACHED: Límite de 3 intentos diarios alcanzado para este comprobante (1 emisión + 2 reintentos). Por favor, intente el día de mañana con una nueva clave de acceso automática.');
+        }
+        // -------------------------
+
         // 2. Calculate Details (same items as original bill, but as credit)
         const details = this.billingService.calculateDetails(originalBill.items, taxRate);
 
@@ -89,11 +99,13 @@ export class GenerateCreditNote {
         let secuencial: string;
         let existingPendingAccessKey: string | undefined;
 
-        const existingCreditNotes = await this.creditNoteRepository.findByBillId(billId);
+        // Reusing the existingCreditNotes variable from the daily limit check
+        // existingCreditNotes = await this.creditNoteRepository.findByBillId(billId); // Removed duplicate line
+        // Reusing the existingCreditNotes variable from the daily limit check
         const pendingNC = existingCreditNotes.find(
-            nc => nc.sriStatus === 'PENDIENTE' || nc.sriStatus === 'PENDING' || nc.sriStatus === 'PENDING_RETRY'
-            // NOTE: DEVUELTA and NO AUTORIZADO are NOT reused — they were explicitly rejected by SRI
-            // and need a new sequential + corrected data to retry.
+            nc => nc.sriStatus !== 'AUTORIZADO' && nc.sriStatus !== 'CANCELLED'
+            // Reutilizamos CUALQUIER nota de crédito que no esté finalizada (AUTORIZADA/CANCELADA)
+            // Esto evita que el secuencial suba innecesariamente si el usuario intenta emitir varias veces la misma
         );
 
         if (pendingNC) {
@@ -152,7 +164,9 @@ export class GenerateCreditNote {
 
                 emailComprador: originalBill.customerEmail,
                 logoUrl: this.billingService.getLogoUrl(info),
-                emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM || 'info@restaurant.com'
+                emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM || 'info@restaurant.com',
+                regime: info.billing?.regime,
+                agenteRetencion: info.billing?.agenteRetencion
             }
         };
 
@@ -269,11 +283,13 @@ export class GenerateCreditNote {
                 total: creditNote.info.importeTotal,
                 sriStatus: authResult.estado || result.estado,
                 environment: creditNote.info.ambiente,
-                authorizationDate: authResult.fechaAutorizacion
+                authorizationDate: authResult.fechaAutorizacion,
+                retryCount: 1, // First attempt
+                lastRetryDate: this.billingService.getCurrentDateEcuador().split('/').reverse().join('-') // YYYY-MM-DD
             });
 
             console.log('[GenerateCreditNote] Credit note persisted successfully');
-            
+
             // Auto-learn/Update customer data
             await this.billingService.autoLearnCustomer({
                 identification: creditNote.info.identificacionComprador,
@@ -309,15 +325,15 @@ export class GenerateCreditNote {
 
                     // Generate PDF for Credit Note
                     const pdfBuffer = await this.pdfService.generateCreditNotePDF(creditNote);
-                    
+
                     // Send Email with PDF and Signed XML
                     await this.emailService.sendCreditNoteEmail(
-                        originalBill.customerEmail!, 
-                        creditNote, 
-                        pdfBuffer, 
+                        originalBill.customerEmail!,
+                        creditNote,
+                        pdfBuffer,
                         signedXml
                     );
-                    
+
                     console.log('[GenerateCreditNote] Credit note email sent successfully');
                 } catch (emailError) {
                     console.error('[GenerateCreditNote] Failed to send credit note email:', emailError);

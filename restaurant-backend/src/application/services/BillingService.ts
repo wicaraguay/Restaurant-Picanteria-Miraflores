@@ -34,17 +34,23 @@ export class BillingService {
 
         const details = items.map((item: any, index: number) => {
             const quantity = item.quantity || 1;
+            let subtotalRounded: number;
+            let taxValueRounded: number;
             let totalInclusive: number;
 
+            // If an explicit total (inclusive) is provided, we derive the subtotal (Total-driven)
             if (item.total !== undefined && item.total !== null) {
                 totalInclusive = item.total;
+                const rawSubtotal = totalInclusive / (1 + rateDecimal);
+                subtotalRounded = parseFloat(rawSubtotal.toFixed(2));
+                taxValueRounded = parseFloat((totalInclusive - subtotalRounded).toFixed(2));
             } else {
-                totalInclusive = (item.price || 0) * quantity;
+                // Otherwise, we assume the price is the SUB-TOTAL (Price-driven/Exclusive)
+                const rawSubtotal = (item.price || 0) * quantity;
+                subtotalRounded = parseFloat(rawSubtotal.toFixed(2));
+                taxValueRounded = parseFloat((subtotalRounded * rateDecimal).toFixed(2));
+                totalInclusive = subtotalRounded + taxValueRounded;
             }
-
-            const rawSubtotal = totalInclusive / (1 + rateDecimal);
-            const subtotalRounded = parseFloat(rawSubtotal.toFixed(2));
-            const taxValueRounded = parseFloat((totalInclusive - subtotalRounded).toFixed(2));
 
             totalSubtotalSum += subtotalRounded;
             totalTaxSum += taxValueRounded;
@@ -105,6 +111,33 @@ export class BillingService {
         if (taxRate === 10) return '3';
         if (taxRate === 5) return '5';
         return '0';
+    }
+
+    /**
+     * Maps payment method descriptions to SRI codes
+     * 01: Sin utilización del sistema financiero (Efectivo)
+     * 16: Tarjeta de Débito
+     * 19: Tarjeta de Crédito
+     * 20: Otros con utilización del sistema financiero (Transferencia, Apps)
+     */
+    public getPaymentMethodCode(method: string | number): string {
+        if (!method) return '01';
+        
+        // Normalize: String, UpperCase, Remove Accents
+        const m = method.toString()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toUpperCase();
+            
+        if (m.includes('DEBITO') || m.includes('DEBIT')) return '16';
+        if (m.includes('CREDITO') || m.includes('CREDIT')) return '19';
+        if (m.includes('TRANSFERENCIA') || m.includes('TRANSFER') || m.includes('APP') || m.includes('DEPOSITO') || m.includes('ZELLE') || m.includes('PAGO MOVIL')) return '20';
+        if (m.includes('EFECTIVO') || m.includes('CASH')) return '01';
+        
+        // If it's already a 2-digit numeric code, return it
+        if (/^\d{2}$/.test(method.toString())) return method.toString();
+        
+        return '01'; // Default to Cash
     }
 
     /**

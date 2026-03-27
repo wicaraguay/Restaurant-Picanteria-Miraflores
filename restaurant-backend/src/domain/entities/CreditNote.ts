@@ -48,6 +48,8 @@ export class CreditNote {
         public readonly authorizationDate?: string,
         public readonly xmlUrl?: string,
         public readonly pdfUrl?: string,
+        public readonly retryCount?: number,
+        public readonly lastRetryDate?: string,
         public readonly createdAt?: Date
     ) { }
 }

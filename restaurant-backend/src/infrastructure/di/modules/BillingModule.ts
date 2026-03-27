@@ -12,6 +12,7 @@ import { ResetBillingSystem } from '../../../application/use-cases/ResetBillingS
 import { ResetFullSystem } from '../../../application/use-cases/ResetFullSystem';
 import { UpdateBill } from '../../../application/use-cases/UpdateBill';
 import { RetryInvoices } from '../../../application/use-cases/RetryInvoices';
+import { RetryCreditNotes } from '../../../application/use-cases/RetryCreditNotes';
 import { CronService } from '../../services/CronService';
 
 
@@ -42,6 +43,7 @@ export class BillingModule {
     private resetFullSystemUseCase?: ResetFullSystem;
     private updateBillUseCase?: UpdateBill;
     private retryInvoicesUseCase?: RetryInvoices;
+    private retryCreditNotesUseCase?: RetryCreditNotes;
     private cronService?: CronService;
     private billingController?: BillingController;
 
@@ -160,7 +162,8 @@ export class BillingModule {
                 this.repoModule.getBillRepository(),
                 this.getSRIService(),
                 this.getPDFService(),
-                this.getEmailService()
+                this.getEmailService(),
+                this.getBillingService()
             );
             logger.debug('CheckCreditNoteStatus use case instantiated');
         }
@@ -213,9 +216,23 @@ export class BillingModule {
         return this.retryInvoicesUseCase;
     }
 
+    public getRetryCreditNotesUseCase(): RetryCreditNotes {
+        if (!this.retryCreditNotesUseCase) {
+            this.retryCreditNotesUseCase = new RetryCreditNotes(
+                this.repoModule.getCreditNoteRepository(),
+                this.getCheckCreditNoteStatusUseCase()
+            );
+            logger.debug('RetryCreditNotes use case instantiated');
+        }
+        return this.retryCreditNotesUseCase;
+    }
+
     public getCronService(): CronService {
         if (!this.cronService) {
-            this.cronService = CronService.getInstance(this.getRetryInvoicesUseCase());
+            this.cronService = CronService.getInstance(
+                this.getRetryInvoicesUseCase(),
+                this.getRetryCreditNotesUseCase()
+            );
             logger.debug('CronService instantiated');
         }
         return this.cronService;

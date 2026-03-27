@@ -57,6 +57,8 @@ export interface InvoiceInfo {
     logoUrl?: string;
     tasaIva?: string; // e.g. "15"
     emailMatriz?: string; // Business email
+    regime?: 'General' | 'RIMPE - Negocio Popular' | 'RIMPE - Emprendedor';
+    agenteRetencion?: string; // Resolución number
 }
 
 export interface Invoice {

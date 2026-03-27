@@ -94,6 +94,8 @@ export interface CreditNoteInfo {
     emailComprador?: string;
     logoUrl?: string;
     emailMatriz?: string;
+    regime?: 'General' | 'RIMPE - Negocio Popular' | 'RIMPE - Emprendedor';
+    agenteRetencion?: string; // Resolución number
 }
 
 export interface CreditNote {

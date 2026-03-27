@@ -144,12 +144,13 @@ export class SRIService {
         <totalSinImpuestos>${invoice.info.totalSinImpuestos.toFixed(2)}</totalSinImpuestos>
         <totalDescuento>${invoice.info.totalDescuento.toFixed(2)}</totalDescuento>
         <totalConImpuestos>
+            ${this.groupTaxes(invoice.detalles).map((tax: any) => `
             <totalImpuesto>
-                <codigo>2</codigo>
-                <codigoPorcentaje>${invoiceTaxCode}</codigoPorcentaje>
-                <baseImponible>${invoice.info.totalSinImpuestos.toFixed(2)}</baseImponible>
-                <valor>${(invoice.info.importeTotal - invoice.info.totalSinImpuestos).toFixed(2)}</valor>
-            </totalImpuesto>
+                <codigo>${tax.codigo}</codigo>
+                <codigoPorcentaje>${tax.codigoPorcentaje}</codigoPorcentaje>
+                <baseImponible>${tax.baseImponible.toFixed(2)}</baseImponible>
+                <valor>${tax.valor.toFixed(2)}</valor>
+            </totalImpuesto>`).join('')}
         </totalConImpuestos>
         <propina>0.00</propina>
         <importeTotal>${invoice.info.importeTotal.toFixed(2)}</importeTotal>
@@ -191,6 +192,8 @@ export class SRIService {
         ${invoice.info.telefonoComprador ? `<campoAdicional nombre="Teléfono">${this.escapeXML(invoice.info.telefonoComprador)}</campoAdicional>` : ''}
         ${invoice.info.emailComprador ? `<campoAdicional nombre="Email">${this.escapeXML(invoice.info.emailComprador)}</campoAdicional>` : ''}
         ${invoice.info.contribuyenteEspecial ? `<campoAdicional nombre="Contribuyente Especial">${invoice.info.contribuyenteEspecial}</campoAdicional>` : ''}
+        ${(invoice.info.regime && invoice.info.regime.includes('RIMPE')) ? `<campoAdicional nombre="Régimen">Contribuyente Régimen RIMPE</campoAdicional>` : ''}
+        ${invoice.info.agenteRetencion ? `<campoAdicional nombre="Agente de Retención">Resolución No. ${invoice.info.agenteRetencion}</campoAdicional>` : ''}
     </infoAdicional>
 </factura>`;
 
@@ -641,12 +644,13 @@ export class SRIService {
         <valorModificacion>${creditNote.info.importeTotal.toFixed(2)}</valorModificacion>
         <moneda>${creditNote.info.moneda}</moneda>
         <totalConImpuestos>
+            ${this.groupTaxes(creditNote.detalles).map((tax: any) => `
             <totalImpuesto>
-                <codigo>2</codigo>
-                <codigoPorcentaje>${cnTaxCode}</codigoPorcentaje>
-                <baseImponible>${creditNote.info.totalSinImpuestos.toFixed(2)}</baseImponible>
-                <valor>${(creditNote.info.importeTotal - creditNote.info.totalSinImpuestos).toFixed(2)}</valor>
-            </totalImpuesto>
+                <codigo>${tax.codigo}</codigo>
+                <codigoPorcentaje>${tax.codigoPorcentaje}</codigoPorcentaje>
+                <baseImponible>${tax.baseImponible.toFixed(2)}</baseImponible>
+                <valor>${tax.valor.toFixed(2)}</valor>
+            </totalImpuesto>`).join('')}
         </totalConImpuestos>
         <motivo>${this.escapeXML(creditNote.info.motivo)}</motivo>
     </infoNotaCredito>
@@ -676,6 +680,8 @@ export class SRIService {
     <infoAdicional>
         ${creditNote.info.emailComprador ? `<campoAdicional nombre="Email">${this.escapeXML(creditNote.info.emailComprador)}</campoAdicional>` : ''}
         ${creditNote.info.contribuyenteEspecial ? `<campoAdicional nombre="Contribuyente Especial">${creditNote.info.contribuyenteEspecial}</campoAdicional>` : ''}
+        ${(creditNote.info.regime && creditNote.info.regime.includes('RIMPE')) ? `<campoAdicional nombre="Régimen">Contribuyente Régimen RIMPE</campoAdicional>` : ''}
+        ${creditNote.info.agenteRetencion ? `<campoAdicional nombre="Agente de Retención">Resolución No. ${creditNote.info.agenteRetencion}</campoAdicional>` : ''}
     </infoAdicional>
 </notaCredito>`;
 
@@ -885,5 +891,31 @@ export class SRIService {
             console.error('Error authorizing Credit Note:', error.message);
             throw new Error('Failed to connect to SRI Authorization Service for Credit Note');
         }
+    }
+
+    /**
+     * Helper para agrupar impuestos por código y porcentaje (SRI 2026 Compliance)
+     * Requerido cuando una factura tiene items con diferentes tarifas de IVA (ej: 0% y 15%)
+     */
+    private groupTaxes(detalles: any[]): any[] {
+        const taxes: Record<string, any> = {};
+
+        detalles.forEach(d => {
+            d.impuestos.forEach((imp: any) => {
+                const key = `${imp.codigo}-${imp.codigoPorcentaje}`;
+                if (!taxes[key]) {
+                    taxes[key] = {
+                        codigo: imp.codigo,
+                        codigoPorcentaje: imp.codigoPorcentaje,
+                        baseImponible: 0,
+                        valor: 0
+                    };
+                }
+                taxes[key].baseImponible += imp.baseImponible;
+                taxes[key].valor += imp.valor;
+            });
+        });
+
+        return Object.values(taxes);
     }
 }

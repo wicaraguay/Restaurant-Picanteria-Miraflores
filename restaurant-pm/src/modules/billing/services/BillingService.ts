@@ -5,8 +5,8 @@
 
 import { apiService } from '../../../api';
 import { API_ENDPOINTS } from '../../../config/api.config';
-import { dataService } from '../../../services/DataService'; 
-import { Bill } from '../types/billing.types';
+import { dataService } from '../../../services/DataService';
+import { Bill, CreditNote } from '../types/billing.types';
 
 export class BillingService {
     private static instance: BillingService;
@@ -99,7 +99,7 @@ export class BillingService {
         reason?: string;
         customerIdentification?: string;
         sort?: any;
-    }): Promise<{ data: any[], pagination: any }> {
+    }): Promise<{ data: CreditNote[], pagination: any }> {
         const queryParams = new URLSearchParams();
         if (params?.page) queryParams.append('page', params.page.toString());
         if (params?.limit) queryParams.append('limit', params.limit.toString());

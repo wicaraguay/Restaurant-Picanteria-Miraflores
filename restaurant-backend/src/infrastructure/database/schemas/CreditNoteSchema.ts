@@ -46,7 +46,9 @@ const CreditNoteSchema = new Schema({
     environment: { type: String }, // '1' (pruebas) o '2' (producción)
     authorizationDate: { type: String },
     xmlUrl: { type: String },
-    pdfUrl: { type: String }
+    pdfUrl: { type: String },
+    retryCount: { type: Number, default: 0 },
+    lastRetryDate: { type: String }
 }, {
     timestamps: true
 });

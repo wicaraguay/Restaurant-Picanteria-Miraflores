@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { Bill } from '../types/billing.types';
+import React, { useState, useEffect } from 'react';
+import { Bill, CreditNote } from '../types/billing.types';
 import { billingService } from '../services/BillingService';
 import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
-import { FileTextIcon, AlertCircleIcon } from '../../../components/ui/Icons';
+import { FileTextIcon, AlertCircleIcon, RefreshCcwIcon } from '../../../components/ui/Icons';
 import InvoiceProcessingModal, { InvoiceProcessState } from './InvoiceProcessingModal';
 
 interface CreditNoteModalProps {
@@ -32,6 +32,8 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
     const [customDescription, setCustomDescription] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string>('');
+    const [existingNC, setExistingNC] = useState<CreditNote | null>(null);
+    const [loadingExisting, setLoadingExisting] = useState(false);
     const { config } = useRestaurantConfig();
 
     // Estados para el modal de procesamiento
@@ -40,6 +42,46 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
     const [processingMessage, setProcessingMessage] = useState('');
     const [processingDetails, setProcessingDetails] = useState('');
     const [generatedNCNumber, setGeneratedNCNumber] = useState('');
+
+    useEffect(() => {
+        if (isOpen && bill.id) {
+            const fetchExistingNC = async () => {
+                setLoadingExisting(true);
+                try {
+                    const response = await billingService.getCreditNotes({ billId: bill.id });
+                    // Encontrar la nota de crédito más reciente que no esté autorizada ni cancelada
+                    const pending = response.data
+                        .filter(nc => nc.sriStatus !== 'AUTORIZADO' && nc.sriStatus !== 'CANCELLED')
+                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+                    if (pending) {
+                        setExistingNC(pending);
+                        setReason(pending.reason);
+
+                        // Si la descripción no es la estándar del motivo, es una descripción personalizada
+                        const standardDesc = CREDIT_NOTE_REASONS[pending.reason as keyof typeof CREDIT_NOTE_REASONS];
+                        if (pending.reasonDescription !== standardDesc) {
+                            setCustomDescription(pending.reasonDescription);
+                        } else {
+                            setCustomDescription('');
+                        }
+                    } else {
+                        setExistingNC(null);
+                    }
+                } catch (err) {
+                    console.error('Error fetching existing credit note:', err);
+                } finally {
+                    setLoadingExisting(false);
+                }
+            };
+            fetchExistingNC();
+        } else if (!isOpen) {
+            // Reset al cerrar
+            setExistingNC(null);
+            setReason('03');
+            setCustomDescription('');
+        }
+    }, [isOpen, bill.id]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -170,6 +212,17 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
                         </div>
                     </div>
 
+                    {/* Existing NC Info */}
+                    {existingNC && (
+                        <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl animate-in fade-in slide-in-from-top-2">
+                            <RefreshCcwIcon className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                            <div className="text-sm text-blue-800 dark:text-blue-300">
+                                <p className="font-semibold text-xs uppercase tracking-wider mb-1">Comprobante previo detectado</p>
+                                <p>Se encontró una nota de crédito previa ({existingNC.documentNumber}) con estado <b>{existingNC.sriStatus}</b>. Se reintentará el proceso usando este mismo secuencial y motivo.</p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Reason Selection */}
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -230,18 +283,30 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
                         </button>
                         <button
                             type="submit"
-                            disabled={isLoading}
-                            className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white font-bold rounded-xl hover:from-orange-700 hover:to-red-700 transition-all shadow-lg shadow-orange-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            disabled={isLoading || loadingExisting}
+                            className={`flex-[2] px-6 py-3 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${existingNC
+                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-500/30'
+                                : 'bg-gradient-to-r from-orange-600 to-red-600 shadow-orange-500/30'
+                                }`}
                         >
                             {isLoading ? (
                                 <>
                                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Generando...
+                                    {existingNC ? 'Reintentando...' : 'Generando...'}
                                 </>
                             ) : (
                                 <>
-                                    <FileTextIcon className="w-5 h-5" />
-                                    Generar Nota de Crédito
+                                    {existingNC ? (
+                                        <>
+                                            <RefreshCcwIcon className="w-5 h-5" />
+                                            Reintentar Reenvío
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FileTextIcon className="w-5 h-5" />
+                                            Generar Nota de Crédito
+                                        </>
+                                    )}
                                 </>
                             )}
                         </button>
@@ -256,6 +321,7 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
                 message={processingMessage}
                 details={processingDetails}
                 invoiceNumber={generatedNCNumber} // Mostrará el número de la NC
+                documentLabel="Número de Nota de Crédito"
                 onClose={handleCloseProcessing}
                 onPrint={undefined}
                 onGoToHistory={undefined} // Estamos en el modal, no navegar

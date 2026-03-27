@@ -39,6 +39,8 @@ export class MongoCreditNoteRepository extends BaseRepository<CreditNote> implem
             doc.authorizationDate,
             doc.xmlUrl,
             doc.pdfUrl,
+            doc.retryCount,
+            doc.lastRetryDate,
             doc.createdAt
         );
     }

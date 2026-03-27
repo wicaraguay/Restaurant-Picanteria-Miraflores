@@ -146,4 +146,16 @@ describe('BillingService', () => {
             expect(() => billingService.validateRealTimeTransmission('01/01/2000')).toThrow(/Transmisión NO en tiempo real/);
         });
     });
+
+    describe('getPaymentMethodCode', () => {
+        it('should map various types of payment methods correctly', () => {
+            expect(billingService.getPaymentMethodCode('Efectivo')).toBe('01');
+            expect(billingService.getPaymentMethodCode('Tarjeta de Crédito')).toBe('19');
+            expect(billingService.getPaymentMethodCode('Débito')).toBe('16');
+            expect(billingService.getPaymentMethodCode('Transferencia Bancaria')).toBe('20');
+            expect(billingService.getPaymentMethodCode('Zelle')).toBe('20');
+            expect(billingService.getPaymentMethodCode('19')).toBe('19'); // Direct code
+            expect(billingService.getPaymentMethodCode('')).toBe('01'); // Default
+        });
+    });
 });

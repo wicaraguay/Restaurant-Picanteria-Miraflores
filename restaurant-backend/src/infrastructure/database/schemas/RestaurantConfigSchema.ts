@@ -51,6 +51,7 @@ const RestaurantConfigSchema = new Schema({
             required: true,
             enum: ['General', 'RIMPE - Negocio Popular', 'RIMPE - Emprendedor']
         },
+        agenteRetencion: { type: String },
         currentSequenceFactura: { type: Number, required: true, default: 1 },
         currentSequenceNotaCredito: { type: Number, required: true, default: 1 },
         currentSequenceNotaVenta: { type: Number, required: true, default: 1 }

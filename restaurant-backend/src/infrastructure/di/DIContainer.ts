@@ -59,6 +59,7 @@ import { GenerateCreditNote } from '../../application/use-cases/GenerateCreditNo
 import { GetCreditNotes } from '../../application/use-cases/GetCreditNotes';
 import { CheckCreditNoteStatus } from '../../application/use-cases/CheckCreditNoteStatus';
 import { RetryInvoices } from '../../application/use-cases/RetryInvoices';
+import { RetryCreditNotes } from '../../application/use-cases/RetryCreditNotes';
 import { CronService } from '../services/CronService';
 import { GetRoles } from '../../application/use-cases/GetRoles';
 import { CreateRole } from '../../application/use-cases/CreateRole';
@@ -155,6 +156,7 @@ export class DIContainer {
     public getResetBillingSystemUseCase(): ResetBillingSystem { return this.billingModule.getResetBillingSystemUseCase(); }
     public getResetFullSystemUseCase(): ResetFullSystem { return this.billingModule.getResetFullSystemUseCase(); }
     public getRetryInvoicesUseCase(): RetryInvoices { return this.billingModule.getRetryInvoicesUseCase(); }
+    public getRetryCreditNotesUseCase(): RetryCreditNotes { return this.billingModule.getRetryCreditNotesUseCase(); }
     public getCronService(): CronService { return this.billingModule.getCronService(); }
 
 

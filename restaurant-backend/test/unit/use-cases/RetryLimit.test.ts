@@ -112,7 +112,7 @@ describe('Retry Limit Logic (CheckInvoiceStatus)', () => {
             id: 'bill123', 
             accessKey: 'OLD_KEY_1', 
             documentNumber: '001-001-000000001', 
-            retryCount: 2, 
+            retryCount: 3, 
             lastRetryDate: today,
             items: []
         };
@@ -123,7 +123,7 @@ describe('Retry Limit Logic (CheckInvoiceStatus)', () => {
         const result = await checkInvoiceStatus.execute('OLD_KEY_1', false);
 
         expect(result.success).toBe(false);
-        expect(result.error).toContain('Límite de 2 intentos diarios alcanzado');
+        expect(result.error).toContain('Límite de 3 intentos diarios alcanzado');
         // Verify SRI was NOT called for recovery
         expect(mockSRIService.sendToSRI).not.toHaveBeenCalled();
     });

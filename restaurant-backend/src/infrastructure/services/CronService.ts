@@ -1,31 +1,25 @@
 
 import cron, { ScheduledTask } from 'node-cron';
 import { RetryInvoices } from '../../application/use-cases/RetryInvoices';
+import { RetryCreditNotes } from '../../application/use-cases/RetryCreditNotes';
 import { logger } from '../utils/Logger';
 
 /**
  * @class CronService
  * @description Service to manage background scheduled tasks (Cron Jobs).
- * 
- * @purpose
- * Handles the scheduling and execution of repetitive tasks like retrying failed invoices.
- * 
- * @connections
- * - Uses: node-cron for scheduling.
- * - Uses: RetryInvoices use case.
- * - Initialized in: main.ts
- * 
- * @layer Infrastructure
  */
 export class CronService {
     private static instance: CronService;
     private jobs: ScheduledTask[] = [];
 
-    private constructor(private retryInvoices: RetryInvoices) { }
+    private constructor(
+        private retryInvoices: RetryInvoices,
+        private retryCreditNotes: RetryCreditNotes
+    ) { }
 
-    public static getInstance(retryInvoices: RetryInvoices): CronService {
+    public static getInstance(retryInvoices: RetryInvoices, retryCreditNotes: RetryCreditNotes): CronService {
         if (!CronService.instance) {
-            CronService.instance = new CronService(retryInvoices);
+            CronService.instance = new CronService(retryInvoices, retryCreditNotes);
         }
         return CronService.instance;
     }
@@ -38,15 +32,20 @@ export class CronService {
         logger.info('[CronService] Initializing Cron Jobs...');
 
 
-        // 1. Retry Invoices Cron (Every 3 hours)
-        // Adjust schedule as needed. '0 */3 * * *' = every 3 hours
-        const retryJob = cron.schedule('0 */3 * * *', async () => {
-            logger.info('[CronService] Running scheduled task: RetryInvoices');
+        // 1. Retry SRI Documents Cron (Every 3 hours)
+        // Adjust schedule as needed.        // Scheduled to run every 15 minutes for testing (was every 3 hours)
+        const retryJob = cron.schedule('*/15 * * * *', async () => {
+            logger.info('[CronService] Running scheduled task: RetrySRIDocuments');
             try {
-                const results = await this.retryInvoices.execute();
-                logger.info('[CronService] RetryInvoices task completed', results);
+                // Retry Invoices
+                const invoiceResults = await this.retryInvoices.execute();
+                logger.info('[CronService] RetryInvoices task completed', invoiceResults);
+
+                // Retry Credit Notes
+                const ncResults = await this.retryCreditNotes.execute();
+                logger.info('[CronService] RetryCreditNotes task completed', ncResults);
             } catch (error) {
-                logger.error('[CronService] Error during RetryInvoices scheduled task:', error);
+                logger.error('[CronService] Error during RetrySRIDocuments scheduled task:', error);
             }
         });
 

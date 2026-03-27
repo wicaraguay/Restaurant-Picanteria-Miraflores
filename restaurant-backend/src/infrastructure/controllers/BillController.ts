@@ -179,7 +179,7 @@ export class BillController {
                 tasaIva: taxRate.toString(),
                 obligadoContabilidad: config?.obligadoContabilidad ? 'SI' : 'NO',
                 moneda: 'DOLAR',
-                formaPago: billData.paymentMethod || '01',
+                formaPago: this.billingService.getPaymentMethodCode(billData.paymentMethod || '01'),
                 telefonoComprador: billData.customerPhone || 'S/N',
                 emailMatriz: config?.fiscalEmail || config?.email || process.env.SMTP_FROM,
                 logoUrl: this.billingService.getLogoUrl(config)

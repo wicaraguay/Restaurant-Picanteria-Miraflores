@@ -45,6 +45,7 @@ export interface RestaurantConfig {
         establishment: string;
         emissionPoint: string;
         regime: 'General' | 'RIMPE - Negocio Popular' | 'RIMPE - Emprendedor';
+        agenteRetencion?: string;
         currentSequenceFactura: number;
         currentSequenceNotaCredito: number;
         currentSequenceNotaVenta: number;

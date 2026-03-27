@@ -23,10 +23,10 @@ export class GenerateInvoice {
         private billingService: BillingService
     ) { }
 
-    async execute(params: { 
-        order: any, 
-        client: any, 
-        taxRate?: number, 
+    async execute(params: {
+        order: any,
+        client: any,
+        taxRate?: number,
         logoUrl?: string,
         id?: string
     }): Promise<any> {
@@ -65,6 +65,13 @@ export class GenerateInvoice {
         }
 
         if (existingBill && existingBill.documentNumber) {
+            // --- RETRY LIMIT CHECK ---
+            const todayISO = this.billingService.getCurrentDateEcuador().split('/').reverse().join('-');
+            if (existingBill.lastRetryDate === todayISO && (existingBill.retryCount || 0) >= 3) {
+                throw new Error('SRI_LIMIT_REACHED: Límite de 3 intentos diarios alcanzado para este comprobante (1 emisión + 2 reintentos). Por favor intente mañana con una nueva clave automática.');
+            }
+            // -------------------------
+
             // Reuse existing sequential to avoid gaps (User Request)
             const parts = existingBill.documentNumber.split('-');
             secuencial = parts[parts.length - 1];
@@ -108,11 +115,13 @@ export class GenerateInvoice {
                 importeTotal: total,
                 moneda: 'DOLAR',
                 emailComprador: client.email,
-                formaPago: client.paymentMethod || '01',
+                formaPago: this.billingService.getPaymentMethodCode(client.paymentMethod || '01'),
                 logoUrl: this.billingService.getLogoUrl(info, logoUrl),
                 tasaIva: taxRate.toString(),
                 telefonoComprador: client.phone,
-                emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM || 'info@restaurant.com'
+                emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM || 'info@restaurant.com',
+                regime: info.billing?.regime,
+                agenteRetencion: info.billing?.agenteRetencion
             }
         };
 
@@ -158,13 +167,8 @@ export class GenerateInvoice {
             subtotal: invoice.info.totalSinImpuestos,
             tax: totalImpuestos,
             total: invoice.info.importeTotal,
-            sriStatus: 'BORRADOR',
-            environment: invoice.info.ambiente,
-            customerPhone: invoice.info.telefonoComprador,
-            paymentMethod: invoice.info.formaPago,
-            regime: info.billing?.regime || 'General',
-            retryCount: 0,
-            lastRetryDate: this.billingService.getCurrentDateEcuador().split('/').reverse().join('-') // YYYY-MM-DD
+            retryCount: 1, // First attempt
+            lastRetryDate: this.billingService.getCurrentDateEcuador().split('/').reverse().join('-')
         };
 
         const draftBill = await this.billRepository.upsert(billData);
@@ -247,7 +251,7 @@ export class GenerateInvoice {
         });
 
         // 9. Update Order to COMPLETED and set billed flag to move to history
-        await this.orderRepository.update(invoice.orderId, { 
+        await this.orderRepository.update(invoice.orderId, {
             billed: true,
             status: OrderStatus.Completed,
             billingType: isConsumidorFinal ? 'Consumidor Final' : 'Factura'

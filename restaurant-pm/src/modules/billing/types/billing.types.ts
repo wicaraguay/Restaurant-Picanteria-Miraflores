@@ -34,3 +34,25 @@ export interface Bill {
     retryCount?: number;
     lastRetryDate?: string;
 }
+
+export interface CreditNote {
+    id: string;
+    billId: string;
+    documentNumber: string;
+    date: string;
+    reason: string;
+    reasonDescription: string;
+    customerName: string;
+    customerIdentification: string;
+    customerAddress: string;
+    customerEmail?: string;
+    subtotal: number;
+    tax: number;
+    total: number;
+    sriStatus?: string;
+    accessKey?: string;
+    environment?: string;
+    authorizationDate?: string;
+    retryCount?: number;
+    lastRetryDate?: string;
+}

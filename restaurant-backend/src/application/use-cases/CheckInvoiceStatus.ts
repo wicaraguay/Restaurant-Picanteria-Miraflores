@@ -68,11 +68,11 @@ export class CheckInvoiceStatus {
                         newRetryCount++;
                         console.log(`[CheckInvoiceStatus] Incrementing daily retryCount for ${fullBill.documentNumber}: ${fullBill.retryCount} -> ${newRetryCount}`);
                         
-                        if (newRetryCount > 2) {
-                            console.log(`[CheckInvoiceStatus] Daily limit reached (2 attempts) for today (${todayISO}). Stopping.`);
+                        if (newRetryCount > 3) {
+                            console.log(`[CheckInvoiceStatus] Daily limit reached (3 attempts) for today (${todayISO}). Stopping.`);
                             return { 
                                 success: false, 
-                                error: 'Límite de 2 intentos diarios alcanzado para esta factura. Intente mañana.',
+                                error: 'Límite de 3 intentos diarios alcanzado para esta factura (1 emisión + 2 reintentos). Por favor intente mañana con una nueva clave automática.',
                                 authorization: authResult 
                             };
                         }

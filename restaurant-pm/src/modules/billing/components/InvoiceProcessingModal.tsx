@@ -19,6 +19,7 @@ interface InvoiceProcessingModalProps {
     message: string;
     details?: string;
     invoiceNumber?: string;
+    documentLabel?: string;
     onClose: () => void;
     onPrint?: () => void;
     onGoToHistory?: () => void;
@@ -30,6 +31,7 @@ const InvoiceProcessingModal: React.FC<InvoiceProcessingModalProps> = ({
     message,
     details,
     invoiceNumber,
+    documentLabel = 'Número de Factura',
     onClose,
     onPrint,
     onGoToHistory
@@ -60,6 +62,9 @@ const InvoiceProcessingModal: React.FC<InvoiceProcessingModalProps> = ({
             case InvoiceProcessState.AUTHORIZED:
                 return 'border-green-500 bg-green-50 dark:bg-green-900/20';
             case InvoiceProcessState.ERROR:
+                if (details?.includes('SRI_LIMIT_REACHED')) {
+                    return 'border-orange-500 bg-orange-50 dark:bg-orange-900/20';
+                }
                 return 'border-red-500 bg-red-50 dark:bg-red-900/20';
             case InvoiceProcessState.PENDING:
                 return 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20';
@@ -95,20 +100,20 @@ const InvoiceProcessingModal: React.FC<InvoiceProcessingModalProps> = ({
                         {getStateIcon()}
                     </div>
 
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
-                        {message}
+                    <h2 className={`text-2xl font-bold mb-2 ${details?.includes('SRI_LIMIT_REACHED') ? 'text-orange-600 dark:text-orange-400' : 'text-gray-800 dark:text-white'}`}>
+                        {details?.includes('SRI_LIMIT_REACHED') ? 'Límite de Intentos Alcanzado' : message}
                     </h2>
 
                     {details && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                            {details}
+                        <p className={`text-sm mb-4 ${details.includes('SRI_LIMIT_REACHED') ? 'text-orange-700 dark:text-orange-300 font-medium' : 'text-gray-600 dark:text-gray-400'}`}>
+                            {details.replace('SRI_LIMIT_REACHED: ', '')}
                         </p>
                     )}
 
                     {invoiceNumber && (
                         <div className="mt-4 p-3 bg-gray-100 dark:bg-dark-700 rounded-lg">
                             <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-                                Número de Factura
+                                {documentLabel}
                             </p>
                             <p className="text-lg font-mono font-bold text-gray-800 dark:text-white">
                                 {invoiceNumber}
