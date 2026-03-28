@@ -132,6 +132,8 @@ export class SRIService {
         <ptoEmi>${invoice.info.ptoEmi}</ptoEmi>
         <secuencial>${invoice.info.secuencial}</secuencial>
         <dirMatriz>${this.escapeXML(invoice.info.dirMatriz)}</dirMatriz>
+        ${(invoice.info.regime && invoice.info.regime.includes('RIMPE')) ? `<regimenRimpe>CONTRIBUYENTE RÉGIMEN RIMPE</regimenRimpe>` : ''}
+        ${invoice.info.agenteRetencion ? `<agenteRetencion>${invoice.info.agenteRetencion}</agenteRetencion>` : ''}
         ${invoice.info.contribuyenteEspecial ? `<contribuyenteEspecial>${invoice.info.contribuyenteEspecial}</contribuyenteEspecial>` : ''}
     </infoTributaria>
     <infoFactura>
@@ -628,6 +630,8 @@ export class SRIService {
         <ptoEmi>${creditNote.info.ptoEmi}</ptoEmi>
         <secuencial>${creditNote.info.secuencial}</secuencial>
         <dirMatriz>${this.escapeXML(creditNote.info.dirMatriz)}</dirMatriz>
+        ${(creditNote.info.regime && creditNote.info.regime.includes('RIMPE')) ? `<regimenRimpe>CONTRIBUYENTE RÉGIMEN RIMPE</regimenRimpe>` : ''}
+        ${creditNote.info.agenteRetencion ? `<agenteRetencion>${creditNote.info.agenteRetencion}</agenteRetencion>` : ''}
         ${creditNote.info.contribuyenteEspecial ? `<contribuyenteEspecial>${creditNote.info.contribuyenteEspecial}</contribuyenteEspecial>` : ''}
     </infoTributaria>
     <infoNotaCredito>

@@ -51,25 +51,9 @@ export class GenerateCreditNote {
             throw new Error('No se puede emitir una nota de crédito para facturas de "CONSUMIDOR FINAL" según las normativas del SRI vigentes desde 2026 (Resolución NAC-DGERCGC25-00000017).');
         }
 
-        // Validate 7-day deadline for credit notes (SRI 2026 requirement)
-        // Resolution NAC-DGERCGC25-00000017: Credit notes can only be issued until the 7th of the month following emission
-        const billDate = this.billingService.parseSRIDate(originalBill.date);
-        const billMonth = billDate.getMonth();
-        const billYear = billDate.getFullYear();
-
-        // Calculate the last allowed day (7th of the following month, end of day)
-        const maxDate = new Date(billYear, billMonth + 1, 7, 23, 59, 59);
-        const today = new Date();
-
-        if (today > maxDate) {
-            const billDateStr = billDate.toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const maxDateStr = maxDate.toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            throw new Error(
-                `Fuera de plazo: Las notas de crédito solo pueden emitirse hasta el día 7 del mes siguiente ` +
-                `(Resolución SRI NAC-DGERCGC25-00000017). Factura emitida: ${billDateStr}. Plazo máximo: ${maxDateStr}.`
-            );
-        }
-
+        // Resolution NAC-DGERCGC25-00000017 (2026): Credit notes have NO time limit to correct errors.
+        // The 7-day limit applies only to ANNULMENT (fully deleting the record from SRI).
+        // If the user missed the 7-day deadline to annul, the only way to correct is a credit note.
         console.log(`[GenerateCreditNote] Bill validated: ${originalBill.documentNumber}`);
 
         // --- RETRY LIMIT CHECK ---
