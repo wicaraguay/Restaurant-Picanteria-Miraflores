@@ -245,7 +245,8 @@ export class BillingModule {
                 this.getGenerateInvoiceUseCase(),
                 this.getCheckInvoiceStatusUseCase(),
                 this.getUpdateBillUseCase(),
-                this.getGetBillsUseCase()
+                this.getGetBillsUseCase(),
+                this.repoModule.getRestaurantConfigRepository() // ← taxRate source of truth
             );
             logger.debug('BillingController instantiated');
         }

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { GenerateCreditNote } from '../../application/use-cases/GenerateCreditNote';
 import { GetCreditNotes } from '../../application/use-cases/GetCreditNotes';
 import { CheckCreditNoteStatus } from '../../application/use-cases/CheckCreditNoteStatus';
+import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
 import { ValidationError, NotFoundError } from '../../domain/errors/CustomErrors';
@@ -10,16 +11,22 @@ export class CreditNoteController {
     constructor(
         private generateCreditNote: GenerateCreditNote,
         private getCreditNotes: GetCreditNotes,
-        private checkCreditNoteStatus: CheckCreditNoteStatus
+        private checkCreditNoteStatus: CheckCreditNoteStatus,
+        private configRepository: IRestaurantConfigRepository
     ) { }
 
     public create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { billId, reason, customDescription, taxRate } = req.body;
+            const { billId, reason, customDescription } = req.body;
 
             if (!billId || !reason) {
                 throw new ValidationError('billId y reason son requeridos');
             }
+
+            // CRITICAL: Always read taxRate from DB config — never trust the frontend value.
+            const config = await this.configRepository.get();
+            const taxRate: number = config?.billing?.taxRate ?? 15;
+            logger.info(`📊 Credit Note using taxRate from DB config: ${taxRate}%`);
 
             logger.info('Generating credit note', { billId, reason });
 

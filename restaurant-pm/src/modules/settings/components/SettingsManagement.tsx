@@ -51,6 +51,7 @@ const SettingsManagement: React.FC = () => {
         businessName: config.businessName,
         fiscalEmail: config.fiscalEmail,
         fiscalLogo: config.fiscalLogo,
+        fiscalAddress: config.fiscalAddress || '',
         obligadoContabilidad: config.obligadoContabilidad,
         contribuyenteEspecial: config.contribuyenteEspecial,
     });
@@ -72,6 +73,7 @@ const SettingsManagement: React.FC = () => {
             businessName: config.businessName,
             fiscalEmail: config.fiscalEmail,
             fiscalLogo: config.fiscalLogo,
+            fiscalAddress: config.fiscalAddress || '',
             obligadoContabilidad: config.obligadoContabilidad,
             contribuyenteEspecial: config.contribuyenteEspecial,
         });

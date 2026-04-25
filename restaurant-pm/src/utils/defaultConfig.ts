@@ -25,6 +25,7 @@ export const defaultRestaurantConfig: RestaurantConfig = {
     // Información fiscal (Ecuador)
     ruc: '1790012345001',
     businessName: 'Restaurante Ejemplo CIA LTDA',
+    fiscalAddress: '', // Dirección que aparece en las facturas electrónicas
 
     // Configuración regional
     currency: 'USD',
@@ -44,6 +45,7 @@ export const defaultRestaurantConfig: RestaurantConfig = {
         establishment: '001',
         emissionPoint: '001',
         regime: 'General',
+        taxRate: 15,               // Tarifa IVA vigente en Ecuador
         // Secuenciales
         currentSequenceFactura: 1,
         currentSequenceNotaVenta: 1,

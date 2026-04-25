@@ -17,7 +17,8 @@ const router = Router();
 const creditNoteController = new CreditNoteController(
     container.getGenerateCreditNoteUseCase(),
     container.getGetCreditNotesUseCase(),
-    container.getCheckCreditNoteStatusUseCase()
+    container.getCheckCreditNoteStatusUseCase(),
+    container.getRestaurantConfigRepository() // ← taxRate source of truth
 );
 
 /**

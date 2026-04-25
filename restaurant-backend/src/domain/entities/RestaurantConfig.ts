@@ -24,6 +24,7 @@ export interface RestaurantConfig {
     businessName: string;
     fiscalEmail?: string;
     fiscalLogo?: string;
+    fiscalAddress?: string;         // Dirección que aparece en la factura electrónica
     obligadoContabilidad?: boolean;
     contribuyenteEspecial?: string;
 
@@ -46,6 +47,7 @@ export interface RestaurantConfig {
         emissionPoint: string;
         regime: 'General' | 'RIMPE - Negocio Popular' | 'RIMPE - Emprendedor';
         agenteRetencion?: string;
+        taxRate: number;               // Tarifa IVA activa (ej: 15, 12, 8, 0)
         currentSequenceFactura: number;
         currentSequenceNotaCredito: number;
         currentSequenceNotaVenta: number;

@@ -3,6 +3,7 @@ import { GenerateInvoice } from '../../application/use-cases/GenerateInvoice';
 import { CheckInvoiceStatus } from '../../application/use-cases/CheckInvoiceStatus';
 import { UpdateBill } from '../../application/use-cases/UpdateBill';
 import { GetBills } from '../../application/use-cases/GetBills';
+import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
 import { ValidationError, NotFoundError } from '../../domain/errors/CustomErrors';
@@ -12,17 +13,25 @@ export class BillingController {
         private generateInvoice: GenerateInvoice,
         private checkInvoiceStatus: CheckInvoiceStatus,
         private updateBillUseCase: UpdateBill,
-        private getBills: GetBills
+        private getBills: GetBills,
+        private configRepository: IRestaurantConfigRepository
     ) { }
 
     public generateXml = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             logger.info('⚡ Receiving SRI billing request (Backend)', { body: req.body });
-            const { order, client, taxRate = 15, logoUrl } = req.body;
+            const { order, client, logoUrl } = req.body;
 
             if (!order || !client) {
                 throw new ValidationError('Order and Client data are required');
             }
+
+            // CRITICAL: Always read taxRate from DB config — never trust the frontend value.
+            // This ensures a single point of truth: if the SRI changes the IVA rate,
+            // you only update it once in the restaurant configuration panel.
+            const config = await this.configRepository.get();
+            const taxRate: number = config?.billing?.taxRate ?? 15;
+            logger.info(`📊 Using taxRate from DB config: ${taxRate}%`);
 
             const result = await this.generateInvoice.execute({ order, client, taxRate, logoUrl });
 
@@ -78,6 +87,10 @@ export class BillingController {
                 return;
             }
 
+            // CRITICAL: Read taxRate from DB config for re-submissions too
+            const config = await this.configRepository.get();
+            const taxRate: number = config?.billing?.taxRate ?? 15;
+
             // Reconstruct order and client from Bill data
             const order = {
                 id: bill.orderId,
@@ -96,7 +109,8 @@ export class BillingController {
             // Re-run generation logic using existing Bill ID to update same record
             const result = await this.generateInvoice.execute({ 
                 order, 
-                client, 
+                client,
+                taxRate,
                 id: bill.id 
             });
 

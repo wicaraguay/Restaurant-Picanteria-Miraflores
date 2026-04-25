@@ -35,6 +35,7 @@ const DEFAULT_CONFIG: Omit<RestaurantConfig, 'id' | 'createdAt' | 'updatedAt'> =
         establishment: '001',
         emissionPoint: '001',
         regime: 'General',
+        taxRate: 15,                     // IVA por defecto (Ecuador: 15%)
         currentSequenceFactura: 1,
         currentSequenceNotaCredito: 1,
         currentSequenceNotaVenta: 1
@@ -57,6 +58,7 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
             businessName: doc.businessName,
             fiscalEmail: doc.fiscalEmail,
             fiscalLogo: doc.fiscalLogo,
+            fiscalAddress: doc.fiscalAddress,       // ← Dirección para la factura electrónica
             obligadoContabilidad: doc.obligadoContabilidad,
             contribuyenteEspecial: doc.contribuyenteEspecial,
             currency: doc.currency,
@@ -72,6 +74,8 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
                 establishment: doc.billing.establishment,
                 emissionPoint: doc.billing.emissionPoint,
                 regime: doc.billing.regime,
+                agenteRetencion: doc.billing.agenteRetencion,
+                taxRate: doc.billing.taxRate ?? 15, // Fallback 15% para registros anteriores
                 currentSequenceFactura: doc.billing.currentSequenceFactura,
                 currentSequenceNotaCredito: doc.billing.currentSequenceNotaCredito,
                 currentSequenceNotaVenta: doc.billing.currentSequenceNotaVenta
@@ -116,11 +120,27 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
         // Asegurar que existe primero
         await this.getOrCreate();
 
-        // Actualizar
+        // CRITICAL: MongoDB's $set with nested objects REPLACES the entire subdocument.
+        // Example: { $set: { billing: { taxRate: 12 } } } would ERASE billing.currentSequenceFactura!
+        // We flatten nested objects to dot-notation so MongoDB does a granular field-level merge:
+        // { $set: { 'billing.taxRate': 12 } } → only updates taxRate, leaves other billing fields intact.
+        const flatConfig: Record<string, any> = {};
+        for (const [key, value] of Object.entries(config)) {
+            if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+                // Flatten one level deep (billing.*, brandColors.*)
+                for (const [subKey, subValue] of Object.entries(value as Record<string, any>)) {
+                    flatConfig[`${key}.${subKey}`] = subValue;
+                }
+            } else {
+                flatConfig[key] = value;
+            }
+        }
+
+        // Actualizar usando dot-notation para merge granular
         const doc = await RestaurantConfigModel.findByIdAndUpdate(
             FIXED_CONFIG_ID,
-            { $set: config },
-            { new: true, runValidators: true }
+            { $set: flatConfig },
+            { new: true, runValidators: false } // runValidators:false to avoid issues with partial updates
         );
 
         if (!doc) {
@@ -130,6 +150,7 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
         logger.info('Restaurant config updated successfully');
         return this.mapToEntity(doc);
     }
+
 
     /**
      * Atomically retrieves and increments the sequential number for invoices.

@@ -7,6 +7,7 @@ interface BillingSRISectionProps {
         businessName: string;
         fiscalEmail?: string;
         fiscalLogo?: string;
+        fiscalAddress?: string;
         obligadoContabilidad?: boolean;
         contribuyenteEspecial?: string;
     };
@@ -148,6 +149,17 @@ const BillingSRISection: React.FC<BillingSRISectionProps> = ({
                                     />
                                 </div>
                                 <div className="md:col-span-2 space-y-1.5">
+                                    <label htmlFor="fiscalAddress" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Dirección Fiscal (Aparece en la Factura)</label>
+                                    <input
+                                        type="text"
+                                        id="fiscalAddress"
+                                        value={fiscalInfo.fiscalAddress || ''}
+                                        onChange={(e) => onFiscalInfoChange({ ...fiscalInfo, fiscalAddress: e.target.value })}
+                                        className={inputClass}
+                                        placeholder="Ej: Av. Eugenio Espejo S/N, Miraflores, Loja"
+                                    />
+                                </div>
+                                <div className="md:col-span-2 space-y-1.5">
                                     <label htmlFor="contribuyenteEspecial" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Nro. de Resolución de Contribuyente Especial</label>
                                     <input
                                         type="text"
@@ -177,9 +189,9 @@ const BillingSRISection: React.FC<BillingSRISectionProps> = ({
                             </div>
                         </div>
 
-                        {/* Puntos de Emisión */}
+                        {/* Puntos de Emisión, Régimen e IVA */}
                         <div className="space-y-4">
-                            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Puntos de Emisión y Régimen</h3>
+                            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Puntos de Emisión, Régimen e IVA</h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-1.5">
                                     <label htmlFor="establishment" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Establecimiento</label>
@@ -218,6 +230,60 @@ const BillingSRISection: React.FC<BillingSRISectionProps> = ({
                                         <option value="RIMPE - Negocio Popular">RIMPE - Negocio Popular</option>
                                         <option value="RIMPE - Emprendedor">RIMPE - Emprendedor</option>
                                     </select>
+                                </div>
+                            </div>
+
+                            {/* Tarifa IVA — campo crítico con advertencia */}
+                            <div className="p-5 bg-blue-50 dark:bg-blue-900/10 rounded-3xl border border-blue-100 dark:border-blue-800/30">
+                                <div className="flex items-start gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-xl bg-blue-200 dark:bg-blue-900/50 flex items-center justify-center text-blue-700 dark:text-blue-400 flex-shrink-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-800 dark:text-blue-400">Tarifa IVA (%)</h4>
+                                        <p className="text-[10px] font-bold text-blue-700/70 dark:text-blue-300/60 uppercase tracking-widest mt-1 leading-relaxed">
+                                            Cámbialo solo si el SRI decreta un nuevo porcentaje. Afecta todas las facturas y notas de crédito futuras.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="relative w-40">
+                                        <input
+                                            type="number"
+                                            id="taxRate"
+                                            value={billingConfig.taxRate ?? 15}
+                                            onChange={(e) => {
+                                                const val = parseFloat(e.target.value);
+                                                if (!isNaN(val) && val >= 0 && val <= 100) {
+                                                    onBillingConfigChange({ ...billingConfig, taxRate: val });
+                                                }
+                                            }}
+                                            className={`${monoInputClass} pr-8`}
+                                            min="0"
+                                            max="100"
+                                            step="0.5"
+                                            placeholder="15"
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-black text-sm">%</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        {[0, 5, 8, 12, 15].map(rate => (
+                                            <button
+                                                key={rate}
+                                                type="button"
+                                                onClick={() => onBillingConfigChange({ ...billingConfig, taxRate: rate })}
+                                                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                                                    (billingConfig.taxRate ?? 15) === rate
+                                                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/25'
+                                                        : 'bg-white dark:bg-dark-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-dark-700 hover:border-blue-400 hover:text-blue-600'
+                                                }`}
+                                            >
+                                                {rate}%
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -26,6 +26,7 @@ const RestaurantConfigSchema = new Schema({
     businessName: { type: String, required: true },
     fiscalEmail: { type: String },
     fiscalLogo: { type: String },
+    fiscalAddress: { type: String }, // Dirección que aparece en las facturas electrónicas
     obligadoContabilidad: { type: Boolean, default: false },
     contribuyenteEspecial: { type: String },
 
@@ -52,6 +53,7 @@ const RestaurantConfigSchema = new Schema({
             enum: ['General', 'RIMPE - Negocio Popular', 'RIMPE - Emprendedor']
         },
         agenteRetencion: { type: String },
+        taxRate: { type: Number, default: 15, min: 0, max: 100 }, // Tarifa IVA configurable (ej: 15, 12, 8, 0)
         currentSequenceFactura: { type: Number, required: true, default: 1 },
         currentSequenceNotaCredito: { type: Number, required: true, default: 1 },
         currentSequenceNotaVenta: { type: Number, required: true, default: 1 }

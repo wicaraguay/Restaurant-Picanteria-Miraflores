@@ -43,6 +43,7 @@ export interface RestaurantConfig {
   businessName: string;
   fiscalEmail?: string;
   fiscalLogo?: string; // Logo específico para facturas
+  fiscalAddress?: string; // Dirección que aparece en la factura electrónica
   obligadoContabilidad?: boolean;
   contribuyenteEspecial?: string; // Número de resolución (opcional)
 
