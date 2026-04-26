@@ -33,9 +33,15 @@ export const generateInvoiceHtml = (
     authorizationDate?: string
 ): string => {
     const taxRate = config.billing?.taxRate || 15;
-    const total = order.items.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
-    const subtotal = total / (1 + (taxRate / 100));
-    const tax = total - subtotal;
+    // Los precios del sistema YA incluyen IVA (precio de venta con IVA incluido)
+    // total = lo que el cliente paga (con IVA)
+    // subtotal = base imponible = total / (1 + taxRate%)
+    // tax = IVA = total - subtotal
+    const totalConIva = order.items.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
+    const subtotal = totalConIva / (1 + (taxRate / 100));
+    const tax = totalConIva - subtotal;
+    const total = totalConIva; // alias semántico: VALOR TOTAL = precio ya con IVA
+
     // Helper for safe strings
     const safeStr = (str?: string) => str || '';
 

@@ -276,11 +276,20 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
             setProcessingMessage('Enviando al SRI');
             setProcessingDetails('Transmitiendo factura para recepción...');
 
-            // Llamada real al backend
-            console.log('Enviando a facturar:', { order, client: data });
+            // CRITICAL: Los precios del sistema YA INCLUYEN IVA.
+            // Debemos enviar `item.total` para que el BillingService use modo "total-driven"
+            // (extrae el IVA desde el total) en lugar de modo "price-driven"
+            // (que trataría item.price como base sin IVA y sumaría IVA encima → incorrecto).
+            const itemsConTotal = order.items.map((item: any) => ({
+                id: item.id || item.name,
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                total: parseFloat(((item.price || 0) * item.quantity).toFixed(2)), // precio con IVA incluido
+            }));
 
             const result = await billingService.generateXML({
-                order: order,
+                order: { ...order, items: itemsConTotal },
                 client: data,
                 taxRate: config.billing?.taxRate || 15,
                 logoUrl: config.fiscalLogo || config.logo
