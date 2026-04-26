@@ -268,9 +268,26 @@ export class GenerateCreditNote {
                 sriStatus: authResult.estado || result.estado,
                 environment: creditNote.info.ambiente,
                 authorizationDate: authResult.fechaAutorizacion,
+                sriMessage: (authResult.mensajes || result.mensajes || []).join(' '),
                 retryCount: 1, // First attempt
                 lastRetryDate: this.billingService.getCurrentDateEcuador().split('/').reverse().join('-') // YYYY-MM-DD
             });
+
+            // 9.1 Si el SRI NO autorizó la NC → guardar en errorLog acumulativo
+            const cnFinalStatus = authResult.estado || result.estado;
+            const cnFinalMessage = (authResult.mensajes || result.mensajes || []).join(' ');
+            if (cnFinalStatus !== 'AUTORIZADO' && cnFinalMessage) {
+                // Obtener el documento recién creado para obtener su ID
+                const savedCN = await this.creditNoteRepository.findByAccessKey(creditNote.info.claveAcceso!);
+                if (savedCN) {
+                    await (this.creditNoteRepository as any).pushErrorLog(savedCN.id, {
+                        timestamp: new Date().toISOString(),
+                        sriStatus: cnFinalStatus || 'DESCONOCIDO',
+                        message: cnFinalMessage,
+                        attempt: 1
+                    });
+                }
+            }
 
             console.log('[GenerateCreditNote] Credit note persisted successfully');
 

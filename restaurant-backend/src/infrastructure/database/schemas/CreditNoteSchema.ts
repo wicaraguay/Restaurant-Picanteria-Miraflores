@@ -48,7 +48,16 @@ const CreditNoteSchema = new Schema({
     xmlUrl: { type: String },
     pdfUrl: { type: String },
     retryCount: { type: Number, default: 0 },
-    lastRetryDate: { type: String }
+    lastRetryDate: { type: String },
+    /** Mensaje del último error del SRI */
+    sriMessage: { type: String },
+    /** Historial acumulado de errores del SRI. Nunca se sobreescribe, se acumula con $push */
+    errorLog: [{
+        timestamp: { type: String, required: true },
+        sriStatus:  { type: String, required: true },
+        message:    { type: String, required: true },
+        attempt:    { type: Number, required: true }
+    }]
 }, {
     timestamps: true
 });

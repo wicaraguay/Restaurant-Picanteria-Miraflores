@@ -10,6 +10,18 @@ export interface BillItem {
     total: number;
 }
 
+/** Entrada del log de errores SRI — acumulativa, nunca se sobreescribe */
+export interface BillErrorEntry {
+    /** ISO timestamp del intento */
+    timestamp: string;
+    /** Estado del SRI: DEVUELTA, ERROR, TIMEOUT, etc. */
+    sriStatus: string;
+    /** Mensaje(s) de error del SRI */
+    message: string;
+    /** Número de intento (1, 2, 3...) */
+    attempt: number;
+}
+
 export interface Bill {
     id: string;
     orderId: string;
@@ -33,6 +45,8 @@ export interface Bill {
     hasCreditNote?: boolean;
     retryCount?: number;
     lastRetryDate?: string;
+    /** Historial completo de errores del SRI — nunca se sobreescribe, se acumula */
+    errorLog?: BillErrorEntry[];
 }
 
 export interface CreditNote {
@@ -55,4 +69,7 @@ export interface CreditNote {
     authorizationDate?: string;
     retryCount?: number;
     lastRetryDate?: string;
+    sriMessage?: string;
+    /** Historial completo de errores del SRI para la nota de crédito */
+    errorLog?: BillErrorEntry[];
 }

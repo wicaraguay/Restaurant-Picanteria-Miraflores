@@ -26,6 +26,18 @@ export interface BillItem {
     total: number;
 }
 
+/** Registro de un intento fallido de envío al SRI */
+export interface BillErrorEntry {
+    /** Timestamp ISO del momento del error */
+    timestamp: string;
+    /** Estado devuelto por el SRI (DEVUELTA, ERROR, TIMEOUT, etc.) */
+    sriStatus: string;
+    /** Mensaje(s) de error del SRI */
+    message: string;
+    /** Número de intento (1, 2, 3...) */
+    attempt: number;
+}
+
 export class Bill {
     constructor(
         public readonly id: string,
@@ -55,6 +67,8 @@ export class Bill {
         public readonly xmlContent?: string,
         public readonly retryCount: number = 0,
         public readonly lastRetryDate?: string,
-        public readonly createdAt?: Date
+        public readonly createdAt?: Date,
+        /** Historial completo de errores — nunca se sobreescribe, solo se acumula */
+        public readonly errorLog?: BillErrorEntry[]
     ) { }
 }

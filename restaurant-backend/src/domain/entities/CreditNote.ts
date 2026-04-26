@@ -24,6 +24,14 @@ export interface CreditNoteItem {
     total: number;
 }
 
+/** Registro de un intento fallido de envío al SRI (Nota de Crédito) */
+export interface CreditNoteErrorEntry {
+    timestamp: string;
+    sriStatus: string;
+    message: string;
+    attempt: number;
+}
+
 export class CreditNote {
     constructor(
         public readonly id: string,
@@ -50,6 +58,10 @@ export class CreditNote {
         public readonly pdfUrl?: string,
         public readonly retryCount?: number,
         public readonly lastRetryDate?: string,
-        public readonly createdAt?: Date
+        public readonly createdAt?: Date,
+        /** Mensaje del último error del SRI */
+        public readonly sriMessage?: string,
+        /** Historial completo de errores — nunca se sobreescribe */
+        public readonly errorLog?: CreditNoteErrorEntry[]
     ) { }
 }

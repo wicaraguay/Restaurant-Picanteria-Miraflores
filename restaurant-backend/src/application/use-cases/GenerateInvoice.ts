@@ -243,12 +243,28 @@ export class GenerateInvoice {
         }
 
         // 8. Persistir Resultado Final
+        const finalStatus = authResult?.estado || result.estado;
+        const finalMessage = (authResult?.mensajes || result.mensajes || []).join(' ');
+
         await this.billRepository.upsert({
             id: draftBill.id,
-            sriStatus: authResult?.estado || result.estado,
+            sriStatus: finalStatus,
             authorizationDate: authResult?.fechaAutorizacion,
-            sriMessage: (authResult?.mensajes || result.mensajes || []).join(' ')
+            sriMessage: finalMessage
         });
+
+        // 8.1 Si el SRI NO autorizó → guardar entrada en errorLog acumulativo
+        const notAuthorized = finalStatus !== 'AUTORIZADO';
+        if (notAuthorized && finalMessage) {
+            const retryCount = (draftBill.retryCount || 0) + 1;
+            await (this.billRepository as any).pushErrorLog(draftBill.id, {
+                timestamp: new Date().toISOString(),
+                sriStatus: finalStatus || 'DESCONOCIDO',
+                message: finalMessage,
+                attempt: retryCount
+            });
+        }
+
 
         // 9. Update Order to COMPLETED and set billed flag to move to history
         await this.orderRepository.update(invoice.orderId, {

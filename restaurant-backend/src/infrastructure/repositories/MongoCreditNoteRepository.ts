@@ -41,7 +41,9 @@ export class MongoCreditNoteRepository extends BaseRepository<CreditNote> implem
             doc.pdfUrl,
             doc.retryCount,
             doc.lastRetryDate,
-            doc.createdAt
+            doc.createdAt,
+            doc.sriMessage,
+            doc.errorLog || []
         );
     }
 
@@ -77,5 +79,24 @@ export class MongoCreditNoteRepository extends BaseRepository<CreditNote> implem
 
         if (!doc) throw new Error('Failed to upsert credit note');
         return this.mapToEntity(doc);
+    }
+
+    /**
+     * Añade una entrada al historial de errores del SRI para una nota de crédito.
+     * Usa $push de MongoDB para garantizar que el log sea acumulativo e inmutable.
+     */
+    async pushErrorLog(creditNoteId: string, entry: {
+        timestamp: string;
+        sriStatus: string;
+        message: string;
+        attempt: number;
+    }): Promise<void> {
+        await this.model.findByIdAndUpdate(
+            creditNoteId,
+            {
+                $push: { errorLog: entry },
+                $set:  { sriMessage: entry.message, sriStatus: entry.sriStatus }
+            }
+        );
     }
 }

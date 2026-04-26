@@ -44,7 +44,8 @@ export class MongoBillRepository extends BaseRepository<Bill> implements IBillRe
             doc.xmlContent,
             doc.retryCount || 0,
             doc.lastRetryDate,
-            doc.createdAt
+            doc.createdAt,
+            doc.errorLog || []
         );
     }
 
@@ -79,5 +80,24 @@ export class MongoBillRepository extends BaseRepository<Bill> implements IBillRe
         const doc = await this.model.findOne({ accessKey });
         if (!doc) return null;
         return this.mapToEntity(doc);
+    }
+
+    /**
+     * Añade una entrada al historial de errores del SRI sin sobreescribir las anteriores.
+     * Usa $push de MongoDB para garantizar que el log sea acumulativo e inmutable.
+     */
+    async pushErrorLog(billId: string, entry: {
+        timestamp: string;
+        sriStatus: string;
+        message: string;
+        attempt: number;
+    }): Promise<void> {
+        await this.model.findByIdAndUpdate(
+            billId,
+            {
+                $push: { errorLog: entry },
+                $set:  { sriMessage: entry.message, sriStatus: entry.sriStatus }
+            }
+        );
     }
 }

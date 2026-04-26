@@ -14,6 +14,7 @@ import CreditNoteModal from './CreditNoteModal.tsx';
 import InvoiceProcessingModal, { InvoiceProcessState } from './InvoiceProcessingModal';
 import { XMLViewerModal } from './XMLViewerModal';
 import { EditBillModal } from './EditBillModal';
+import ErrorLogPanel from './ErrorLogPanel';
 
 import {
     SearchIcon,
@@ -762,6 +763,13 @@ const BillingHistory: React.FC = () => {
                                                             </table>
                                                         </div>
                                                     </div>
+
+                                                    {/* Log de errores SRI — solo visible si hay errores registrados */}
+                                                    <ErrorLogPanel
+                                                        errorLog={bill.errorLog}
+                                                        sriMessage={bill.sriMessage}
+                                                        documentNumber={bill.documentNumber}
+                                                    />
                                                 </td>
                                             </tr>
                                         )}

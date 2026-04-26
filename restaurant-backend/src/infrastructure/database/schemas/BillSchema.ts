@@ -51,7 +51,14 @@ const BillSchema = new Schema({
     sriMessage: { type: String },
     xmlContent: { type: String },
     retryCount: { type: Number, default: 0 },
-    lastRetryDate: { type: String }
+    lastRetryDate: { type: String },
+    /** Historial acumulado de errores del SRI. Nunca se sobreescribe, se acumula con $push */
+    errorLog: [{
+        timestamp: { type: String, required: true },
+        sriStatus:  { type: String, required: true },
+        message:    { type: String, required: true },
+        attempt:    { type: Number, required: true }
+    }]
 }, {
     timestamps: true
 });
