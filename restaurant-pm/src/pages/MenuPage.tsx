@@ -55,7 +55,28 @@ const MenuPage: React.FC = () => {
         try {
             logger.info('Fetching menu for public page');
             const items = await menuService.getAll();
-            setMenuItems(items.filter(item => item.available));
+            
+            // Filtramos para que NO se muestren bebidas en la página web pública
+            // Se excluyen por categoría (Bebidas, Gaseosas, etc.) y por nombres específicos
+            const filteredItems = items.filter(item => {
+                if (!item.available) return false;
+                
+                const category = item.category.toLowerCase();
+                const name = item.name.toLowerCase();
+                
+                // Categorías de bebidas a omitir
+                const beverageCategories = ['bebida', 'beverage', 'gaseosa', 'jugo', 'refresco', 'drink', 'licor', 'vino', 'cerveza', 'coctel'];
+                const isBeverageCategory = beverageCategories.some(cat => category.includes(cat));
+                
+                // Nombres específicos mencionados por el usuario o muy comunes
+                const beverageNames = ['cafe', 'agua', 'cocacola', 'coca-cola', 'sprite', 'fanta', 'pepsi'];
+                const isSpecificBeverage = beverageNames.some(n => name.includes(n));
+                
+                // Solo retornamos si NO es una categoría de bebida Y NO es un nombre de bebida específico
+                return !isBeverageCategory && !isSpecificBeverage;
+            });
+
+            setMenuItems(filteredItems);
             setLoading(false);
         } catch (error) {
             logger.error('Failed to fetch menu', error);
@@ -67,18 +88,29 @@ const MenuPage: React.FC = () => {
         fetchMenu();
         checkBusinessStatus();
 
+        // Actualización frecuente para simular "tiempo real"
         const menuInterval = setInterval(() => {
             fetchMenu();
             checkBusinessStatus();
-        }, 30000); // Menu updates less frequently now
+        }, 3000); // 3 segundos para una respuesta rápida
 
         const slideInterval = setInterval(() => {
             setCurrentSlide(prev => (prev + 1) % carouselSlides.length);
-        }, 6000); // Change image every 6 seconds
+        }, 6000); // Cambio de imagen cada 6 segundos
+
+        // Actualizar automáticamente cuando el usuario vuelve a la pestaña
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchMenu();
+                checkBusinessStatus();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
             clearInterval(menuInterval);
             clearInterval(slideInterval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [carouselSlides.length]);
 
