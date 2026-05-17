@@ -39,7 +39,26 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 // CORS: En producción solo permite orígenes específicos
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3001'];
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || ['http://localhost:3001'];
+logger.info('CORS allowed origins', { allowedOrigins });
+
+// Cabeceras CORS manuales para que INCLUSO errores 500 lleven cabeceras CORS
+// Sin esto, el navegador bloquea la lectura de cualquier respuesta de error
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    }
+    // Responder inmediatamente a preflight OPTIONS
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    next();
+});
+
 app.use(cors({
     origin: (origin, callback) => {
         // Permitir requests sin origin (como mobile apps o curl)
@@ -47,11 +66,13 @@ app.use(cors({
         if (allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
-        logger.warn('CORS blocked origin', { origin });
-        callback(new Error('CORS: Origin not allowed'));
+        logger.warn('CORS blocked origin', { origin, allowedOrigins });
+        // No lanzar Error (causaba 500 sin cabeceras CORS). 
+        // Devolver false para rechazar sin crashear.
+        callback(null, false);
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(helmet());
