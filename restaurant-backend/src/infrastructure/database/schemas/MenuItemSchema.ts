@@ -24,6 +24,7 @@ export interface MenuItemDocument extends Document {
     imageUrl: string;
     category: string;
     available: boolean;
+    taxRate: number;
 }
 
 const MenuItemSchema: Schema = new Schema({
@@ -32,7 +33,8 @@ const MenuItemSchema: Schema = new Schema({
     price: { type: Number, required: true },
     imageUrl: { type: String },
     category: { type: String, required: true },
-    available: { type: Boolean, default: true }
+    available: { type: Boolean, default: true },
+    taxRate: { type: Number, default: 15, min: 0, max: 100 } // IVA por producto (0, 5, 12, 15)
 }, { timestamps: true });
 
 export const MenuItemModel = mongoose.model<MenuItemDocument>('MenuItem', MenuItemSchema);

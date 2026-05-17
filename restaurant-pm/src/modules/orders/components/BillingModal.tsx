@@ -49,8 +49,27 @@ export const BillingModal: React.FC<BillingModalProps> = ({
     if (!billingOrder) return null;
 
     const total = billingOrder.items.reduce((s, i) => s + (i.price || 0) * i.quantity, 0);
-    const subtotal = total / 1.15;
-    const iva = total - subtotal;
+    
+    // Calcular subtotales e IVA por ítem, respetando el taxRate individual
+    const itemBreakdown = billingOrder.items.map(item => {
+        const itemTotal = (item.price || 0) * item.quantity;
+        const rate = (item.taxRate ?? 15) / 100;
+        const itemSubtotal = rate > 0 ? itemTotal / (1 + rate) : itemTotal;
+        const itemIva = itemTotal - itemSubtotal;
+        return { ...item, itemTotal, itemSubtotal, itemIva, taxRate: item.taxRate ?? 15 };
+    });
+    
+    const subtotal = itemBreakdown.reduce((s, i) => s + i.itemSubtotal, 0);
+    const iva = itemBreakdown.reduce((s, i) => s + i.itemIva, 0);
+    
+    // Agrupar por tasa de IVA para el desglose
+    const taxGroups = itemBreakdown.reduce((acc, item) => {
+        const rate = item.taxRate;
+        if (!acc[rate]) acc[rate] = { subtotal: 0, iva: 0 };
+        acc[rate].subtotal += item.itemSubtotal;
+        acc[rate].iva += item.itemIva;
+        return acc;
+    }, {} as Record<number, { subtotal: number; iva: number }>);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Cobro y Facturación" maxWidth="max-w-4xl">
@@ -210,25 +229,38 @@ export const BillingModal: React.FC<BillingModalProps> = ({
                             <div className="space-y-2">
                                 {billingOrder.items.map((item, idx) => (
                                     <div key={idx} className="flex justify-between text-sm py-2 px-1 border-b border-gray-50 dark:border-dark-900">
-                                        <div className="flex gap-4">
+                                        <div className="flex gap-4 items-center">
                                             <span className="font-black text-blue-500 w-4">{item.quantity}</span>
                                             <span className="font-bold text-gray-700 dark:text-gray-300 uppercase">{item.name}</span>
+                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-lg ${
+                                                (item.taxRate ?? 15) === 0 
+                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-600' 
+                                                    : 'bg-blue-50 dark:bg-blue-900/20 text-blue-500'
+                                            }`}>
+                                                IVA {item.taxRate ?? 15}%
+                                            </span>
                                         </div>
                                         <span className="font-black text-gray-900 dark:text-white">${((item.price || 0) * item.quantity).toFixed(2)}</span>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Totals Breakdown Section (Added for clarity and testing) */}
+                            {/* Totals Breakdown Section */}
                             <div className="mt-6 bg-gray-50 dark:bg-dark-900/50 p-6 rounded-3xl space-y-3 border border-gray-100 dark:border-dark-800">
-                                <div className="flex justify-between text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                    <span>Subtotal 15%</span>
-                                    <span data-testid="preview-subtotal">${subtotal.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                    <span>IVA 15%</span>
-                                    <span data-testid="preview-iva">${iva.toFixed(2)}</span>
-                                </div>
+                                {Object.entries(taxGroups).sort(([a], [b]) => Number(a) - Number(b)).map(([rate, group]) => (
+                                    <React.Fragment key={rate}>
+                                        <div className="flex justify-between text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            <span>Subtotal {Number(rate) === 0 ? '0%' : `${rate}%`}</span>
+                                            <span>${group.subtotal.toFixed(2)}</span>
+                                        </div>
+                                        {Number(rate) > 0 && (
+                                            <div className="flex justify-between text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                <span>IVA {rate}%</span>
+                                                <span>${group.iva.toFixed(2)}</span>
+                                            </div>
+                                        )}
+                                    </React.Fragment>
+                                ))}
                                 <div className="pt-3 border-t border-gray-200 dark:border-dark-700 flex justify-between items-center">
                                     <span className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Total a Pagar</span>
                                     <span className="text-xl font-black text-blue-600 dark:text-blue-400" data-testid="preview-total">${total.toFixed(2)}</span>

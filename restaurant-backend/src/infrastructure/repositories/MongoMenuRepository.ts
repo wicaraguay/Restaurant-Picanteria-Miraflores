@@ -23,7 +23,8 @@ export class MongoMenuRepository extends BaseRepository<MenuItem> implements IMe
             price: doc.price,
             imageUrl: doc.imageUrl,
             category: doc.category,
-            available: doc.available
+            available: doc.available,
+            taxRate: doc.taxRate ?? 15
         };
     }
 }

@@ -11,4 +11,5 @@ export interface MenuItem {
     imageUrl: string;
     category: string;
     available: boolean;
+    taxRate: number; // Porcentaje de IVA individual (0, 5, 12, 15)
 }

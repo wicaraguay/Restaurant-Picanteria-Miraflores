@@ -86,7 +86,7 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
             setItems(newItems);
         } else {
             // Create a new line item, even if the same product exists as a saved item
-            setItems([...items, { name: menuItem.name, quantity: 1, price: menuItem.price, prepared: false, isNew: true }]);
+            setItems([...items, { name: menuItem.name, quantity: 1, price: menuItem.price, prepared: false, isNew: true, taxRate: menuItem.taxRate }]);
         }
     };
 

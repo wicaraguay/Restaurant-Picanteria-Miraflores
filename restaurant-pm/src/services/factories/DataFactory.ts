@@ -131,9 +131,9 @@ export class DataFactory {
      */
     static createDefaultMenuItems(): MenuItem[] {
         return [
-            { id: '1', name: 'Arroz con Pollo', description: 'Arroz con pollo clásico', price: 10.50, category: 'Main', available: true, imageUrl: '' },
-            { id: '2', name: 'Ceviche', description: 'Ceviche de camarón', price: 12.00, category: 'Seafood', available: true, imageUrl: '' },
-            { id: '3', name: 'Coca Cola', description: 'Refresca tu día', price: 1.50, category: 'Beverages', available: true, imageUrl: '' }
+            { id: '1', name: 'Arroz con Pollo', description: 'Arroz con pollo clásico', price: 10.50, category: 'Main', available: true, imageUrl: '', taxRate: 15 },
+            { id: '2', name: 'Ceviche', description: 'Ceviche de camarón', price: 12.00, category: 'Seafood', available: true, imageUrl: '', taxRate: 15 },
+            { id: '3', name: 'Coca Cola', description: 'Refresca tu día', price: 1.50, category: 'Beverages', available: true, imageUrl: '', taxRate: 0 }
         ];
     }
 

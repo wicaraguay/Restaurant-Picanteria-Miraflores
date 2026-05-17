@@ -19,7 +19,7 @@ import { Order, OrderStatus } from '../../../domain/entities/Order';
 
 export interface OrderDocument extends Document {
     customerName: string;
-    items: { name: string; quantity: number; price?: number }[];
+    items: { name: string; quantity: number; price?: number; taxRate?: number }[];
     type: 'En Local' | 'Delivery' | 'Para Llevar';
     status: OrderStatus;
     createdAt: Date;
@@ -36,7 +36,8 @@ const OrderSchema: Schema = new Schema({
         name: { type: String, required: true },
         quantity: { type: Number, required: true },
         price: { type: Number },
-        prepared: { type: Boolean, default: false }
+        prepared: { type: Boolean, default: false },
+        taxRate: { type: Number }
     }],
     type: { type: String, enum: ['En Local', 'Delivery', 'Para Llevar'], required: true },
     status: { type: String, enum: Object.values(OrderStatus), default: OrderStatus.New },

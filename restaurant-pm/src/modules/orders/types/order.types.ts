@@ -14,6 +14,7 @@ export interface OrderItem {
     quantity: number;
     price?: number;
     prepared?: boolean;
+    taxRate?: number; // IVA individual del producto
 }
 
 export interface Order {

@@ -30,7 +30,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
 
     React.useEffect(() => {
         if (isOpen) {
-            setFormData(isEditing ? { ...item } : { name: '', category: '', price: 0, description: '', available: true, imageUrl: '' });
+            setFormData(isEditing ? { ...item } : { name: '', category: '', price: 0, description: '', available: true, imageUrl: '', taxRate: 15 });
             setImageFile(null);
             setIsUploading(false);
             setErrors({});
@@ -100,6 +100,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                 description: formData.description || '',
                 available: formData.available || false,
                 imageUrl: finalImageUrl,
+                taxRate: Number(formData.taxRate ?? 15),
             };
 
             await onSave(itemToSave);
@@ -131,6 +132,19 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 block ml-1">Precio ($)</label>
                         <input type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} required placeholder="0.00" className={`${inputClass} ${errors.price ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
                         {errors.price && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1 uppercase">{errors.price}</p>}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 block ml-1">IVA del Producto</label>
+                        <select name="taxRate" value={formData.taxRate ?? 15} onChange={handleChange} className={inputClass}>
+                            <option value={15}>15% IVA</option>
+                            <option value={12}>12% IVA</option>
+                            <option value={5}>5% IVA</option>
+                            <option value={0}>0% IVA (Exento)</option>
+                        </select>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 ml-1">Tarifa de IVA que aplica a este producto</p>
                     </div>
                 </div>
 

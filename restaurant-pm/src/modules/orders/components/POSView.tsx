@@ -44,7 +44,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
             if (existing) {
                 return prev.map(i => (i === existing ? { ...i, quantity: i.quantity + 1 } : i));
             }
-            return [...prev, { name: item.name, quantity: 1, price: item.price, prepared: false }];
+            return [...prev, { name: item.name, quantity: 1, price: item.price, prepared: false, taxRate: item.taxRate }];
         });
 
         // Visual Feedback

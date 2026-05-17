@@ -187,7 +187,21 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     }, [historySearch, historyDate, activeTab]);
 
     const handleOpenBilling = (order: Order) => {
-        setBillingOrder(order);
+        // Enriquecer los items con el taxRate más reciente de menuItems
+        const enrichedItems = order.items.map((item: any) => {
+            const menuItem = menuItems.find((m: any) => m.name === item.name);
+            const currentTaxRate = menuItem ? menuItem.taxRate : (item.taxRate !== undefined ? item.taxRate : 15);
+            return {
+                ...item,
+                taxRate: currentTaxRate
+            };
+        });
+
+        setBillingOrder({
+            ...order,
+            items: enrichedItems
+        });
+        
         setBillingData({
             identification: '',
             name: order.customerName,
@@ -286,6 +300,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 quantity: item.quantity,
                 price: item.price,
                 total: parseFloat(((item.price || 0) * item.quantity).toFixed(2)), // precio con IVA incluido
+                taxRate: item.taxRate
             }));
 
             const result = await billingService.generateXML({

@@ -27,9 +27,18 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onEdit, onDele
                     loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
-                <div className="absolute top-4 right-4">
+                <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5">
                     <span className="font-black text-gray-900 dark:text-white bg-white/90 dark:bg-dark-900/90 backdrop-blur-sm px-3 py-1.5 rounded-2xl text-lg border border-white/20 shadow-lg">
                         ${item.price.toFixed(2)}
+                    </span>
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-xl backdrop-blur-sm shadow-md border border-white/20 ${
+                        (item.taxRate ?? 15) === 0 
+                            ? 'bg-green-500/90 text-white' 
+                            : (item.taxRate ?? 15) === 15 
+                                ? 'bg-blue-500/90 text-white'
+                                : 'bg-amber-500/90 text-white'
+                    }`}>
+                        IVA {item.taxRate ?? 15}%
                     </span>
                 </div>
                 {!item.available && (

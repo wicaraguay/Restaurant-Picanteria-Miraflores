@@ -5,9 +5,9 @@ import { MenuItem } from '@/modules/menu/types/menu.types';
 import { OrderStatus } from '@/modules/orders/types/order.types';
 
 const mockMenuItems: MenuItem[] = [
-    { id: '1', name: 'Arroz con Pollo', price: 10, category: 'Carnes', available: true, description: 'Test', imageUrl: '' },
-    { id: '2', name: 'Coca Cola', price: 2, category: 'Bebidas', available: true, description: 'Test', imageUrl: '' },
-    { id: '3', name: 'Ceviche', price: 15, category: 'Mariscos', available: false, description: 'Test', imageUrl: '' },
+    { id: '1', name: 'Arroz con Pollo', price: 10, category: 'Carnes', available: true, description: 'Test', imageUrl: '', taxRate: 15 },
+    { id: '2', name: 'Coca Cola', price: 2, category: 'Bebidas', available: true, description: 'Test', imageUrl: '', taxRate: 0 },
+    { id: '3', name: 'Ceviche', price: 15, category: 'Mariscos', available: false, description: 'Test', imageUrl: '', taxRate: 15 },
 ];
 
 describe('POSView Component', () => {

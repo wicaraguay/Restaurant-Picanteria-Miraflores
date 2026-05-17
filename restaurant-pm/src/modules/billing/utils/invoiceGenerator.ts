@@ -32,14 +32,26 @@ export const generateInvoiceHtml = (
     accessKeyOverride?: string,
     authorizationDate?: string
 ): string => {
-    const taxRate = config.billing?.taxRate || 15;
-    // Los precios del sistema YA incluyen IVA (precio de venta con IVA incluido)
-    // total = lo que el cliente paga (con IVA)
-    // subtotal = base imponible = total / (1 + taxRate%)
-    // tax = IVA = total - subtotal
     const totalConIva = order.items.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
-    const subtotal = totalConIva / (1 + (taxRate / 100));
-    const tax = totalConIva - subtotal;
+    
+    let subtotal15 = 0;
+    let subtotal0 = 0;
+    let iva15 = 0;
+
+    order.items.forEach(item => {
+        const itemTaxRate = item.taxRate !== undefined ? item.taxRate : 15;
+        const itemTotal = (item.price || 0) * item.quantity;
+        
+        if (itemTaxRate > 0) {
+            const itemSubtotal = itemTotal / (1 + (itemTaxRate / 100));
+            subtotal15 += itemSubtotal;
+            iva15 += (itemTotal - itemSubtotal);
+        } else {
+            subtotal0 += itemTotal;
+        }
+    });
+
+    const totalSubtotal = subtotal15 + subtotal0;
     const total = totalConIva; // alias semántico: VALOR TOTAL = precio ya con IVA
 
     // Helper for safe strings
@@ -505,20 +517,24 @@ export const generateInvoiceHtml = (
             <div class="totals-container">
                 <table class="totals-table">
                     <tr>
-                        <td>SUBTOTAL ${taxRate}%</td>
-                        <td>$${subtotal.toFixed(2)}</td>
+                        <td>SUBTOTAL 15%</td>
+                        <td>$${subtotal15.toFixed(2)}</td>
                     </tr>
                     <tr>
                         <td>SUBTOTAL 0%</td>
-                        <td>$0.00</td>
+                        <td>$${subtotal0.toFixed(2)}</td>
+                    </tr>
+                    <tr>
+                        <td>SUBTOTAL</td>
+                        <td>$${totalSubtotal.toFixed(2)}</td>
                     </tr>
                     <tr>
                         <td>DESCUENTO</td>
                         <td>$0.00</td>
                     </tr>
                     <tr>
-                        <td>IVA ${taxRate}%</td>
-                        <td>$${tax.toFixed(2)}</td>
+                        <td>IVA 15%</td>
+                        <td>$${iva15.toFixed(2)}</td>
                     </tr>
                     <tr>
                         <td>PROPINA</td>

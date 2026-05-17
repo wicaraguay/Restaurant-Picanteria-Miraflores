@@ -447,9 +447,22 @@ export class PDFService {
                 y += 5;
 
                 // --- Totals Breakdown ---
-                const taxRate = invoice.info.tasaIva || '15';
-                const subtotalBase = invoice.info.totalSinImpuestos.toFixed(2);
-                const ivaValue = (invoice.info.importeTotal - invoice.info.totalSinImpuestos).toFixed(2);
+                let subtotal15 = 0;
+                let subtotal0 = 0;
+                let iva15 = 0;
+
+                invoice.detalles.forEach(item => {
+                    const rate = item.impuestos && item.impuestos.length > 0 ? item.impuestos[0].tarifa : 15;
+                    const taxVal = item.impuestos && item.impuestos.length > 0 ? item.impuestos[0].valor : 0;
+                    if (rate > 0) {
+                        subtotal15 += item.precioTotalSinImpuesto;
+                        iva15 += taxVal;
+                    } else {
+                        subtotal0 += item.precioTotalSinImpuesto;
+                    }
+                });
+
+                const totalSubtotal = subtotal15 + subtotal0;
                 const totalValue = invoice.info.importeTotal.toFixed(2);
 
                 doc.fontSize(8);
@@ -464,16 +477,16 @@ export class PDFService {
                     y += 10;
                 };
 
-                drawRow(`SUBTOTAL ${taxRate}%`, subtotalBase);
-                drawRow(`SUBTOTAL 0%`, '0.00');
-                drawRow(`SUBTOTAL`, subtotalBase);
-                drawRow(`DESCUENTO`, '0.00');
-                drawRow(`IVA ${taxRate}%`, ivaValue);
-                drawRow(`PROPINA`, '0.00');
+                drawRow('SUBTOTAL 15%', subtotal15.toFixed(2));
+                drawRow('SUBTOTAL 0%', subtotal0.toFixed(2));
+                drawRow('SUBTOTAL', totalSubtotal.toFixed(2));
+                drawRow('DESCUENTO', '0.00');
+                drawRow('IVA 15%', iva15.toFixed(2));
+                drawRow('PROPINA', '0.00');
 
                 y += 3;
                 doc.fontSize(10);
-                drawRow(`VALOR TOTAL`, totalValue, true);
+                drawRow('VALOR TOTAL', totalValue, true);
 
                 y += 20;
 
@@ -718,8 +731,6 @@ export class PDFService {
 
         let position = invoiceTableTop + 30;
 
-        const taxRate = parseFloat(invoice.info.tasaIva || '15') / 100;
-
         for (let i = 0; i < invoice.detalles.length; i++) {
             const item = invoice.detalles[i];
 
@@ -728,8 +739,9 @@ export class PDFService {
                 position = 50;
             }
 
+            const itemTaxRate = (item.impuestos && item.impuestos.length > 0) ? (item.impuestos[0].tarifa / 100) : 0.15;
             const taxValue = item.impuestos && item.impuestos.length > 0 ? item.impuestos[0].valor : 0;
-            const displayUnitPrice = item.precioUnitario * (1 + taxRate);
+            const displayUnitPrice = item.precioUnitario * (1 + itemTaxRate);
             const displayTotal = item.precioTotalSinImpuesto + taxValue;
 
             doc.text(item.cantidad.toString(), colQty, position, { width: 50, align: 'center' });
@@ -758,13 +770,28 @@ export class PDFService {
             y += step;
         };
 
-        const taxRate = invoice.info.tasaIva || '15';
-        const ivaValue = invoice.info.importeTotal - invoice.info.totalSinImpuestos;
+        let subtotal15 = 0;
+        let subtotal0 = 0;
+        let iva15 = 0;
 
-        drawTotalRow(`SUBTOTAL ${taxRate}%`, invoice.info.totalSinImpuestos.toFixed(2));
-        drawTotalRow('SUBTOTAL 0%', '0.00');
+        invoice.detalles.forEach(item => {
+            const rate = item.impuestos && item.impuestos.length > 0 ? item.impuestos[0].tarifa : 15;
+            const taxVal = item.impuestos && item.impuestos.length > 0 ? item.impuestos[0].valor : 0;
+            if (rate > 0) {
+                subtotal15 += item.precioTotalSinImpuesto;
+                iva15 += taxVal;
+            } else {
+                subtotal0 += item.precioTotalSinImpuesto;
+            }
+        });
+
+        const totalSubtotal = subtotal15 + subtotal0;
+
+        drawTotalRow('SUBTOTAL 15%', subtotal15.toFixed(2));
+        drawTotalRow('SUBTOTAL 0%', subtotal0.toFixed(2));
+        drawTotalRow('SUBTOTAL', totalSubtotal.toFixed(2));
         drawTotalRow('DESCUENTO', '0.00');
-        drawTotalRow(`IVA ${taxRate}%`, ivaValue.toFixed(2));
+        drawTotalRow('IVA 15%', iva15.toFixed(2));
         drawTotalRow('PROPINA', '0.00');
 
         y += 8;
