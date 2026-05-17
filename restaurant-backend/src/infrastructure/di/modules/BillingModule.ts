@@ -20,6 +20,7 @@ import { SRIService } from '../../services/SRIService';
 import { PDFService } from '../../services/PDFService';
 import { IEmailService } from '../../../application/interfaces/IEmailService';
 import { ResendEmailService } from '../../services/ResendEmailService';
+import { NoOpEmailService } from '../../services/NoOpEmailService';
 import { BillingService } from '../../../application/services/BillingService';
 import { ICustomerRepository } from '../../../domain/repositories/ICustomerRepository';
 import { BillingController } from '../../controllers/BillingController';
@@ -68,8 +69,13 @@ export class BillingModule {
 
     public getEmailService(): IEmailService {
         if (!this.emailService) {
-            this.emailService = new ResendEmailService();
-            logger.debug('ResendEmailService instantiated');
+            if (ResendEmailService.isConfigured()) {
+                this.emailService = new ResendEmailService();
+                logger.debug('ResendEmailService instantiated');
+            } else {
+                this.emailService = new NoOpEmailService();
+                logger.debug('NoOpEmailService instantiated (email disabled)');
+            }
         }
         return this.emailService;
     }

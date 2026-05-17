@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import { IEmailService } from '../../application/interfaces/IEmailService';
 import { Invoice } from '../../domain/billing/invoice';
 import { CreditNote } from '../../domain/billing/creditNote';
+import { logger } from '../utils/Logger';
 
 export class ResendEmailService implements IEmailService {
     private resend: Resend;
@@ -10,7 +11,7 @@ export class ResendEmailService implements IEmailService {
     constructor() {
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey) {
-            console.warn('[ResendEmailService] RESEND_API_KEY is not defined in environment variables.');
+            throw new Error('RESEND_API_KEY is required for ResendEmailService');
         }
         this.resend = new Resend(apiKey);
         const email = process.env.SMTP_FROM || 'onboarding@resend.dev';
@@ -19,14 +20,18 @@ export class ResendEmailService implements IEmailService {
         this.fromEmail = name ? `${name} <${email}>` : email;
     }
 
+    static isConfigured(): boolean {
+        return !!process.env.RESEND_API_KEY;
+    }
+
     public async sendInvoiceEmail(to: string, invoice: Invoice, pdfBuffer: Buffer, xmlContent?: string): Promise<void> {
         if (!to) {
-            console.warn('[ResendEmailService] No email provided for customer. Skipping email.');
+            logger.warn('[ResendEmailService] No email provided for customer. Skipping email.');
             return;
         }
 
         try {
-            console.log(`[ResendEmailService] Attempting to send invoice email to ${to}`);
+            logger.info(`[ResendEmailService] Attempting to send invoice email to ${to}`);
 
             const attachments: any[] = [
                 {
@@ -54,25 +59,25 @@ export class ResendEmailService implements IEmailService {
             });
 
             if (error) {
-                console.error('[ResendEmailService] Error sending email via Resend:', error);
+                logger.error('[ResendEmailService] Error sending email via Resend:', error);
                 return;
             }
 
-            console.log(`[ResendEmailService] Email sent successfully via Resend. ID: ${data?.id}`);
+            logger.info(`[ResendEmailService] Email sent successfully via Resend. ID: ${data?.id}`);
 
         } catch (error) {
-            console.error('[ResendEmailService] Unexpected error sending email via Resend:', error);
+            logger.error('[ResendEmailService] Unexpected error sending email via Resend:', error);
         }
     }
 
     public async sendCreditNoteEmail(to: string, creditNote: CreditNote, pdfBuffer: Buffer, xmlContent?: string): Promise<void> {
         if (!to) {
-            console.warn('[ResendEmailService] No email provided for customer. Skipping email.');
+            logger.warn('[ResendEmailService] No email provided for customer. Skipping email.');
             return;
         }
 
         try {
-            console.log(`[ResendEmailService] Attempting to send credit note email to ${to}`);
+            logger.info(`[ResendEmailService] Attempting to send credit note email to ${to}`);
 
             const attachments: any[] = [
                 {
@@ -99,14 +104,14 @@ export class ResendEmailService implements IEmailService {
             });
 
             if (error) {
-                console.error('[ResendEmailService] Error sending email via Resend:', error);
+                logger.error('[ResendEmailService] Error sending email via Resend:', error);
                 return;
             }
 
-            console.log(`[ResendEmailService] Email sent successfully via Resend. ID: ${data?.id}`);
+            logger.info(`[ResendEmailService] Email sent successfully via Resend. ID: ${data?.id}`);
 
         } catch (error) {
-            console.error('[ResendEmailService] Unexpected error sending email via Resend:', error);
+            logger.error('[ResendEmailService] Unexpected error sending email via Resend:', error);
         }
     }
 
@@ -117,7 +122,7 @@ export class ResendEmailService implements IEmailService {
         // We prioritize a public HTTP URL for better visibility in the email body.
         const publicLogo = process.env.BUSINESS_LOGO_URL;
         if (logoUrl.startsWith('data:') && publicLogo) {
-            console.log('[ResendEmailService] Base64 logo detected, using public BUSINESS_LOGO_URL for email content.');
+            logger.info('[ResendEmailService] Base64 logo detected, using public BUSINESS_LOGO_URL for email content.');
             logoUrl = publicLogo;
         }
 

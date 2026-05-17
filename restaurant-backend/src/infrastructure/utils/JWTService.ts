@@ -48,7 +48,7 @@ export class JWTService {
         try {
             const token = jwt.sign(payload, JWT_SECRET, {
                 expiresIn: JWT_EXPIRATION,
-            });
+            } as jwt.SignOptions);
             logger.info('JWT token generated', { userId: payload.userId, sessionId: payload.sessionId });
             return token;
         } catch (error) {
