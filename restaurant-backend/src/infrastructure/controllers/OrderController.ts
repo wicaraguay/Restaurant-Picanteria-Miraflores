@@ -35,6 +35,7 @@ export class OrderController {
             if (req.query.status) filter.status = req.query.status;
             if (req.query.billed !== undefined) filter.billed = req.query.billed === 'true';
             if (req.query.customerName) filter.customerName = { $regex: req.query.customerName, $options: 'i' };
+            if (req.query.billingType) filter.billingType = req.query.billingType;
 
             // Build sort from query params (default: newest first)
             const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { createdAt: -1 };

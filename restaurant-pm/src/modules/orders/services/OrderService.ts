@@ -19,6 +19,7 @@ export class OrderService {
         limit?: number;
         status?: string;
         billed?: boolean;
+        billingType?: string;
         customerName?: string;
         sort?: any;
     }): Promise<any> {
@@ -27,6 +28,7 @@ export class OrderService {
         if (params?.limit) queryParams.append('limit', params.limit.toString());
         if (params?.status) queryParams.append('status', params.status);
         if (params?.billed !== undefined) queryParams.append('billed', params.billed.toString());
+        if (params?.billingType) queryParams.append('billingType', params.billingType);
         if (params?.customerName) queryParams.append('customerName', params.customerName);
         if (params?.sort) queryParams.append('sort', JSON.stringify(params.sort));
 

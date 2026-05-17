@@ -548,7 +548,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                             setBillingData={setBillingData}
                             searchingIdentity={searchingIdentity}
                             onProcess={handleProcessBilling}
-                            onManualComplete={() => {/* Handled by ConfirmModal or separate flow if needed */ }}
+                            onManualComplete={handleManualComplete}
                             manualCompleteLabel="Registrar sin Factura"
                         />
                     )}
