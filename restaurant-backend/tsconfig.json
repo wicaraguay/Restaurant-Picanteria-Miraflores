@@ -23,6 +23,7 @@
         "dist",
         "scripts",
         "test",
+        "tests",
         "vitest.config.ts",
         "tmp"
     ]
