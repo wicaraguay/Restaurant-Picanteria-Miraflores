@@ -57,4 +57,9 @@ export interface ICreditNoteRepository {
      * Actualizar nota de crédito existente
      */
     update(id: string, data: Partial<CreditNote>): Promise<CreditNote | null>;
+
+    /**
+     * Eliminar nota de crédito por ID
+     */
+    delete(id: string): Promise<boolean>;
 }

@@ -122,6 +122,13 @@ export class BillingService {
     }
 
     /**
+     * Eliminar una nota de crédito
+     */
+    public async deleteCreditNote(id: string): Promise<boolean> {
+        return apiService.delete(`/credit-notes/${id}`);
+    }
+
+    /**
      * Actualiza los datos y detalles de una factura
      */
     public async updateBill(id: string, data: any): Promise<any> {

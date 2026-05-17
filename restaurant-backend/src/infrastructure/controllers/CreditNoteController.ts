@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { GenerateCreditNote } from '../../application/use-cases/GenerateCreditNote';
 import { GetCreditNotes } from '../../application/use-cases/GetCreditNotes';
 import { CheckCreditNoteStatus } from '../../application/use-cases/CheckCreditNoteStatus';
+import { DeleteCreditNote } from '../../application/use-cases/DeleteCreditNote';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
@@ -12,6 +13,7 @@ export class CreditNoteController {
         private generateCreditNote: GenerateCreditNote,
         private getCreditNotes: GetCreditNotes,
         private checkCreditNoteStatus: CheckCreditNoteStatus,
+        private deleteCreditNoteUseCase: DeleteCreditNote,
         private configRepository: IRestaurantConfigRepository
     ) { }
 
@@ -112,6 +114,30 @@ export class CreditNoteController {
             });
 
             res.json(ResponseFormatter.success(result));
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    public delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.params;
+
+            if (!id) {
+                throw new ValidationError('id es requerido');
+            }
+
+            logger.info('Deleting credit note', { id });
+
+            const deleted = await this.deleteCreditNoteUseCase.execute(id);
+
+            if (!deleted) {
+                throw new NotFoundError('Nota de crédito no encontrada', 'CreditNote');
+            }
+
+            logger.info('Credit note deleted successfully', { id });
+
+            res.json(ResponseFormatter.success({ deleted: true, id }));
         } catch (error) {
             next(error);
         }

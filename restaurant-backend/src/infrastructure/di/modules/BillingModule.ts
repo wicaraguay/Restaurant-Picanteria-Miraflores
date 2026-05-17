@@ -13,6 +13,7 @@ import { ResetFullSystem } from '../../../application/use-cases/ResetFullSystem'
 import { UpdateBill } from '../../../application/use-cases/UpdateBill';
 import { RetryInvoices } from '../../../application/use-cases/RetryInvoices';
 import { RetryCreditNotes } from '../../../application/use-cases/RetryCreditNotes';
+import { DeleteCreditNote } from '../../../application/use-cases/DeleteCreditNote';
 import { CronService } from '../../services/CronService';
 
 
@@ -45,6 +46,7 @@ export class BillingModule {
     private updateBillUseCase?: UpdateBill;
     private retryInvoicesUseCase?: RetryInvoices;
     private retryCreditNotesUseCase?: RetryCreditNotes;
+    private deleteCreditNoteUseCase?: DeleteCreditNote;
     private cronService?: CronService;
     private billingController?: BillingController;
 
@@ -184,6 +186,17 @@ export class BillingModule {
         return this.getCreditNotesUseCase;
     }
 
+    public getDeleteCreditNoteUseCase(): DeleteCreditNote {
+        if (!this.deleteCreditNoteUseCase) {
+            this.deleteCreditNoteUseCase = new DeleteCreditNote(
+                this.repoModule.getCreditNoteRepository(),
+                this.repoModule.getBillRepository()
+            );
+            logger.debug('DeleteCreditNote use case instantiated');
+        }
+        return this.deleteCreditNoteUseCase;
+    }
+
     public getResetBillingSystemUseCase(): ResetBillingSystem {
         if (!this.resetBillingSystemUseCase) {
             this.resetBillingSystemUseCase = new ResetBillingSystem();
@@ -272,6 +285,7 @@ export class BillingModule {
         this.deleteBillUseCase = undefined;
         this.getCreditNotesUseCase = undefined;
         this.checkCreditNoteStatusUseCase = undefined;
+        this.deleteCreditNoteUseCase = undefined;
         this.resetBillingSystemUseCase = undefined;
         this.billingController = undefined;
     }

@@ -58,6 +58,7 @@ import { DeleteBill } from '../../application/use-cases/DeleteBill';
 import { GenerateCreditNote } from '../../application/use-cases/GenerateCreditNote';
 import { GetCreditNotes } from '../../application/use-cases/GetCreditNotes';
 import { CheckCreditNoteStatus } from '../../application/use-cases/CheckCreditNoteStatus';
+import { DeleteCreditNote } from '../../application/use-cases/DeleteCreditNote';
 import { RetryInvoices } from '../../application/use-cases/RetryInvoices';
 import { RetryCreditNotes } from '../../application/use-cases/RetryCreditNotes';
 import { CronService } from '../services/CronService';
@@ -152,6 +153,7 @@ export class DIContainer {
     public getGetBillsUseCase(): GetBills { return this.billingModule.getGetBillsUseCase(); }
     public getDeleteBillUseCase(): DeleteBill { return this.billingModule.getDeleteBillUseCase(); }
     public getGetCreditNotesUseCase(): GetCreditNotes { return this.billingModule.getGetCreditNotesUseCase(); }
+    public getDeleteCreditNoteUseCase(): DeleteCreditNote { return this.billingModule.getDeleteCreditNoteUseCase(); }
     public getCheckCreditNoteStatusUseCase(): CheckCreditNoteStatus { return this.billingModule.getCheckCreditNoteStatusUseCase(); }
     public getResetBillingSystemUseCase(): ResetBillingSystem { return this.billingModule.getResetBillingSystemUseCase(); }
     public getResetFullSystemUseCase(): ResetFullSystem { return this.billingModule.getResetFullSystemUseCase(); }

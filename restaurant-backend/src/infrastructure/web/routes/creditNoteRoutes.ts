@@ -18,6 +18,7 @@ const creditNoteController = new CreditNoteController(
     container.getGenerateCreditNoteUseCase(),
     container.getGetCreditNotesUseCase(),
     container.getCheckCreditNoteStatusUseCase(),
+    container.getDeleteCreditNoteUseCase(),
     container.getRestaurantConfigRepository() // ← taxRate source of truth
 );
 
@@ -44,5 +45,11 @@ router.get('/:id', creditNoteController.getById);
  * Verificar estado de autorización en el SRI
  */
 router.post('/check-status', creditNoteController.checkStatus);
+
+/**
+ * DELETE /api/credit-notes/:id
+ * Eliminar una nota de crédito (solo administrador)
+ */
+router.delete('/:id', creditNoteController.delete);
 
 export default router;
