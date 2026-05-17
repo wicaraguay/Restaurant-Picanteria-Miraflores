@@ -9,9 +9,22 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { logger } from './Logger';
 
-// Secret key para firmar tokens (en producción usar variable de entorno)
-const JWT_SECRET = process.env.JWT_SECRET || 'restaurant-pm-secret-key-change-in-production';
-const JWT_EXPIRATION = '7d'; // 7 días
+// Secret key para firmar tokens
+function getJwtSecret(): string {
+    const secret = process.env.JWT_SECRET;
+    if (secret) return secret;
+
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error('FATAL: JWT_SECRET environment variable is required in production');
+    }
+
+    // Solo en desarrollo: usar clave por defecto (NO SEGURO)
+    logger.warn('⚠️ Using default JWT_SECRET - NOT SAFE FOR PRODUCTION');
+    return 'dev-secret-key-not-for-production';
+}
+
+const JWT_SECRET = getJwtSecret();
+const JWT_EXPIRATION = process.env.JWT_EXPIRATION || '24h';
 
 export interface JWTPayload {
     userId: string;

@@ -8,7 +8,6 @@
  */
 
 import 'dotenv/config';
-console.log('DEBUG: main.ts is starting...');
 import express from 'express';
 
 import cors from 'cors';
@@ -39,7 +38,22 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+// CORS: En producción solo permite orígenes específicos
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3001'];
+app.use(cors({
+    origin: (origin, callback) => {
+        // Permitir requests sin origin (como mobile apps o curl)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        logger.warn('CORS blocked origin', { origin });
+        callback(new Error('CORS: Origin not allowed'));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(helmet());
 app.use(compression()); // Enable gzip compression for responses
 app.use(express.json({ limit: '50mb' }));

@@ -1,0 +1,114 @@
+# ============================================
+# Docker Compose para Restaurant PM
+# Ambiente completo: Backend + Frontend + MongoDB
+# ============================================
+
+version: '3.8'
+
+services:
+  # ============================================
+  # MongoDB Database
+  # ============================================
+  mongodb:
+    image: mongo:7
+    container_name: restaurant-pm-db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme}
+      MONGO_INITDB_DATABASE: restaurant-pm
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - restaurant-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # ============================================
+  # Backend API (Node.js/Express)
+  # ============================================
+  backend:
+    build:
+      context: ./restaurant-backend
+      dockerfile: Dockerfile
+    container_name: restaurant-pm-backend
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-changeme}@mongodb:27017/restaurant-pm?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-24h}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost}
+      - SRI_ENV=${SRI_ENV:-1}
+      - SRI_SIGNATURE_BASE64=${SRI_SIGNATURE_BASE64}
+      - SRI_SIGNATURE_PASSWORD=${SRI_SIGNATURE_PASSWORD}
+      - BUSINESS_NAME=${BUSINESS_NAME}
+      - COMMERCIAL_NAME=${COMMERCIAL_NAME}
+      - RUC=${RUC}
+      - DIR_MATRIZ=${DIR_MATRIZ}
+      - DIR_ESTABLECIMIENTO=${DIR_ESTABLECIMIENTO}
+      - ESTAB=${ESTAB:-001}
+      - PTO_EMI=${PTO_EMI:-001}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - SMTP_FROM=${SMTP_FROM}
+      - TEST_EMAIL=${TEST_EMAIL}
+      - BUSINESS_LOGO_URL=${BUSINESS_LOGO_URL}
+    ports:
+      - "3000:3000"
+    networks:
+      - restaurant-network
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================
+  # Frontend (React/Vite + Nginx)
+  # ============================================
+  frontend:
+    build:
+      context: ./restaurant-pm
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+    container_name: restaurant-pm-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    networks:
+      - restaurant-network
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:80 || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# ============================================
+# Volúmenes persistentes
+# ============================================
+volumes:
+  mongodb_data:
+    driver: local
+
+# ============================================
+# Red interna
+# ============================================
+networks:
+  restaurant-network:
+    driver: bridge

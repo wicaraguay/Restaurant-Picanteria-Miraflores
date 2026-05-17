@@ -4,6 +4,10 @@ import axios from 'axios';
 import { Invoice, InvoiceDetail } from '../../domain/billing/invoice';
 import { CreditNote, CreditNoteDetail } from '../../domain/billing/creditNote';
 import { signInvoiceXml, signCreditNoteXml } from 'ec-sri-invoice-signer';
+import { logger } from '../utils/Logger';
+
+// Solo loguear XMLs completos en desarrollo
+const DEBUG_XML = process.env.NODE_ENV === 'development';
 
 /**
  * Servicio para gestionar la comunicación con el SRI
@@ -14,19 +18,11 @@ import { signInvoiceXml, signCreditNoteXml } from 'ec-sri-invoice-signer';
 export class SRIService {
 
     /**
-     * Helper para comparar estructuras de XML (diagnóstico)
+     * Helper para comparar estructuras de XML (diagnóstico) - Solo en desarrollo
      */
     private logXMLComparison(label1: string, xml1: string, label2: string, xml2: string) {
-        console.log('\n==============================================');
-        console.log(`XML COMPARISON: ${label1} vs ${label2}`);
-        console.log('==============================================');
-        console.log(`${label1} length: ${xml1.length} chars`);
-        console.log(`${label2} length: ${xml2.length} chars`);
-        console.log(`First 300 chars of ${label1}:`);
-        console.log(xml1.substring(0, 300));
-        console.log(`\nFirst 300 chars of ${label2}:`);
-        console.log(xml2.substring(0, 300));
-        console.log('==============================================\n');
+        if (!DEBUG_XML) return;
+        logger.debug(`XML COMPARISON: ${label1} (${xml1.length} chars) vs ${label2} (${xml2.length} chars)`);
     }
 
     /**
@@ -59,11 +55,10 @@ export class SRIService {
 
     /**
      * Log de auditoría para operaciones SRI (Priority 3 - SRI 2026 Compliance)
-     * Formato: [ISO_TIMESTAMP] [SRI-AUDIT] [OPERATION] Detail - Status: SUCCESS/FAIL/INFO
      */
     private auditLog(operation: string, detail: string, status: 'SUCCESS' | 'FAIL' | 'INFO' = 'INFO'): void {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] [SRI-AUDIT] [${operation}] ${detail} - Status: ${status}`);
+        const logMethod = status === 'FAIL' ? 'error' : status === 'SUCCESS' ? 'info' : 'debug';
+        logger[logMethod](`[SRI-AUDIT] [${operation}] ${detail}`, { status });
     }
 
     /**
@@ -74,7 +69,7 @@ export class SRIService {
      * @param existingAccessKey - (Optional) Use this key instead of generating a new one (for resending/retrying)
      */
     public generateInvoiceXML(invoice: Invoice, existingAccessKey?: string): string {
-        console.log('Generating XML for invoice', invoice.info.secuencial);
+        logger.info('[SRI] Generating invoice XML', { secuencial: invoice.info.secuencial });
 
         let claveAcceso = existingAccessKey;
 
@@ -106,12 +101,12 @@ export class SRIService {
             const digitoVerificador = this.calculateMod11(keyPayload);
             claveAcceso = keyPayload + digitoVerificador;
         } else {
-            console.log('[SRIService] Using EXISTING Access Key for regeneration:', claveAcceso);
+            logger.debug('[SRI] Using existing access key for regeneration');
         }
 
         // Save key to invoice
         invoice.info.claveAcceso = claveAcceso;
-        console.log('Generated/Used Access Key:', claveAcceso);
+        logger.info('[SRI] Access key generated', { claveAcceso: claveAcceso.substring(0, 10) + '...' });
 
         // FIX: Derive the tax percentage code dynamically from the first detail item
         // instead of hardcoding '4' (15%). This ensures correctness for all tax rates.
@@ -208,7 +203,7 @@ export class SRIService {
      */
     public async signXML(xmlContent: string): Promise<string> {
         try {
-            console.log('[SRIService] Signing XML with ec-sri-invoice-signer...');
+            logger.info('[SRI] Signing XML...');
 
             const signaturePath = process.env.SRI_SIGNATURE_PATH;
             const signaturePassword = process.env.SRI_SIGNATURE_PASSWORD;
@@ -222,7 +217,7 @@ export class SRIService {
             let p12Buffer: Buffer;
 
             if (p12Base64) {
-                console.log('[SRIService] Loading P12 from Environment Variable (Base64)...');
+                logger.debug('[SRI] Loading P12 from environment variable');
                 p12Buffer = Buffer.from(p12Base64, 'base64');
             } else {
                 // 2. Fallback to File System if Base64 is missing
@@ -236,7 +231,7 @@ export class SRIService {
                     const renderSecretPath = path.join('/etc/secrets', filename);
 
                     if (fs.existsSync(renderSecretPath)) {
-                        console.log(`[SRIService] Configured path (${p12Path}) not found. Using Render Secret at: ${renderSecretPath}`);
+                        logger.debug('[SRI] Using Render secret path for P12');
                         p12Path = renderSecretPath;
                     } else {
                         // Only throw if NEITHER exists
@@ -245,7 +240,7 @@ export class SRIService {
                 }
 
                 p12Buffer = fs.readFileSync(p12Path);
-                console.log(`[SRIService] P12 file loaded from ${p12Path}. Size: ${p12Buffer.length} bytes`);
+                logger.debug('[SRI] P12 file loaded', { size: p12Buffer.length });
             }
 
             if (p12Buffer.length === 0) {
@@ -261,7 +256,7 @@ export class SRIService {
                     ? signCreditNoteXml(xmlContent, p12Buffer, { pkcs12Password: signaturePassword })
                     : signInvoiceXml(xmlContent, p12Buffer, { pkcs12Password: signaturePassword });
             } catch (signingError: any) {
-                console.error('[SRIService] Critical Signing Error:', signingError);
+                logger.error('[SRI] Critical signing error', { error: signingError.message });
                 // Detect common node-forge errors related to bad password or corrupt file
                 if (signingError.message?.includes('Only 8, 16, 24, or 32 bits supported') ||
                     signingError.message?.includes('Too few bytes to parse') ||
@@ -271,19 +266,15 @@ export class SRIService {
                 throw signingError;
             }
 
-            console.log('[SRIService] XML signed successfully');
-
-
-
-            console.log('==============================================');
-            console.log('DEBUG: Signed XML (first 500 chars):');
-            console.log(signedXml.substring(0, 500));
-            console.log('==============================================');
+            logger.info('[SRI] XML signed successfully');
+            if (DEBUG_XML) {
+                logger.debug('[SRI] Signed XML preview', { preview: signedXml.substring(0, 200) });
+            }
 
             return signedXml;
 
-        } catch (error) {
-            console.error('[SRIService] Error signing XML with ec-sri-invoice-signer:', error);
+        } catch (error: any) {
+            logger.error('[SRI] Error signing XML', { error: error.message });
             throw error;
         }
     }
@@ -296,7 +287,7 @@ export class SRIService {
             ? 'https://cel.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl'
             : 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl';
 
-        console.log(`Sending to SRI (${isProduction ? 'PROD' : 'TEST'}):`, url);
+        logger.info('[SRI] Sending to SRI', { env: isProduction ? 'PROD' : 'TEST' });
 
         // 1. Encode XML to Base64
         const xmlBase64 = Buffer.from(signedXml).toString('base64');
@@ -327,14 +318,12 @@ export class SRIService {
             const estadoMatch = responseBody.match(/<estado>(.*?)<\/estado>/);
             const estado = estadoMatch ? estadoMatch[1] : 'UNKNOWN';
 
-            console.log('================================================================');
-            console.log(`📡 SRI RECEPCIÓN: ${estado}`);
-            console.log('================================================================');
+            logger.info('[SRI] Reception response', { estado });
 
             // If "RECHAZADA", try to extract messages
-            let mensajes = [];
+            let mensajes: string[] = [];
             if (estado === 'DEVUELTA') {
-                console.log('Full SRI Response (Debug):', responseBody); // Debug Dump
+                if (DEBUG_XML) logger.debug('[SRI] Full response', { body: responseBody });
                 const mensajeMatch = responseBody.match(/<mensaje>(.*?)<\/mensaje>/);
                 if (mensajeMatch) mensajes.push(mensajeMatch[1]);
             }
@@ -354,11 +343,11 @@ export class SRIService {
             };
 
         } catch (error: any) {
-            console.error('Error sending to SRI:', error.message);
+            logger.error('[SRI] Error sending to SRI', { error: error.message });
 
             // Check if it's an axios error with response
             if (error.response) {
-                console.error('SRI Error Data:', error.response.data);
+                logger.error('[SRI] Response error', { status: error.response.status });
 
                 // IMPROVED ERROR HANDLING: Distinguish between SRI server errors and connectivity issues
                 if (error.response.status === 500) {
@@ -424,7 +413,7 @@ export class SRIService {
         let authResult;
         let attempts = 0;
 
-        console.log(`[SRIService] Starting Authorization Polling for ${accessKey} (Max ${maxAttempts} attempts)`);
+        logger.info('[SRI] Starting authorization polling', { maxAttempts });
 
         while (attempts < maxAttempts) {
             attempts++;
@@ -432,11 +421,11 @@ export class SRIService {
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
 
-            console.log(`[SRIService] Authorization Attempt ${attempts}/${maxAttempts}...`);
+            logger.debug('[SRI] Authorization attempt', { attempt: attempts, maxAttempts });
             authResult = await this.authorizeInvoice(accessKey, isProduction);
 
             if (authResult.estado === 'AUTORIZADO') {
-                console.log('✅ Document Authorized successfully!');
+                logger.info('[SRI] Document authorized successfully');
                 return authResult;
             }
 
@@ -444,15 +433,15 @@ export class SRIService {
                 // Check if it's actually just processing hidden in a message
                 const responseStr = JSON.stringify(authResult);
                 if (responseStr.includes('EN PROCESAMIENTO') || responseStr.includes('CLAVE DE ACCESO EN PROCESAMIENTO')) {
-                    console.log('⚠️ Status is DEVUELTA but message says PROCESSING. Retrying...');
+                    logger.debug('[SRI] Status DEVUELTA but processing, retrying...');
                     continue;
                 }
-                console.log('❌ Document Rejected by SRI.');
+                logger.warn('[SRI] Document rejected by SRI');
                 return authResult;
             }
 
             if (authResult.estado === 'UNKNOWN' || authResult.estado === 'EN PROCESO') {
-                console.log(`⚠️ Status is ${authResult.estado}. Retrying...`);
+                logger.debug('[SRI] Status pending, retrying', { estado: authResult.estado });
                 continue;
             }
         }
@@ -468,7 +457,7 @@ export class SRIService {
             ? 'https://cel.sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl'
             : 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl';
 
-        console.log(`Authorizing with SRI (${isProduction ? 'PROD' : 'TEST'}):`, url);
+        logger.info('[SRI] Authorizing with SRI', { env: isProduction ? 'PROD' : 'TEST' });
 
         const soapEnvelope = `
             <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ec="http://ec.gob.sri.ws.autorizacion">
@@ -493,9 +482,7 @@ export class SRIService {
             const estadoMatch = responseBody.match(/<estado>(.*?)<\/estado>/);
             let estado = estadoMatch ? estadoMatch[1] : 'UNKNOWN';
 
-            console.log('================================================================');
-            console.log(`🔐 SRI AUTORIZACIÓN: ${estado}`);
-            console.log('================================================================');
+            logger.info('[SRI] Authorization response', { estado });
 
             let numeroAutorizacion = '';
             let fechaAutorizacion = '';
@@ -514,11 +501,11 @@ export class SRIService {
             } else {
                 // Check if it's a "Not Found" or "Pending" case (0 authorizations)
                 if (responseBody.includes('<numeroComprobantes>0</numeroComprobantes>')) {
-                    console.log('SRI returned 0 authorizations. Invoice might be pending or rejected.');
-                    console.log('DEBUG SRI BODY:', responseBody); // Force log of body to see potential errors
+                    logger.debug('[SRI] 0 authorizations returned, may be pending');
+                    if (DEBUG_XML) logger.debug('[SRI] Response body', { body: responseBody });
                     estado = 'EN PROCESO'; // More friendly status
                 } else {
-                    console.log('Full Authorization Response (Debug):', responseBody);
+                    if (DEBUG_XML) logger.debug('[SRI] Full auth response', { body: responseBody });
                 }
             }
 
@@ -532,7 +519,7 @@ export class SRIService {
 
         } catch (error: any) {
             this.auditLog('AUTHORIZE_INVOICE', `Error: ${error.message}`, 'FAIL');
-            console.error('Error authorizing invoice:', error.message);
+            logger.error('[SRI] Error authorizing invoice', { error: error.message });
             throw new Error('Failed to connect to SRI Authorization Service');
         }
 
@@ -563,18 +550,16 @@ export class SRIService {
      * @param existingAccessKey - (Opcional) Reutilizar clave existente en reintentos
      */
     public generateCreditNoteXML(creditNote: CreditNote, existingAccessKey?: string): string {
-        console.log('[SRIService] Generating Credit Note XML...');
-        console.log('[SRIService] Credit Note RUC:', creditNote.info.ruc);
-        console.log('[SRIService] Certificate should be for RUC:', process.env.RUC);
+        logger.info('[SRI] Generating credit note XML');
 
         if (creditNote.info.ruc !== process.env.RUC) {
-            console.error('❌ RUC MISMATCH DETECTED!');
-            console.error(`Credit Note RUC: ${creditNote.info.ruc}`);
-            console.error(`Certificate RUC: ${process.env.RUC}`);
-            console.error('This will cause FIRMA INVALIDA error!');
+            logger.error('[SRI] RUC mismatch detected - will cause FIRMA INVALIDA error', {
+                creditNoteRuc: creditNote.info.ruc,
+                certificateRuc: process.env.RUC
+            });
         }
 
-        console.log('Generating Credit Note XML for bill', creditNote.billId);
+        logger.debug('[SRI] Generating credit note for bill', { billId: creditNote.billId });
 
         let claveAcceso = existingAccessKey;
 
@@ -603,12 +588,12 @@ export class SRIService {
             const digitoVerificador = this.calculateMod11(keyPayload);
             claveAcceso = keyPayload + digitoVerificador;
         } else {
-            console.log('[SRIService] Using EXISTING Access Key for Credit Note regeneration:', claveAcceso);
+            logger.debug('[SRI] Using existing access key for credit note');
         }
 
         // Save key to credit note
         creditNote.info.claveAcceso = claveAcceso;
-        console.log('Generated/Used Credit Note Access Key:', claveAcceso);
+        logger.info('[SRI] Credit note access key ready', { keyPrefix: claveAcceso.substring(0, 10) });
 
         // FIX: Derive the tax percentage code dynamically from the first detail item
         // instead of hardcoding '4' (15%). This ensures correctness for all tax rates.
@@ -689,10 +674,7 @@ export class SRIService {
     </infoAdicional>
 </notaCredito>`;
 
-        console.log('==============================================');
-        console.log('DEBUG: Generated Credit Note XML:');
-        console.log(xml);
-        console.log('==============================================');
+        if (DEBUG_XML) logger.debug('[SRI] Generated credit note XML', { xmlLength: xml.length });
 
         return xml.trim();
     }
@@ -705,7 +687,7 @@ export class SRIService {
             ? 'https://cel.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl'
             : 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl';
 
-        console.log(`Sending Credit Note to SRI (${isProduction ? 'PROD' : 'TEST'}):`, url);
+        logger.info('[SRI] Sending credit note to SRI', { env: isProduction ? 'PROD' : 'TEST' });
 
         // 1. Encode XML to Base64
         const xmlBase64 = Buffer.from(signedXml).toString('base64');
@@ -736,14 +718,12 @@ export class SRIService {
             const estadoMatch = responseBody.match(/<estado>(.*?)<\/estado>/);
             const estado = estadoMatch ? estadoMatch[1] : 'UNKNOWN';
 
-            console.log('================================================================');
-            console.log(`📡 SRI CREDIT NOTE RECEPCIÓN: ${estado}`);
-            console.log('================================================================');
+            logger.info('[SRI] Credit note reception response', { estado });
 
             // Extract messages if DEVUELTA
             let mensajes = [];
             if (estado === 'DEVUELTA') {
-                console.log('Full SRI Response (Debug):', responseBody);
+                if (DEBUG_XML) logger.debug('[SRI] Full SRI response', { body: responseBody });
                 const mensajeMatch = responseBody.match(/<mensaje>(.*?)<\/mensaje>/);
                 if (mensajeMatch) mensajes.push(mensajeMatch[1]);
             }
@@ -763,10 +743,10 @@ export class SRIService {
             };
 
         } catch (error: any) {
-            console.error('Error sending Credit Note to SRI:', error.message);
+            logger.error('[SRI] Error sending credit note', { error: error.message });
 
             if (error.response) {
-                console.error('SRI Error Data:', error.response.data);
+                logger.error('[SRI] Credit note response error', { status: error.response.status });
 
                 // IMPROVED ERROR HANDLING: Same as invoice sending
                 if (error.response.status === 500) {
@@ -815,7 +795,7 @@ export class SRIService {
             ? 'https://cel.sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl'
             : 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl';
 
-        console.log(`Authorizing Credit Note with SRI (${isProduction ? 'PROD' : 'TEST'}):`, url);
+        logger.info('[SRI] Authorizing credit note', { env: isProduction ? 'PROD' : 'TEST' });
 
         const soapEnvelope = `
             <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ec="http://ec.gob.sri.ws.autorizacion">
@@ -840,9 +820,7 @@ export class SRIService {
             const estadoMatch = responseBody.match(/<estado>(.*?)<\/estado>/);
             let estado = estadoMatch ? estadoMatch[1] : 'UNKNOWN';
 
-            console.log('================================================================');
-            console.log(`🔐 SRI CREDIT NOTE AUTORIZACIÓN: ${estado}`);
-            console.log('================================================================');
+            logger.info('[SRI] Credit note authorization response', { estado });
 
             let numeroAutorizacion = '';
             let fechaAutorizacion = '';
@@ -858,25 +836,17 @@ export class SRIService {
                 const compMatch = responseBody.match(/<comprobante><!\[CDATA\[([\s\S]*?)\]\]><\/comprobante>/);
                 if (compMatch) comprobanteAutorizado = compMatch[1];
             } else {
-                // ENHANCED DEBUGGING FOR REJECTED CREDIT NOTES
-                console.log('==============================================');
-                console.log('❌ CREDIT NOTE REJECTED BY SRI');
-                console.log('==============================================');
-                console.log('Full SRI Authorization Response:');
-                console.log(responseBody);
-                console.log('==============================================');
-
-                // Try to extract error messages
+                // Extract error messages for rejected credit notes
                 const mensajeRegex = /<mensaje>(.*?)<\/mensaje>/g;
                 let match;
-                const mensajes = [];
+                const mensajes: string[] = [];
                 while ((match = mensajeRegex.exec(responseBody)) !== null) {
                     mensajes.push(match[1]);
                 }
                 if (mensajes.length > 0) {
-                    console.log('SRI Error Messages:');
-                    mensajes.forEach((msg, i) => console.log(`  ${i + 1}. ${msg}`));
+                    logger.warn('[SRI] Credit note rejected', { mensajes });
                 }
+                if (DEBUG_XML) logger.debug('[SRI] Full rejection response', { body: responseBody });
 
                 if (responseBody.includes('<numeroComprobantes>0</numeroComprobantes>')) {
                     estado = 'EN PROCESO';
@@ -892,7 +862,7 @@ export class SRIService {
             };
 
         } catch (error: any) {
-            console.error('Error authorizing Credit Note:', error.message);
+            logger.error('[SRI] Error authorizing credit note', { error: error.message });
             throw new Error('Failed to connect to SRI Authorization Service for Credit Note');
         }
     }

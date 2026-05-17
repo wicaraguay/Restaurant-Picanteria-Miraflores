@@ -65,7 +65,9 @@ export class DatabaseConnection {
 
         try {
             logger.info('🔄 Attempting to connect to MongoDB...');
-            logger.info(`📍 URI: ${uri}`);
+            // SECURITY: No loguear URI completa (contiene credenciales)
+            const sanitizedUri = uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@');
+            logger.info(`📍 URI: ${sanitizedUri}`);
 
             await mongoose.connect(uri, {
                 serverSelectionTimeoutMS: 5000,
