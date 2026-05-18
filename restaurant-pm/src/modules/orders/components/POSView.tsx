@@ -106,7 +106,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
     };
 
     const getCategoryClass = (cat: string) => {
-        const base = "category-pill px-4 py-2 rounded-2xl border-2 text-sm font-bold flex items-center justify-center min-w-[100px] ";
+        const base = "category-pill px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border-2 text-[10px] md:text-sm font-bold flex items-center justify-center min-w-[70px] md:min-w-[100px] whitespace-nowrap ";
         const isActive = selectedCategory === cat;
         
         const catMap: Record<string, string> = {
@@ -124,38 +124,38 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
     return (
         <div className="pos-container pos-full-height flex flex-col animate-in fade-in duration-500">
             {/* Header / Toolbar */}
-            <div className="flex items-center justify-between mb-3 md:mb-6">
-                <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between mb-2 md:mb-6 gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
                     <button 
                         onClick={onCancel}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-full transition-colors"
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-full transition-colors shrink-0 touch-target"
                     >
                         <ChevronLeftIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     </button>
-                    <div>
-                        <h2 className="text-lg md:text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
-                            {initialOrder ? `Editando Pedido #${initialOrder.orderNumber || initialOrder.id.slice(-6)}` : 'Nuevo Pedido POS'}
+                    <div className="min-w-0">
+                        <h2 className="text-sm md:text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter truncate">
+                            {initialOrder ? `Pedido #${initialOrder.orderNumber || initialOrder.id.slice(-6)}` : 'Nuevo Pedido'}
                         </h2>
-                        <p className="text-[10px] md:text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                        <p className="text-[9px] md:text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-                            SISTEMA POS
+                            POS
                         </p>
                     </div>
                 </div>
-                <div className="flex gap-3">
-                    <div className="hidden md:flex bg-gray-100 dark:bg-dark-800 p-1 rounded-xl">
-                        {(['En Local', 'Para Llevar', 'Delivery'] as const).map(type => (
-                            <button
-                                key={type}
-                                onClick={() => setOrderType(type)}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${orderType === type 
-                                    ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-sm' 
-                                    : 'text-gray-500'}`}
-                            >
-                                {type}
-                            </button>
-                        ))}
-                    </div>
+                {/* Order type selector — visible on ALL sizes */}
+                <div className="flex bg-gray-100 dark:bg-dark-800 p-0.5 md:p-1 rounded-xl shrink-0">
+                    {(['En Local', 'Para Llevar', 'Delivery'] as const).map(type => (
+                        <button
+                            key={type}
+                            onClick={() => setOrderType(type)}
+                            className={`px-2 md:px-4 py-1.5 rounded-lg text-[9px] md:text-xs font-bold transition-all whitespace-nowrap ${orderType === type 
+                                ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                                : 'text-gray-400'}`}
+                        >
+                            {type === 'En Local' ? '🍽️' : type === 'Para Llevar' ? '📦' : '🛵'}
+                            <span className="hidden sm:inline ml-1">{type}</span>
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -163,18 +163,18 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                 {/* Catalog Section */}
                 <div className={`flex-[3] flex flex-col min-w-0 ${showTicketMobile ? 'hidden md:flex' : 'flex'}`}>
                     {/* Search & Categories */}
-                    <div className="glass-panel p-4 mb-4 space-y-4">
+                    <div className="glass-panel p-2.5 md:p-4 mb-2 md:mb-4 space-y-2 md:space-y-4">
                         <div className="relative">
-                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                            <SearchIcon className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 md:w-5 h-4 md:h-5" />
                             <input 
                                 type="text" 
-                                placeholder="¿Qué desea el cliente hoy?"
+                                placeholder="Buscar producto..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3 bg-white dark:bg-dark-900 border-none rounded-2xl text-lg font-medium focus:ring-4 focus:ring-blue-500/10 placeholder-gray-300 dark:placeholder-gray-600 transition-all shadow-inner"
+                                className="w-full pl-10 md:pl-12 pr-4 py-2.5 md:py-3 bg-white dark:bg-dark-900 border-none rounded-xl md:rounded-2xl text-sm md:text-lg font-medium focus:ring-4 focus:ring-blue-500/10 placeholder-gray-300 dark:placeholder-gray-600 transition-all shadow-inner"
                             />
                         </div>
-                        <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar pos-scroll">
+                        <div className="flex gap-2 md:gap-3 overflow-x-auto pb-1 md:pb-2 no-scrollbar category-scroll">
                             {categories.map(cat => (
                                 <button 
                                     key={cat} 
@@ -188,28 +188,27 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                     </div>
 
                     {/* Grid with improved mobile padding to clear floating button */}
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scroll pb-36 md:pb-4">
+                    <div className="flex-1 overflow-y-auto pr-1 md:pr-2 custom-scroll pb-28 md:pb-4">
                         <div className="pos-grid">
                             {filteredItems.map(item => (
                                 <button
                                     key={item.id}
                                     onClick={() => addToCart(item)}
-                                    className="product-card bg-white dark:bg-dark-800 rounded-2xl p-2 md:rounded-3xl md:p-3 flex flex-col items-center group relative"
+                                    className="product-card bg-white dark:bg-dark-800 rounded-xl p-2 md:rounded-3xl md:p-3 flex flex-col items-center group relative active:scale-[0.97] transition-transform"
                                 >
-                                    <div className="w-full aspect-square rounded-xl md:rounded-2xl overflow-hidden mb-2 bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
+                                    <div className="w-full aspect-[4/3] md:aspect-square rounded-lg md:rounded-2xl overflow-hidden mb-1.5 md:mb-2 bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
                                         {item.imageUrl ? (
                                             <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                                         ) : (
-                                            <span className="text-3xl md:text-4xl group-hover:scale-125 transition-transform duration-300">🍽️</span>
+                                            <span className="text-2xl md:text-4xl group-hover:scale-125 transition-transform duration-300">🍽️</span>
                                         )}
                                     </div>
                                     <div className="text-center w-full">
-                                        <p className="text-[9px] md:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">{item.category}</p>
-                                        <h4 className="font-bold text-gray-800 dark:text-gray-100 text-xs md:text-sm truncate px-1">{item.name}</h4>
-                                        <p className="text-blue-600 dark:text-blue-400 font-black text-sm md:text-base mt-0.5">${item.price.toFixed(2)}</p>
+                                        <h4 className="font-bold text-gray-800 dark:text-gray-100 text-[11px] md:text-sm truncate px-0.5">{item.name}</h4>
+                                        <p className="text-blue-600 dark:text-blue-400 font-black text-sm md:text-base">${item.price.toFixed(2)}</p>
                                     </div>
                                     {/* Tap ripple effect */}
-                                    <div className="absolute inset-0 bg-blue-500/0 group-active:bg-blue-500/10 rounded-2xl md:rounded-3xl transition-colors"></div>
+                                    <div className="absolute inset-0 bg-blue-500/0 group-active:bg-blue-500/10 rounded-xl md:rounded-3xl transition-colors"></div>
                                 </button>
                             ))}
                         </div>
@@ -285,36 +284,36 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                                 </div>
                             ) : (
                                 cartItems.map((item, idx) => (
-                                    <div key={idx} className="animate-slide-up bg-white dark:bg-dark-900 p-3 rounded-2xl flex items-center gap-3 shadow-sm border border-gray-50 dark:border-dark-700">
+                                    <div key={idx} className="animate-slide-up bg-white dark:bg-dark-900 p-2.5 md:p-3 rounded-xl md:rounded-2xl flex items-center gap-2 md:gap-3 shadow-sm border border-gray-50 dark:border-dark-700">
                                         <div className="flex-1 min-w-0">
-                                            <h5 className="font-bold text-sm text-gray-800 dark:text-gray-100 truncate">{item.name}</h5>
-                                            <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-tighter">${item.price?.toFixed(2)} / UNIDAD</p>
+                                            <h5 className="font-bold text-xs md:text-sm text-gray-800 dark:text-gray-100 truncate">{item.name}</h5>
+                                            <p className="text-[9px] md:text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-tighter">${item.price?.toFixed(2)} c/u</p>
                                         </div>
                                         <div className="flex items-center bg-gray-50 dark:bg-dark-800 rounded-xl p-0.5">
                                             <button 
                                                 onClick={() => updateQuantity(idx, -1)}
                                                 data-testid={`btn-minus-${idx}`}
-                                                className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-red-500 disabled:opacity-30"
+                                                className="w-9 h-9 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-red-500 active:bg-red-50 dark:active:bg-red-950/20 rounded-lg disabled:opacity-30 transition-colors"
                                                 disabled={item.prepared}
                                             >
-                                                <MinusIcon className="w-3 h-3" />
+                                                <MinusIcon className="w-4 h-4 md:w-3 md:h-3" />
                                             </button>
-                                            <span className="w-6 text-center text-xs font-black">{item.quantity}</span>
+                                            <span className="w-7 text-center text-sm md:text-xs font-black">{item.quantity}</span>
                                             <button 
                                                 onClick={() => updateQuantity(idx, 1)}
                                                 data-testid={`btn-plus-${idx}`}
-                                                className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-blue-500 disabled:opacity-30"
+                                                className="w-9 h-9 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 active:bg-blue-50 dark:active:bg-blue-950/20 rounded-lg disabled:opacity-30 transition-colors"
                                                 disabled={item.prepared}
                                             >
-                                                <PlusIcon className="w-3 h-3" />
+                                                <PlusIcon className="w-4 h-4 md:w-3 md:h-3" />
                                             </button>
                                         </div>
-                                        <div className="w-12 text-right">
+                                        <div className="w-14 md:w-12 text-right">
                                             <p className="font-black text-sm text-gray-900 dark:text-white">${((item.price || 0) * item.quantity).toFixed(2)}</p>
                                         </div>
                                         <button 
                                             onClick={() => removeItem(idx)}
-                                            className="text-gray-300 hover:text-red-500 transition-colors disabled:opacity-10"
+                                            className="w-9 h-9 md:w-auto md:h-auto flex items-center justify-center text-gray-300 hover:text-red-500 active:bg-red-50 dark:active:bg-red-950/20 rounded-lg transition-colors disabled:opacity-10"
                                             disabled={item.prepared}
                                         >
                                             <TrashIcon className="w-4 h-4" />
@@ -325,33 +324,29 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                         </div>
 
                         {/* Footer / Summary */}
-                        <div className="p-6 bg-white dark:bg-dark-900 border-t dark:border-dark-700 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
-                            <div className="flex flex-col gap-1 mb-6">
-                                <div className="flex justify-between items-center text-gray-400 dark:text-gray-500 font-bold text-xs uppercase tracking-widest">
-                                    <span>Subtotal estimado</span>
-                                    <span>${(total / 1.15).toFixed(2)}</span>
+                        <div className="p-4 md:p-6 bg-white dark:bg-dark-900 border-t dark:border-dark-700 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
+                            <div className="flex justify-between items-end mb-3 md:mb-6">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Subtotal: ${(total / 1.15).toFixed(2)}</span>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">IVA 15%: ${(total - (total / 1.15)).toFixed(2)}</span>
                                 </div>
-                                <div className="flex justify-between items-center text-gray-400 dark:text-gray-500 font-bold text-xs uppercase tracking-widest">
-                                    <span>IVA (15%)</span>
-                                    <span>${(total - (total / 1.15)).toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between items-end mt-2">
-                                    <span className="text-sm font-black text-gray-900 dark:text-white">TOTAL FINAL</span>
-                                    <span className="text-4xl font-black text-blue-600 dark:text-blue-400 tracking-tighter">${total.toFixed(2)}</span>
+                                <div className="text-right">
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest block">Total</span>
+                                    <span className="text-3xl md:text-4xl font-black text-blue-600 dark:text-blue-400 tracking-tighter">${total.toFixed(2)}</span>
                                 </div>
                             </div>
                             <button 
                                 onClick={handleConfirm}
                                 data-testid="confirm-order-btn"
                                 disabled={isSaving || cartItems.length === 0}
-                                className="w-full py-4 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white rounded-3xl font-black text-lg shadow-xl shadow-blue-500/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-3"
+                                className="w-full py-3.5 md:py-4 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white rounded-2xl md:rounded-3xl font-black text-base md:text-lg shadow-xl shadow-blue-500/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-3"
                             >
                                 {isSaving ? (
                                     <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
                                 ) : (
                                     <>
-                                        {initialOrder ? <ClipboardListIcon className="w-6 h-6" /> : <PlusIcon className="w-6 h-6" />}
-                                        {initialOrder ? 'ACTUALIZAR PEDIDO' : 'CONFIRMAR PEDIDO'}
+                                        {initialOrder ? <ClipboardListIcon className="w-5 h-5" /> : <PlusIcon className="w-5 h-5" />}
+                                        {initialOrder ? 'ACTUALIZAR' : 'CONFIRMAR PEDIDO'}
                                     </>
                                 )}
                             </button>
@@ -360,39 +355,30 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                 </div>
             </div>
 
-            {/* Mobile Feedback & Floating Button */}
+            {/* Mobile Feedback & Floating Cart Button */}
             {!showTicketMobile && cartItems.length > 0 && (
-                <div className="md:hidden fixed bottom-24 left-4 right-4 z-[999] flex flex-col gap-3">
+                <div className="md:hidden fixed bottom-20 left-3 right-3 z-[999] flex flex-col items-center gap-2">
                     {/* Last Item Mini-Toast */}
                     {lastAddedFeedback && (
-                        <div className="bg-green-500 text-white py-2 px-4 rounded-2xl text-xs font-bold self-center shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-300 flex items-center gap-2">
-                            <PlusIcon className="w-3 h-3" />
-                            AÑADIDO: {lastAddedFeedback}
+                        <div className="bg-green-500 text-white py-1.5 px-3 rounded-xl text-[10px] font-bold shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-300 flex items-center gap-1.5">
+                            ✓ {lastAddedFeedback}
                         </div>
                     )}
                     
                     <button 
                         onClick={() => setShowTicketMobile(true)}
-                        className="w-full bg-blue-600 text-white rounded-[2rem] py-4 flex items-center justify-between px-8 shadow-2xl shadow-blue-500/40 font-black border-2 border-white/10"
+                        className="w-full bg-blue-600 text-white rounded-2xl py-3 flex items-center justify-between px-5 shadow-2xl shadow-blue-500/40 font-black border border-white/10 active:scale-[0.98] transition-transform"
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="bg-white/20 w-10 h-10 rounded-2xl flex items-center justify-center">
-                                <ClipboardListIcon className="w-6 h-6" />
+                        <div className="flex items-center gap-2.5">
+                            <div className="bg-white/20 w-9 h-9 rounded-xl flex items-center justify-center relative">
+                                <ClipboardListIcon className="w-5 h-5" />
+                                <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow">
+                                    {cartItems.reduce((s, i) => s + i.quantity, 0)}
+                                </span>
                             </div>
-                            <div className="flex flex-col items-start leading-tight">
-                                <span className="text-[10px] opacity-70 uppercase tracking-tighter">Mi Pedido</span>
-                                <span>VER TICKET</span>
-                            </div>
+                            <span className="text-sm">VER TICKET</span>
                         </div>
-                        <div className="flex items-center gap-4">
-                            <div className="text-right leading-tight">
-                                <p className="text-[10px] opacity-70">{cartItems.reduce((s, i) => s + i.quantity, 0)} PRODUCTOS</p>
-                                <p className="text-xl tracking-tighter">${total.toFixed(2)}</p>
-                            </div>
-                            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
-                                <ChevronLeftIcon className="w-5 h-5 rotate-180" />
-                            </div>
-                        </div>
+                        <span className="text-lg tracking-tight">${total.toFixed(2)}</span>
                     </button>
                 </div>
             )}

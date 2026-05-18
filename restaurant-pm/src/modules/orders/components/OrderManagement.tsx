@@ -442,86 +442,87 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
     return (
         <div className="flex flex-col h-full">
-            {/* Common Header / Selector */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-6">
-                <div className="flex flex-col">
-                    <h1 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Operaciones</h1>
-                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-                        CENTRAL DE CONTROL RESTAURANTE
-                    </p>
+            {/* Common Header / Selector — hidden on mobile in POS mode */}
+            <div className={`flex flex-col gap-3 mb-4 md:mb-8 ${viewMode === 'pos' ? 'hidden md:flex' : ''}`}>
+                {/* Row 1: Title + New Order button */}
+                <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                        <h1 className="text-xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Operaciones</h1>
+                        <p className="text-[9px] md:text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                            <span className="w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                            CONTROL RESTAURANTE
+                        </p>
+                    </div>
+
+                    {viewMode === 'dashboard' && (
+                        <button
+                            onClick={() => handleOpenModal(null)}
+                            className="flex items-center justify-center bg-blue-600 text-white px-4 md:px-8 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/25 active:scale-95 group"
+                        >
+                            <PlusIcon className="w-4 h-4 md:mr-2 group-hover:rotate-90 transition-transform" />
+                            <span className="hidden sm:inline">NUEVO PEDIDO</span>
+                        </button>
+                    )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row lg:items-center gap-4 w-full sm:w-auto">
-                    <div className="flex bg-gray-100 dark:bg-dark-800 p-1.5 rounded-2xl shadow-inner border border-gray-200 dark:border-dark-700 w-full sm:w-auto">
+                {/* Row 2: View mode tabs + filter tabs */}
+                <div className="flex flex-wrap items-center gap-2 md:gap-4">
+                    <div className="flex bg-gray-100 dark:bg-dark-800 p-1 rounded-xl shadow-inner border border-gray-200 dark:border-dark-700">
                         <button
                             onClick={() => { setViewMode('dashboard'); setEditingOrder(null); }}
-                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'dashboard' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                            className={`flex items-center justify-center gap-1.5 px-3 md:px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'dashboard' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
                         >
                             <LayoutIcon className="w-3.5 h-3.5" />
                             <span>Tablero</span>
                         </button>
                         <button
                             onClick={() => setViewMode('pos')}
-                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'pos' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                            className={`flex items-center justify-center gap-1.5 px-3 md:px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'pos' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
                         >
                             <MonitorIcon className="w-3.5 h-3.5" />
-                            <span>Sistema POS</span>
+                            <span>POS</span>
                         </button>
                     </div>
 
                     {viewMode === 'dashboard' && (
-                        <>
-                            <div className="hidden lg:block h-8 w-[1px] bg-gray-200 dark:bg-dark-700 mx-1"></div>
-                            <div className="flex bg-gray-100 dark:bg-dark-800 p-1.5 rounded-2xl shadow-inner border border-gray-200 dark:border-dark-700 w-full sm:w-auto">
-                                <button
-                                    onClick={() => setActiveTab('active')}
-                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'active' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-                                >
-                                    <ClockIcon className="w-3.5 h-3.5" />
-                                    <span>En Curso</span>
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('history')}
-                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-                                >
-                                    <HistoryIcon className="w-3.5 h-3.5" />
-                                    <span>Historial</span>
-                                </button>
-                            </div>
-                        </>
+                        <div className="flex bg-gray-100 dark:bg-dark-800 p-1 rounded-xl shadow-inner border border-gray-200 dark:border-dark-700">
+                            <button
+                                onClick={() => setActiveTab('active')}
+                                className={`flex items-center justify-center gap-1.5 px-3 md:px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'active' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                            >
+                                <ClockIcon className="w-3.5 h-3.5" />
+                                <span>En Curso</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('history')}
+                                className={`flex items-center justify-center gap-1.5 px-3 md:px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg shadow-blue-500/10 ring-1 ring-black/5' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                            >
+                                <HistoryIcon className="w-3.5 h-3.5" />
+                                <span>Historial</span>
+                            </button>
+                        </div>
                     )}
                 </div>
 
                 {viewMode === 'dashboard' && activeTab === 'history' && (
-                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:flex-1 lg:max-w-xl">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full">
                         <div className="relative flex-1">
-                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                             <input
                                 type="text"
                                 placeholder="Buscar cliente o # pedido..."
                                 value={historySearch}
                                 onChange={e => setHistorySearch(e.target.value)}
-                                className="w-full rounded-2xl border border-gray-200 bg-gray-50 pl-11 pr-4 py-3 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:border-gray-700 dark:bg-dark-800 dark:text-white"
+                                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 py-2.5 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:border-gray-700 dark:bg-dark-800 dark:text-white"
                             />
                         </div>
                         <input
                             type="date"
                             value={historyDate}
                             onChange={e => setHistoryDate(e.target.value)}
-                            className="w-full sm:w-auto rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:border-gray-700 dark:bg-dark-800 dark:text-white"
+                            className="w-full sm:w-auto rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:border-gray-700 dark:bg-dark-800 dark:text-white"
                         />
                     </div>
-                )}
-
-                {viewMode === 'dashboard' && (
-                    <button
-                        onClick={() => handleOpenModal(null)}
-                        className="w-full sm:w-auto flex items-center justify-center bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/25 active:scale-95 group"
-                    >
-                        <PlusIcon className="w-4 h-4 mr-2 group-hover:rotate-90 transition-transform" />
-                        NUEVO PEDIDO
-                    </button>
                 )}
             </div>
 
@@ -591,8 +592,8 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                         onGoToHistory={handleGoToHistory}
                     />
 
-                    {/* Billing Modal Integration */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-8">
+                    {/* Order Cards Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 mt-2 md:mt-8">
                         {filteredOrders.length === 0 ? (
                             <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
                                 {activeTab === 'active' ? 'No hay pedidos en curso.' : 'No hay historial de pedidos completados.'}
