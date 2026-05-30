@@ -16,6 +16,8 @@ interface AuthContextType {
     login: (username: string, password: string) => Promise<boolean>;
     logout: () => Promise<void>;
     isLoading: boolean;
+    /** Actualiza el rol del usuario actual en tiempo real */
+    updateCurrentUserRole: (role: Role) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -90,13 +92,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
     };
 
+    /**
+     * Actualiza el rol del usuario actual en tiempo real
+     * Útil cuando se modifican permisos de un rol desde RRHH
+     */
+    const updateCurrentUserRole = (updatedRole: Role) => {
+        if (currentUser && currentUser.role?.id === updatedRole.id) {
+            setCurrentUser({
+                ...currentUser,
+                role: updatedRole
+            });
+            logger.info('Current user role updated in real-time', { roleId: updatedRole.id });
+        }
+    };
+
     // Restaurar sesión al montar
     useEffect(() => {
         restoreSession();
     }, []);
 
     return (
-        <AuthContext.Provider value={{ currentUser, token, login, logout, isLoading }}>
+        <AuthContext.Provider value={{ currentUser, token, login, logout, isLoading, updateCurrentUserRole }}>
             {children}
         </AuthContext.Provider>
     );

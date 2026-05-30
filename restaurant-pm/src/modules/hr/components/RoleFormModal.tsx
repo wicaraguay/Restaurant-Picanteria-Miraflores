@@ -42,9 +42,14 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, o
         }
 
         const roleToSave: any = {
-            name: formData.name.trim(),
             permissions: formData.permissions || {},
         };
+
+        // Solo enviar el nombre si es un rol nuevo O si el nombre cambió
+        // Esto evita el error "Cannot change name of system role" para roles del sistema
+        if (!isEditing || (role && formData.name?.trim() !== role.name)) {
+            roleToSave.name = formData.name.trim();
+        }
 
         if (isEditing && role?.id) {
             roleToSave.id = role.id;

@@ -11,6 +11,7 @@ import { api } from '../../../api';
 import { PlusIcon, EditIcon, TrashIcon, UsersIcon, ShieldCheckIcon } from '../../../components/ui/Icons';
 import { toast } from '../../../components/ui/AlertProvider';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
+import { useAuth } from '../../auth/contexts/AuthContext';
 
 // Componentes locales y globales
 import Card from '../../../components/ui/Card';
@@ -26,12 +27,13 @@ interface HRManagementProps {
 }
 
 const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, roles, setRoles }) => {
+    const { updateCurrentUserRole } = useAuth();
     const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
     const [editingRole, setEditingRole] = useState<Role | null>(null);
     const [loading, setLoading] = useState(false);
-    
+
     // Estados para Modales de Confirmación
     const [confirmDeleteEmployee, setConfirmDeleteEmployee] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
     const [confirmDeleteRole, setConfirmDeleteRole] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
@@ -103,6 +105,8 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
             if (isEditing) {
                 const updated = await api.roles.update(roleToSave.id, roleToSave);
                 setRoles(prev => prev.map(r => r.id === updated.id ? updated : r));
+                // Actualizar el rol del usuario actual en tiempo real si es el mismo rol
+                updateCurrentUserRole(updated);
                 toast.success('Rol actualizado correctamente', 'Éxito');
             } else {
                 const created = await api.roles.create(roleToSave);
