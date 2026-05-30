@@ -6,6 +6,7 @@ import { PDFService } from '../../infrastructure/services/PDFService';
 import { IEmailService } from '../interfaces/IEmailService';
 import { CreditNote as BillingCreditNote } from '../../domain/billing/creditNote';
 import { BillingService } from '../services/BillingService';
+import { logger } from '../../infrastructure/utils/Logger';
 
 export class CheckCreditNoteStatus {
     constructor(
@@ -19,7 +20,7 @@ export class CheckCreditNoteStatus {
     ) { }
 
     async execute(accessKey: string): Promise<any> {
-        console.log(`[CheckCreditNoteStatus] Checking status for access key: ${accessKey}`);
+        logger.debug(`[CheckCreditNoteStatus] Checking status for access key: ${accessKey}`);
 
         try {
             // 1. Find credit note in database
@@ -38,15 +39,15 @@ export class CheckCreditNoteStatus {
 
             if (lastRetry !== todayISO) {
                 // New day! Reset counter
-                console.log(`[CheckCreditNoteStatus] New day detected (${lastRetry} -> ${todayISO}). Resetting retry counter.`);
+                logger.info(`[CheckCreditNoteStatus] New day detected (${lastRetry} -> ${todayISO}). Resetting retry counter.`);
                 newRetryCount = 1; // First attempt of the new day
                 shouldGenerateNewKey = true;
             } else {
                 newRetryCount++;
-                console.log(`[CheckCreditNoteStatus] Same day attempt. New retry count: ${newRetryCount}`);
+                logger.debug(`[CheckCreditNoteStatus] Same day attempt. New retry count: ${newRetryCount}`);
 
                 if (newRetryCount > 3) { // Changed from > 2 to > 3
-                    console.warn(`[CheckCreditNoteStatus] Daily limit (3) reached for ${creditNote.documentNumber}`);
+                    logger.warn(`[CheckCreditNoteStatus] Daily limit (3) reached for ${creditNote.documentNumber}`);
                     return {
                         success: false,
                         error: 'SRI_LIMIT_REACHED: Límite de 3 intentos diarios alcanzado para este comprobante (1 emisión + 2 reintentos). Por favor, intente el día de mañana con una nueva clave de acceso automática.'
@@ -59,7 +60,7 @@ export class CheckCreditNoteStatus {
             let authResult;
 
             if (shouldGenerateNewKey) {
-                console.log(`[CheckCreditNoteStatus] REGENERATING ACCESS KEY for ${creditNote.documentNumber} due to date change.`);
+                logger.info(`[CheckCreditNoteStatus] REGENERATING ACCESS KEY for ${creditNote.documentNumber} due to date change.`);
 
                 // Get config and original bill for regeneration
                 const config = await this.configRepository.get();
@@ -80,11 +81,11 @@ export class CheckCreditNoteStatus {
                 const newAccessKey = billingNC.info.claveAcceso!;
                 const signedXml = await this.sriService.signXML(xml);
 
-                console.log(`[CheckCreditNoteStatus] New Access Key generated: ${newAccessKey}`);
+                logger.info(`[CheckCreditNoteStatus] New Access Key generated: ${newAccessKey}`);
 
                 // Send to SRI
                 const sendResult = await this.sriService.sendCreditNoteToSRI(signedXml, isProd);
-                console.log(`[CheckCreditNoteStatus] Resend result: ${sendResult.estado}`);
+                logger.info(`[CheckCreditNoteStatus] Resend result: ${sendResult.estado}`);
 
                 // Wait for authorization
                 authResult = await this.sriService.waitForAuthorization(newAccessKey, isProd);
@@ -110,7 +111,7 @@ export class CheckCreditNoteStatus {
 
                 if (authResult.estado === 'EN PROCESO' || authResult.estado === 'UNKNOWN' || !authResult.estado) {
                     // Try to resend if it was never received
-                    console.log(`[CheckCreditNoteStatus] Document not found or pending. Attempting a fresh send.`);
+                    logger.info(`[CheckCreditNoteStatus] Document not found or pending. Attempting a fresh send.`);
 
                     const config = await this.configRepository.get();
                     const originalBill = await this.billRepository.findById(creditNote.billId);
@@ -135,7 +136,7 @@ export class CheckCreditNoteStatus {
                 });
             }
 
-            console.log(`[CheckCreditNoteStatus] Final state: ${authResult.estado}`);
+            logger.debug(`[CheckCreditNoteStatus] Final state: ${authResult.estado}`);
 
             // 4. If authorized, send email
             if (authResult.estado === 'AUTORIZADO') {
@@ -159,7 +160,7 @@ export class CheckCreditNoteStatus {
                             }
                         }
                     } catch (emailError) {
-                        console.error('[CheckCreditNoteStatus] Error sending email:', emailError);
+                        logger.error('[CheckCreditNoteStatus] Error sending email:', emailError);
                     }
                 }
 
@@ -183,7 +184,7 @@ export class CheckCreditNoteStatus {
             };
 
         } catch (error: any) {
-            console.error(`[CheckCreditNoteStatus] Error:`, error);
+            logger.error(`[CheckCreditNoteStatus] Error:`, error);
             throw error;
         }
     }

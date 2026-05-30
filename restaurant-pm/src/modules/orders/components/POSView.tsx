@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MenuItem } from '../../menu/types/menu.types';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
 import { SearchIcon, PlusIcon, MinusIcon, TrashIcon, ClipboardListIcon, ChevronLeftIcon } from '../../../components/ui/Icons';
+import { toast } from '../../../components/ui/AlertProvider';
 import '../styles/posStyles.css';
 
 interface POSViewProps {
@@ -78,11 +79,11 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
 
     const handleConfirm = async () => {
         if (!customerName.trim()) {
-            alert('Por favor ingrese el nombre del cliente o número de mesa');
+            toast.warning('Por favor ingrese el nombre del cliente o número de mesa', 'Campo Requerido');
             return;
         }
         if (cartItems.length === 0) {
-            alert('Agregue al menos un producto al pedido');
+            toast.warning('Agregue al menos un producto al pedido', 'Carrito Vacío');
             return;
         }
 

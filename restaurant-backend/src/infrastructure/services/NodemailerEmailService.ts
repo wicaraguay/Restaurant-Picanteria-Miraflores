@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import { IEmailService } from '../../application/interfaces/IEmailService';
 import { Invoice } from '../../domain/billing/invoice';
 import { CreditNote } from '../../domain/billing/creditNote';
+import { logger } from '../utils/Logger';
 
 export class NodemailerEmailService implements IEmailService {
     private transporter: nodemailer.Transporter;
@@ -20,12 +21,12 @@ export class NodemailerEmailService implements IEmailService {
 
     public async sendInvoiceEmail(to: string, invoice: Invoice, pdfBuffer: Buffer, xmlContent?: string): Promise<void> {
         if (!to) {
-            console.warn('[EmailService] No email provided for customer. Skipping email.');
+            logger.warn('[EmailService] No email provided for customer. Skipping email.');
             return;
         }
 
         try {
-            console.log(`[EmailService] Attempting to send invoice email to ${to}`);
+            logger.info(`[EmailService] Attempting to send invoice email to ${to}`);
 
             const attachments: any[] = [
                 {
@@ -36,14 +37,14 @@ export class NodemailerEmailService implements IEmailService {
             ];
 
             if (xmlContent) {
-                console.log('[EmailService] XML Content provided, adding attachment. Length:', xmlContent.length);
+                logger.info('[EmailService] XML Content provided, adding attachment. Length:', xmlContent.length);
                 attachments.push({
                     filename: `Factura_${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}.xml`,
                     content: xmlContent,
                     contentType: 'application/xml'
                 });
             } else {
-                console.warn('[EmailService] No XML Content provided for email attachment.');
+                logger.warn('[EmailService] No XML Content provided for email attachment.');
             }
 
             const mailOptions = {
@@ -56,21 +57,21 @@ export class NodemailerEmailService implements IEmailService {
             };
 
             const info = await this.transporter.sendMail(mailOptions);
-            console.log(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
+            logger.info(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
 
         } catch (error) {
-            console.error('[EmailService] Error sending email:', error);
+            logger.error('[EmailService] Error sending email:', error);
         }
     }
 
     public async sendCreditNoteEmail(to: string, creditNote: CreditNote, pdfBuffer: Buffer, xmlContent?: string): Promise<void> {
         if (!to) {
-            console.warn('[EmailService] No email provided for customer. Skipping email.');
+            logger.warn('[EmailService] No email provided for customer. Skipping email.');
             return;
         }
 
         try {
-            console.log(`[EmailService] Attempting to send credit note email to ${to}`);
+            logger.info(`[EmailService] Attempting to send credit note email to ${to}`);
 
             const attachments: any[] = [
                 {
@@ -98,10 +99,10 @@ export class NodemailerEmailService implements IEmailService {
             };
 
             const info = await this.transporter.sendMail(mailOptions);
-            console.log(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
+            logger.info(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
 
         } catch (error) {
-            console.error('[EmailService] Error sending credit note email:', error);
+            logger.error('[EmailService] Error sending credit note email:', error);
         }
     }
 
@@ -112,7 +113,7 @@ export class NodemailerEmailService implements IEmailService {
         // We prioritize a public HTTP URL for better visibility in the email body.
         const publicLogo = process.env.BUSINESS_LOGO_URL;
         if (logoUrl.startsWith('data:') && publicLogo) {
-            console.log('[NodemailerEmailService] Base64 logo detected, using public BUSINESS_LOGO_URL for email content.');
+            logger.info('[NodemailerEmailService] Base64 logo detected, using public BUSINESS_LOGO_URL for email content.');
             logoUrl = publicLogo;
         }
 

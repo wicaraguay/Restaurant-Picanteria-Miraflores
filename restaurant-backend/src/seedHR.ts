@@ -29,7 +29,8 @@ const seedRoles = async () => {
                 kitchen: true,
                 hr: true,
                 billing: true,
-                settings: true
+                settings: true,
+                whatsapp: true
             },
             isSystem: true
         },

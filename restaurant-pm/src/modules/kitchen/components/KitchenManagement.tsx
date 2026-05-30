@@ -277,7 +277,7 @@ const KitchenManagement: React.FC<KitchenManagementProps> = ({ orders, setOrders
         } catch (error) {
             console.error('Failed to update estimate:', error);
             setOrders(originalOrders);
-            alert('Error al guardar la selección. Reintentando...');
+            toast.error('Error al guardar la selección. Reintentando...', 'ERROR');
         }
     };
 

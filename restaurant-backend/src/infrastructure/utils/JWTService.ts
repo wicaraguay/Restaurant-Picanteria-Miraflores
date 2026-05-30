@@ -12,19 +12,33 @@ import { logger } from './Logger';
 // Secret key para firmar tokens
 function getJwtSecret(): string {
     const secret = process.env.JWT_SECRET;
-    if (secret) return secret;
 
+    // En producción: JWT_SECRET es OBLIGATORIO y debe tener mínimo 32 caracteres
     if (process.env.NODE_ENV === 'production') {
-        throw new Error('FATAL: JWT_SECRET environment variable is required in production');
+        if (!secret) {
+            throw new Error('FATAL: JWT_SECRET environment variable is required in production');
+        }
+        if (secret.length < 32) {
+            throw new Error('FATAL: JWT_SECRET must be at least 32 characters long in production');
+        }
+        return secret;
     }
 
-    // Solo en desarrollo: usar clave por defecto (NO SEGURO)
+    // En desarrollo: permitir secret configurado o generar advertencia
+    if (secret) {
+        if (secret.length < 32) {
+            logger.warn('⚠️ JWT_SECRET is too short (min 32 chars) - Consider using a stronger secret');
+        }
+        return secret;
+    }
+
+    // Solo en desarrollo sin secret: usar clave por defecto (NO SEGURO)
     logger.warn('⚠️ Using default JWT_SECRET - NOT SAFE FOR PRODUCTION');
-    return 'dev-secret-key-not-for-production';
+    return 'dev-secret-key-not-for-production-only';
 }
 
 const JWT_SECRET = getJwtSecret();
-const JWT_EXPIRATION = process.env.JWT_EXPIRATION || '24h';
+const JWT_EXPIRATION = process.env.JWT_EXPIRATION || '8h'; // Reducido de 24h a 8h por seguridad
 
 export interface JWTPayload {
     userId: string;

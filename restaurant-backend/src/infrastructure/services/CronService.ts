@@ -28,7 +28,7 @@ export class CronService {
      * Initializes all cron jobs
      */
     public init(): void {
-        console.log('DEBUG: CronService.init() called');
+        logger.debug('DEBUG: CronService.init() called');
         logger.info('[CronService] Initializing Cron Jobs...');
 
 

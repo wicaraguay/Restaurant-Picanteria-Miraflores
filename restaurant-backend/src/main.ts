@@ -28,8 +28,11 @@ import employeeRoutes from './infrastructure/web/routes/employeeRoutes';
 import roleRoutes from './infrastructure/web/routes/roleRoutes';
 import creditNoteRoutes from './infrastructure/web/routes/creditNoteRoutes';
 import dashboardRoutes from './infrastructure/web/routes/dashboard.routes';
+
 import { cacheService } from './infrastructure/utils/CacheService';
 import { container } from './infrastructure/di/DIContainer';
+import { getWhatsAppChatbot, getWhatsAppClient, initWhatsAppClient } from './infrastructure/services/whatsapp';
+import { OrderStatus } from './domain/entities/Order';
 
 
 // dotenv configured at top level
@@ -77,20 +80,20 @@ app.use(cors({
 }));
 app.use(helmet());
 app.use(compression()); // Enable gzip compression for responses
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Rate limiting to prevent abuse
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 10000, // Aumentado significativamente para evitar bloqueos por polling (5s/10s)
+    windowMs: 15 * 60 * 1000,
+    max: parseInt(process.env.RATE_LIMIT_MAX || '500', 10), // Configurable, default 500 requests/15min
     standardHeaders: true,
     legacyHeaders: false,
     handler: (req, res) => {
         logger.warn('Rate limit exceeded', { ip: req.ip, path: req.path });
         res.status(429).json({
             status: 'error',
-            message: 'Límite de peticiones alcanzado (10,000 / 15min). Por favor espera un momento.',
+            message: 'Límite de peticiones alcanzado. Por favor espera un momento.',
             code: 'TOO_MANY_REQUESTS'
         });
     }
@@ -107,6 +110,7 @@ app.use((req, res, next) => {
 });
 
 import billingRoutes from './infrastructure/web/routes/billingRoutes';
+import whatsappApiRoutes from './infrastructure/web/routes/whatsappApiRoutes';
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -120,6 +124,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/credit-notes', creditNoteRoutes); // Notas de crédito SRI
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/whatsapp', whatsappApiRoutes); // WhatsApp API para frontend
 
 app.get('/health', (req, res) => {
     const cacheStats = cacheService.getStats();
@@ -154,7 +159,62 @@ const startServer = async () => {
 
         // Start background tasks (Cron Jobs)
         container.getCronService().init();
+        // Initialize WhatsApp Client from database config
+        // WhatsApp client se inicia bajo demanda desde el panel
 
+        // Initialize WhatsApp Chatbot with dynamic menu from database
+        const chatbot = getWhatsAppChatbot();
+        const whatsappClient = getWhatsAppClient();
+        chatbot.setMenuRepository(container.getMenuRepository());
+        chatbot.setOrderRepository(container.getOrderRepository());
+        await chatbot.loadMenuFromDatabase();
+
+        // Connect WhatsApp client messages to chatbot
+        whatsappClient.on('message', async (message: any) => {
+            try {
+                // Convert whatsapp-web.js message to our format
+                const incomingMessage = {
+                    from: message.from.replace('@c.us', ''),
+                    messageId: message.id._serialized || message.id.id,
+                    type: message.type === 'chat' ? 'text' : message.type,
+                    text: message.body,
+                    buttonPayload: message.selectedButtonId,
+                    listReplyId: message.selectedRowId,
+                    timestamp: message.timestamp
+                };
+
+                logger.info('[WhatsApp] Message received, forwarding to chatbot', {
+                    from: incomingMessage.from,
+                    text: incomingMessage.text?.substring(0, 30)
+                });
+
+                await chatbot.processMessage(incomingMessage as any);
+            } catch (error) {
+                logger.error('[WhatsApp] Error processing message', { error });
+            }
+        });
+
+        // Connect chatbot to order creation system (retorna el ID del pedido)
+        const createOrderUseCase = container.getCreateOrderUseCase();
+        chatbot.setOrderCallback(async (orderData): Promise<string> => {
+            const addressInfo = orderData.customerAddress ? ` (${orderData.customerAddress})` : '';
+            const customerNameWithInfo = `${orderData.customerName} [WhatsApp: ${orderData.customerPhone}]${addressInfo}`;
+
+            const order = await createOrderUseCase.execute({
+                customerName: customerNameWithInfo,
+                items: orderData.items.map((item: any) => ({
+                    name: item.name,
+                    quantity: item.quantity,
+                    price: item.price
+                })),
+                type: orderData.type as 'En Local' | 'Delivery' | 'Para Llevar',
+                status: OrderStatus.New
+            });
+            logger.info('WhatsApp order created', { orderId: order.id, customer: orderData.customerName, items: orderData.items.length });
+            return order.id;
+        });
+
+        logger.info('📱 WhatsApp Chatbot initialized with dynamic menu');
 
         // Start listening
         app.listen(PORT, () => {

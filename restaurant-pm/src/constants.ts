@@ -6,7 +6,7 @@
  */
 
 import type { ViewType } from './types';
-import { HomeIcon, UsersIcon, ClipboardListIcon, ChefHatIcon, BriefcaseIcon, BookOpenIcon, SettingsIcon, FileTextIcon, BarChartIcon } from './components/ui/Icons';
+import { HomeIcon, UsersIcon, ClipboardListIcon, ChefHatIcon, BriefcaseIcon, BookOpenIcon, SettingsIcon, FileTextIcon, BarChartIcon, WhatsAppIcon } from './components/ui/Icons';
 
 /**
  * Items de navegación de la aplicación
@@ -22,6 +22,7 @@ export const NAV_ITEMS = [
   { id: 'kitchen', label: 'Gestión de Cocina', shortLabel: 'Cocina', icon: ChefHatIcon, view: 'kitchen' as ViewType },
   { id: 'hr', label: 'Recursos Humanos', shortLabel: 'RRHH', icon: BriefcaseIcon, view: 'hr' as ViewType },
   { id: 'billing', label: 'Historial de Facturas', shortLabel: 'Historial', icon: FileTextIcon, view: 'billing' as ViewType },
+  { id: 'whatsapp', label: 'WhatsApp Business', shortLabel: 'WhatsApp', icon: WhatsAppIcon, view: 'whatsapp' as ViewType },
   { id: 'settings', label: 'Configuración', shortLabel: 'Ajustes', icon: SettingsIcon, view: 'settings' as ViewType },
 ];
 

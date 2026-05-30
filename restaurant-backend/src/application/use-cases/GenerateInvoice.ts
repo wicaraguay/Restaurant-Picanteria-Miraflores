@@ -11,6 +11,7 @@ import { ValidationError } from '../../domain/errors/CustomErrors';
 
 import { BillingService } from '../services/BillingService';
 import { OrderStatus } from '../../domain/entities/Order';
+import { logger } from '../../infrastructure/utils/Logger';
 
 export class GenerateInvoice {
     constructor(
@@ -53,8 +54,8 @@ export class GenerateInvoice {
         const config = await this.configRepository.get();
         const info = config || {} as any; // Fallback handled in logic or entity
 
-        console.log('[GenerateInvoice] Config from DB:', !!config, 'Logo field:', info.logo ? 'EXISTS' : 'MISSING', 'Fiscal Logo field:', info.fiscalLogo ? 'EXISTS' : 'MISSING');
-        if (info.logo) console.log('[GenerateInvoice] Logo starts with:', info.logo.substring(0, 30));
+        logger.info(`[GenerateInvoice] Config from DB: ${!!config}, Logo field: ${info.logo ? 'EXISTS' : 'MISSING'}, Fiscal Logo field: ${info.fiscalLogo ? 'EXISTS' : 'MISSING'}`);
+        if (info.logo) logger.info(`[GenerateInvoice] Logo starts with: ${info.logo.substring(0, 30)}`);
 
         // 3. Get Next Sequential (Atomic Operation) or Reuse existing one
         let secuencial: string;
@@ -75,13 +76,13 @@ export class GenerateInvoice {
             // Reuse existing sequential to avoid gaps (User Request)
             const parts = existingBill.documentNumber.split('-');
             secuencial = parts[parts.length - 1];
-            console.log(`[GenerateInvoice] Reusing existing sequential: ${secuencial} for bill ${params.id}`);
+            logger.info(`[GenerateInvoice] Reusing existing sequential: ${secuencial} for bill ${params.id}`);
         } else {
             // CRITICAL: This ensures each invoice has a unique sequential number
             // preventing duplicate access key errors from SRI
             const nextSequential = await this.configRepository.getNextSequential();
             secuencial = nextSequential.toString().padStart(9, '0');
-            console.log(`[GenerateInvoice] New sequential generated: ${secuencial}`);
+            logger.info(`[GenerateInvoice] New sequential generated: ${secuencial}`);
         }
 
         // 4. Build Invoice Object
@@ -200,12 +201,12 @@ export class GenerateInvoice {
             // Check for SEQUENCE REGISTERED Error explicitly
             const responseStr = JSON.stringify(result);
             if (responseStr.includes('ERROR SECUENCIAL REGISTRADO')) {
-                console.log('⚠️ Sequence Registered Error detected in GenerateInvoice. Auto-healing...');
+                logger.info('⚠️ Sequence Registered Error detected in GenerateInvoice. Auto-healing...');
 
                 // AUTO-HEAL: Increment Sequence and Retry locally
                 const nextSequential = await this.configRepository.getNextSequential(); // Get NEW next (since previous one failed)
                 const newSecuencial = nextSequential.toString().padStart(9, '0');
-                console.log(`[GenerateInvoice] Retrying with NEW Sequence: ${invoice.info.secuencial} -> ${newSecuencial}`);
+                logger.info(`[GenerateInvoice] Retrying with NEW Sequence: ${invoice.info.secuencial} -> ${newSecuencial}`);
 
                 // Update Invoice Object
                 invoice.info.secuencial = newSecuencial;
@@ -217,7 +218,7 @@ export class GenerateInvoice {
                 const retryResult = await this.sriService.sendToSRI(newSignedXml, isProd);
 
                 if (retryResult.estado === 'RECIBIDA') {
-                    console.log('✅ Auto-heal successful. Invoice Received. Authorizing...');
+                    logger.info('✅ Auto-heal successful. Invoice Received. Authorizing...');
                     // Authorize NEW Access Key
                     const retryAuth = await this.sriService.authorizeInvoice(invoice.info.claveAcceso!, isProd);
                     if (retryAuth && retryAuth.estado === 'AUTORIZADO') {
@@ -228,14 +229,14 @@ export class GenerateInvoice {
                         if (retryAuth) {
                             authResult = retryAuth;
                         } else {
-                            console.error('[GenerateInvoice] Auto-heal authorization returned NULL');
+                            logger.error('[GenerateInvoice] Auto-heal authorization returned NULL');
                             // Keep authResult null or set error
                             authResult = { estado: 'ERROR_AUTH_NULL', mensajes: ['Error interno al autorizar (Respuesta nula)'] };
                         }
                     }
                 } else {
                     // If still fails, bad luck.
-                    console.log('❌ Auto-heal failed.', retryResult);
+                    logger.info('❌ Auto-heal failed.', retryResult);
                     authResult = { ...result, mensajes: [...(result.mensajes || []), ...retryResult.mensajes] };
                 }
 
@@ -277,17 +278,17 @@ export class GenerateInvoice {
         // 11. Send Email
         // Skip email for Consumidor Final or invalid email addresses
         if (authResult?.estado === 'AUTORIZADO' && !isConsumidorFinal && isValidEmail) {
-            console.log(`[GenerateInvoice] Sending email to ${client.email}`);
+            logger.info(`[GenerateInvoice] Sending email to ${client.email}`);
             if (authResult.fechaAutorizacion) invoice.authorizationDate = authResult.fechaAutorizacion;
             const pdfBuffer = await this.pdfService.generateInvoicePDF(invoice);
             await this.emailService.sendInvoiceEmail(client.email, invoice, pdfBuffer, signedXml);
         } else {
             if (isConsumidorFinal) {
-                console.log('[GenerateInvoice] Skipping email - Consumidor Final detected');
+                logger.info('[GenerateInvoice] Skipping email - Consumidor Final detected');
             } else if (!isValidEmail) {
-                console.log('[GenerateInvoice] Skipping email - Invalid or generic email address');
+                logger.info('[GenerateInvoice] Skipping email - Invalid or generic email address');
             } else {
-                console.log('[GenerateInvoice] Skipping email - Invoice not authorized or no email provided');
+                logger.info('[GenerateInvoice] Skipping email - Invoice not authorized or no email provided');
             }
         }
 

@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import { Invoice } from '../../domain/billing/invoice';
 import { CreditNote } from '../../domain/billing/creditNote';
 import axios from 'axios';
+import { logger } from '../utils/Logger';
 
 export class PDFService {
     public async generateInvoicePDF(invoice: Invoice, format: 'A4' | 'ticket' = 'A4'): Promise<Buffer> {
@@ -31,7 +32,7 @@ export class PDFService {
 
                 doc.end();
             } catch (error) {
-                console.error('Error generating credit note PDF:', error);
+                logger.error('Error generating credit note PDF:', error);
                 reject(error);
             }
         });
@@ -60,7 +61,7 @@ export class PDFService {
                     currentLeftY += 130;
                 }
             } catch (error) {
-                console.error('[PDFService CreditNote] Failed to load logo:', error);
+                logger.error('[PDFService CreditNote] Failed to load logo:', error);
                 currentLeftY = topY + 10;
             }
         } else {
@@ -332,7 +333,7 @@ export class PDFService {
                 let y = 10;
 
                 // --- Logo ---
-                console.log('[PDFService Ticket] invoice.info.logoUrl:', invoice.info.logoUrl);
+                logger.debug('[PDFService Ticket] invoice.info.logoUrl:', invoice.info.logoUrl);
                 
                 if (invoice.info.logoUrl) {
                     try {
@@ -350,7 +351,7 @@ export class PDFService {
                             y += 105;
                         }
                     } catch (e) {
-                        console.error('[PDFService Ticket] Logo Error:', e);
+                        logger.error('[PDFService Ticket] Logo Error:', e);
                     }
                 }
 
@@ -500,7 +501,7 @@ export class PDFService {
 
                 doc.end();
             } catch (error) {
-                console.error('Error generating ticket PDF:', error);
+                logger.error('Error generating ticket PDF:', error);
                 reject(error);
             }
         });
@@ -514,7 +515,7 @@ export class PDFService {
         // --- Logo Section (Left) ---
         let currentLeftY = topY;
 
-        console.log('[PDFService A4] invoice.info.logoUrl:', invoice.info.logoUrl);
+        logger.debug('[PDFService A4] invoice.info.logoUrl:', invoice.info.logoUrl);
         
         if (invoice.info.logoUrl) {
             try {
@@ -532,7 +533,7 @@ export class PDFService {
                     currentLeftY += 130;
                 }
             } catch (error) {
-                console.error('[PDFService A4] Failed to load logo for PDF:', error);
+                logger.error('[PDFService A4] Failed to load logo for PDF:', error);
                 currentLeftY = topY + 10;
             }
         } else {

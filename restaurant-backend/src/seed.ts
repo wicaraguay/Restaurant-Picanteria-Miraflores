@@ -34,6 +34,21 @@ dotenv.config();
 
 const seedData = async () => {
     try {
+        // ⚠️ PROTECCIÓN: No ejecutar en producción sin confirmación explícita
+        if (process.env.NODE_ENV === 'production') {
+            if (process.env.SEED_FORCE_PRODUCTION !== 'I_UNDERSTAND_THIS_WILL_DELETE_ALL_DATA') {
+                console.error('❌ FATAL: Seed script cannot run in production!');
+                console.error('   This script DELETES ALL DATA before seeding.');
+                console.error('   If you REALLY need to run this in production, set:');
+                console.error('   SEED_FORCE_PRODUCTION=I_UNDERSTAND_THIS_WILL_DELETE_ALL_DATA');
+                process.exit(1);
+            }
+            console.warn('⚠️  WARNING: Running seed in PRODUCTION mode!');
+            console.warn('   All existing data will be DELETED.');
+            // Dar tiempo para cancelar
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+
         const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/restaurant-pm';
         console.log('🔄 Connecting to MongoDB...');
         console.log('📍 URI:', uri);
@@ -163,7 +178,7 @@ const seedData = async () => {
         const rolesData = [
             {
                 name: 'Administrador',
-                permissions: { dashboard: true, orders: true, customers: true, menu: true, kitchen: true, hr: true, billing: true, settings: true },
+                permissions: { dashboard: true, orders: true, customers: true, menu: true, kitchen: true, hr: true, billing: true, settings: true, whatsapp: true },
                 isSystem: true
             },
             {

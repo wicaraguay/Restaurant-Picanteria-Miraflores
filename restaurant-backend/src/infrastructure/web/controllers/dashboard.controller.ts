@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { DashboardStats } from '../../../application/use-cases/DashboardStats';
 import { MongoOrderRepository } from '../../../infrastructure/repositories/MongoOrderRepository';
+import { logger } from '../../utils/Logger';
 
 export class DashboardController {
 
@@ -15,15 +16,15 @@ export class DashboardController {
     getStats = async (req: Request, res: Response): Promise<void> => {
         try {
             const range = req.query.range as 'today' | 'week' | 'month' | 'year' || 'today';
-            console.log(`[DashboardController] Getting stats for range: ${range}`);
+            logger.debug(`[DashboardController] Getting stats for range: ${range}`);
             const stats = await this.dashboardStatsUseCase.execute(range);
-            console.log(`[DashboardController] Stats result:`, JSON.stringify(stats, null, 2));
+            logger.debug(`[DashboardController] Stats result:`, JSON.stringify(stats, null, 2));
             res.json({
                 success: true,
                 data: stats
             });
         } catch (error) {
-            console.error('Error getting dashboard stats:', error);
+            logger.error('Error getting dashboard stats:', error);
             res.status(500).json({ error: 'Internal Server Error' });
         }
     }

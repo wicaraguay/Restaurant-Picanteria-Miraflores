@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { ValidationError } from '../../domain/errors/CustomErrors';
 import { RestaurantConfig } from '../../domain/entities/RestaurantConfig';
 import { ICustomerRepository } from '../../domain/repositories/ICustomerRepository';
+import { logger } from '../../infrastructure/utils/Logger';
 
 export interface TaxDetail {
     codigo: string;
@@ -93,20 +94,20 @@ export class BillingService {
             const allSameRate = details.every(d => d.impuestos[0].tarifa === details[0].impuestos[0].tarifa);
 
             if (allSameRate && Math.abs(subtotalDifference) > 0 && Math.abs(subtotalDifference) < 0.10) {
-                console.log(`[BillingService] Applying penny adjustment: ${subtotalDifference > 0 ? '+' : ''}${subtotalDifference} to last item subtotal`);
-                
+                logger.debug(`[BillingService] Applying penny adjustment: ${subtotalDifference > 0 ? '+' : ''}${subtotalDifference} to last item subtotal`);
+
                 const lastItem = details[details.length - 1];
                 lastItem.precioTotalSinImpuesto = parseFloat((lastItem.precioTotalSinImpuesto + subtotalDifference).toFixed(2));
                 lastItem.precioUnitario = parseFloat((lastItem.precioTotalSinImpuesto / lastItem.cantidad).toFixed(6));
-                
+
                 // Adjust baseImponible and valor for the last item's tax
                 const lastItemTotal = items[items.length - 1].total || (items[items.length - 1].price * (items[items.length - 1].quantity || 1));
                 const newTaxValue = parseFloat((lastItemTotal - lastItem.precioTotalSinImpuesto).toFixed(2));
-                
+
                 lastItem.impuestos[0].baseImponible = lastItem.precioTotalSinImpuesto;
                 lastItem.impuestos[0].valor = newTaxValue;
 
-                console.log(`[BillingService] New Last Item: Sub=${lastItem.precioTotalSinImpuesto}, Tax=${newTaxValue}, Total=${(lastItem.precioTotalSinImpuesto + newTaxValue).toFixed(2)}`);
+                logger.debug(`[BillingService] New Last Item: Sub=${lastItem.precioTotalSinImpuesto}, Tax=${newTaxValue}, Total=${(lastItem.precioTotalSinImpuesto + newTaxValue).toFixed(2)}`);
             }
         }
 
@@ -251,7 +252,7 @@ export class BillingService {
         // Try to parse as ISO string or timestamp
         const date = new Date(dateStr);
         if (isNaN(date.getTime())) {
-            console.warn(`[BillingService] Invalid date format: ${dateStr}, using current date`);
+            logger.warn(`[BillingService] Invalid date format: ${dateStr}, using current date`);
             return new Date();
         }
 
@@ -289,10 +290,10 @@ export class BillingService {
      * Priority: fiscalLogo > logo > explicitly provided logoUrl > Environment Variable
      */
     public getLogoUrl(config: Partial<RestaurantConfig> | null, providedLogoUrl?: string): string {
-        console.log('[BillingService] Resolving logo. DB Logo:', config?.logo ? 'PRESENT' : 'MISSING', 'DB Fiscal:', config?.fiscalLogo ? 'PRESENT' : 'MISSING', 'Provided:', providedLogoUrl ? 'PRESENT' : 'MISSING');
+        logger.debug(`[BillingService] Resolving logo. DB Logo: ${config?.logo ? 'PRESENT' : 'MISSING'}, DB Fiscal: ${config?.fiscalLogo ? 'PRESENT' : 'MISSING'}, Provided: ${providedLogoUrl ? 'PRESENT' : 'MISSING'}`);
 
         const resolved = config?.logo || config?.fiscalLogo || providedLogoUrl || process.env.BUSINESS_LOGO_URL || '';
-        console.log('[BillingService] Resolved Logo URL (first 50 chars):', resolved.substring(0, 50));
+        logger.debug(`[BillingService] Resolved Logo URL (first 50 chars): ${resolved.substring(0, 50)}`);
         return resolved;
     }
 
@@ -310,10 +311,10 @@ export class BillingService {
     }, now: Date): Promise<{ status: string; id?: string }> {
         // Diagnostic log: which database are we using?
         const dbName = mongoose.connection.db?.databaseName || 'unknown';
-        console.log(`[BillingService] Attempting auto-learn on DB: ${dbName}`);
+        logger.debug(`[BillingService] Attempting auto-learn on DB: ${dbName}`);
 
         if (!this.customerRepository) {
-            console.warn('[BillingService] Cannot auto-learn: CustomerRepository not provided.');
+            logger.warn('[BillingService] Cannot auto-learn: CustomerRepository not provided.');
             return { status: 'no_repository' };
         }
 
@@ -332,8 +333,8 @@ export class BillingService {
         }
 
         try {
-            console.log(`[BillingService] Auto-learning check for: ${identification} (${client.name})`);
-            
+            logger.debug(`[BillingService] Auto-learning check for: ${identification} (${client.name})`);
+
             const existingCustomer = await this.customerRepository.findByIdentification(identification);
             
             if (existingCustomer) {
@@ -373,12 +374,12 @@ export class BillingService {
                     updates.phone = client.phone;
                 }
 
-                console.log(`[BillingService] Updating customer ${identification}. Name update: ${shouldUpdateName}. Fields:`, Object.keys(updates));
+                logger.debug(`[BillingService] Updating customer ${identification}. Name update: ${shouldUpdateName}. Fields:`, Object.keys(updates));
                 await this.customerRepository.update(existingCustomer.id, updates);
                 return { status: shouldUpdateName ? 'updated' : 'up_to_date', id: existingCustomer.id };
             } else {
                 // New Customer
-                console.log(`[BillingService] Creating NEW customer record for: ${identification}`);
+                logger.debug(`[BillingService] Creating NEW customer record for: ${identification}`);
                 
                 const newCustomerData = {
                     name: (client.name || 'CLIENTE NUEVO').toUpperCase(),
@@ -391,12 +392,12 @@ export class BillingService {
                 };
 
                 const created = await this.customerRepository.create(newCustomerData as any);
-                console.log(`[BillingService] Successfully created customer: ${identification} (ID: ${created?.id || 'new'})`);
+                logger.debug(`[BillingService] Successfully created customer: ${identification} (ID: ${created?.id || 'new'})`);
                 return { status: 'created', id: created?.id };
             }
         } catch (error: any) {
             // Log but don't break the billing flow
-            console.error(`[BillingService] Error in auto-learn for ${identification}:`, error);
+            logger.error(`[BillingService] Error in auto-learn for ${identification}:`, error);
             
             // Extract more detail if it's a DatabaseError or has an original error
             let errorMessage = error.message;
@@ -416,7 +417,7 @@ export class BillingService {
             }
 
             if (error.code === 11000 || (errorMessage && errorMessage.includes('E11000'))) {
-                console.warn(`[BillingService] Duplicate key conflict for ${identification}.`);
+                logger.warn(`[BillingService] Duplicate key conflict for ${identification}.`);
                 return { status: 'conflict_duplicate', id: errorMessage };
             }
             return { status: 'error', id: errorMessage };

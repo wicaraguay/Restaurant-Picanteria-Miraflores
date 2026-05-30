@@ -16,7 +16,7 @@
  * - Reducido de 321 líneas a ~150 líneas (-53%)
  */
 
-import React, { lazy, Suspense, useCallback, useEffect } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ViewType } from './types';
 import { Customer, Reservation } from './modules/customers/types/customer.types';
@@ -35,6 +35,7 @@ import { AppStateProvider, useAppState } from './contexts/AppStateContext';
 import { AuthProvider, useAuth } from './modules/auth/contexts/AuthContext';
 import { RestaurantConfigProvider } from './contexts/RestaurantConfigContext';
 import { AlertProvider } from './components/ui/AlertProvider';
+import { WhatsAppOrderAlertProvider, useWhatsAppOrderAlert } from './contexts/WhatsAppOrderAlertContext';
 
 // Hooks
 import { useAppData } from './hooks/useAppData';
@@ -56,6 +57,7 @@ const SettingsManagement = lazy(() => import('./modules/settings/components/Sett
 const Login = lazy(() => import('./modules/auth/components/Login'));
 const MobileBottomNav = lazy(() => import('./components/layout/MobileBottomNav'));
 const BillingHistory = lazy(() => import('./modules/billing/components/BillingHistory'));
+const WhatsAppManagement = lazy(() => import('./modules/whatsapp/components/WhatsAppManagement'));
 
 /**
  * Loading fallback component
@@ -78,9 +80,14 @@ const AdminContent: React.FC = () => {
     const { state, updateMenuItem, setMenuItems: setMenuItemsContext, setEmployees: setEmployeesContext, setRoles: setRolesContext, setOrders: setOrdersContext, setCustomers: setCustomersContext, setReservations: setReservationsContext } = useAppState();
     const { theme, toggleTheme } = useTheme();
     const { currentView, setCurrentView, navItems, getCurrentViewLabel } = useNavigation(currentUser);
+    const { addAlert } = useWhatsAppOrderAlert();
 
     // Cargar datos iniciales automáticamente
     const { isLoading } = useAppData();
+
+    // Ref para trackear IDs de pedidos ya vistos (para detectar nuevos)
+    const seenOrderIds = useRef<Set<string>>(new Set());
+    const isFirstLoad = useRef(true);
 
     // ✅ POLLING: Sincronización automática de pedidos cada 5 seg
     useEffect(() => {
@@ -92,23 +99,43 @@ const AdminContent: React.FC = () => {
                 // Usamos la API directamente para no recargar toda la app
                 const response = await orderService.getAll();
 
+                let orders: Order[] = [];
                 // Validate response is an array
                 if (Array.isArray(response)) {
-                    setOrdersContext(response);
+                    orders = response;
                 } else if (response && response.data && Array.isArray(response.data)) {
                     // Handle potential paginated/wrapped response
-                    setOrdersContext(response.data);
+                    orders = response.data;
                 } else {
                     console.warn("Polling received invalid orders format:", response);
+                    return;
                 }
+
+                // Detectar nuevos pedidos de WhatsApp
+                if (!isFirstLoad.current) {
+                    for (const order of orders) {
+                        // Si es un pedido nuevo (no visto antes) y es de WhatsApp
+                        if (!seenOrderIds.current.has(order.id) && order.customerName.includes('[WhatsApp:')) {
+                            addAlert(order);
+                        }
+                    }
+                }
+
+                // Actualizar set de IDs vistos
+                seenOrderIds.current = new Set(orders.map(o => o.id));
+                isFirstLoad.current = false;
+
+                setOrdersContext(orders);
             } catch (error) {
                 console.error("Error sincronizando pedidos:", error);
             }
         };
 
         const intervalId = setInterval(pollOrders, 5000);
+        // Ejecutar inmediatamente la primera vez
+        pollOrders();
         return () => clearInterval(intervalId);
-    }, [setOrdersContext, isLoading]);
+    }, [setOrdersContext, isLoading, addAlert]);
 
     // ✅ POLLING: Sincronización automática de clientes cada 10 seg
     // Esto asegura que clientes aprendidos por el backend (auto-learn) aparezcan en la lista
@@ -265,6 +292,7 @@ const AdminContent: React.FC = () => {
                                 } />
                                 <Route path="settings" element={<SettingsManagement />} />
                                 <Route path="billing" element={<BillingHistory />} />
+                                <Route path="whatsapp" element={<WhatsAppManagement />} />
 
                                 <Route path="" element={<Navigate to="dashboard" replace />} />
                                 <Route path="*" element={<Navigate to="dashboard" replace />} />
@@ -294,7 +322,9 @@ const AdminApp: React.FC = () => {
             <AlertProvider>
                 <RestaurantConfigProvider>
                     <AppStateProvider>
-                        <AdminAppContent />
+                        <WhatsAppOrderAlertProvider>
+                            <AdminAppContent />
+                        </WhatsAppOrderAlertProvider>
                     </AppStateProvider>
                 </RestaurantConfigProvider>
             </AlertProvider>

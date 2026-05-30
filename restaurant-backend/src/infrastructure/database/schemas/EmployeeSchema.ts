@@ -48,5 +48,12 @@ const EmployeeSchema: Schema = new Schema({
     lastLoginAt: { type: Date }
 }, { timestamps: true });
 
+// ==================== INDEXES FOR PERFORMANCE ====================
+// username already has unique: true which creates an index
+EmployeeSchema.index({ roleId: 1 }); // For filtering employees by role
+EmployeeSchema.index({ identification: 1 }, { sparse: true }); // For employee lookup by ID
+EmployeeSchema.index({ activeSessionId: 1 }, { sparse: true }); // For session validation
+EmployeeSchema.index({ name: 1 }); // For searching employees by name
+EmployeeSchema.index({ lastLoginAt: -1 }); // For sorting by last login
 
 export const EmployeeModel = mongoose.models.Employee || mongoose.model<EmployeeDocument>('Employee', EmployeeSchema);

@@ -89,3 +89,9 @@ public/uploads/
 
 # SRI Electronic Signature
 *.p12
+
+# WhatsApp Session (whatsapp-web.js)
+# Contains sensitive auth data - NEVER commit
+whatsapp-session/
+.wwebjs_auth/
+.wwebjs_cache/

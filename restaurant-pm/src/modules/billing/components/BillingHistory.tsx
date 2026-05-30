@@ -16,6 +16,7 @@ import { XMLViewerModal } from './XMLViewerModal';
 import { EditBillModal } from './EditBillModal';
 import ErrorLogPanel from './ErrorLogPanel';
 import { useAuth } from '../../auth';
+import { toast } from '../../../components/ui/AlertProvider';
 
 import {
     SearchIcon,
@@ -400,7 +401,7 @@ const BillingHistory: React.FC = () => {
             const allBills = response.data || [];
 
             if (allBills.length === 0) {
-                alert('No hay facturas en este periodo para exportar.');
+                toast.warning('No hay facturas en este periodo para exportar.', 'Sin Datos');
                 return;
             }
 
@@ -430,7 +431,7 @@ const BillingHistory: React.FC = () => {
             document.body.removeChild(link);
         } catch (error) {
             console.error('Error exporting CSV:', error);
-            alert('Error al exportar los datos.');
+            toast.error('Error al exportar los datos. Intenta de nuevo.', 'Error');
         } finally {
             setBillsLoading(false);
         }
@@ -1096,7 +1097,7 @@ const BillingHistory: React.FC = () => {
                                                                                 await fetchBills(); // Refresh bills to update hasCreditNote flag
                                                                             } catch (error) {
                                                                                 console.error('Error eliminando nota de crédito:', error);
-                                                                                alert('Error al eliminar la nota de crédito');
+                                                                                toast.error('Error al eliminar la nota de crédito', 'Error');
                                                                             } finally {
                                                                                 setCreditNotesLoading(false);
                                                                             }

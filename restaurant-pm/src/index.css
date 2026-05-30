@@ -76,3 +76,89 @@ body {
 * {
     scroll-behavior: smooth;
 }
+
+/* ═══════════════════════════════════════════════════════
+   ACCESIBILIDAD - Focus States Mejorados
+   ═══════════════════════════════════════════════════════ */
+
+/* Focus general para elementos interactivos */
+*:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+}
+
+/* Focus específico para botones */
+button:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+/* Focus para inputs */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+/* Focus para links */
+a:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 4px;
+    text-decoration: underline;
+}
+
+/* Focus para tarjetas/cards interactivos */
+.product-card:focus-visible,
+.order-card:focus-visible {
+    outline: 3px solid #3b82f6;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.15);
+    transform: scale(1.02);
+}
+
+/* Dark mode adjustments */
+.dark *:focus-visible {
+    outline-color: #60a5fa;
+}
+
+.dark button:focus-visible,
+.dark input:focus-visible,
+.dark select:focus-visible {
+    box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.2);
+}
+
+/* Skip-to-content link (para navegación por teclado) */
+.skip-to-content {
+    position: absolute;
+    top: -100px;
+    left: 0;
+    background: #3b82f6;
+    color: white;
+    padding: 8px 16px;
+    text-decoration: none;
+    border-radius: 4px;
+    z-index: 10000;
+    font-weight: 600;
+}
+
+.skip-to-content:focus {
+    top: 16px;
+    left: 16px;
+}
+
+/* Screen reader only utility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}

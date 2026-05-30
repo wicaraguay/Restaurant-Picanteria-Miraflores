@@ -7,6 +7,7 @@ import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 
 import { BillingService } from '../services/BillingService';
+import { logger } from '../../infrastructure/utils/Logger';
 
 export class CheckInvoiceStatus {
     constructor(
@@ -24,7 +25,7 @@ export class CheckInvoiceStatus {
         const billInDb = await this.billRepository.findByAccessKey(accessKey);
 
         if (!billInDb) {
-            console.warn(`[CheckInvoiceStatus] Bill with Access Key ${accessKey} not found in DB.`);
+            logger.warn(`[CheckInvoiceStatus] Bill with Access Key ${accessKey} not found in DB.`);
             return { success: false, error: 'Factura no encontrada en base de datos local.' };
         }
 
@@ -44,7 +45,7 @@ export class CheckInvoiceStatus {
         // If it's Not Found (0 auths), Unknown, Rejected, OR 'EN PROCESO' (which usually means 0 auths found),
         // We must Attempt Re-send/Recovery to be sure.
         if (isNotFound || authResult.estado === 'UNKNOWN' || isRejected || authResult.estado === 'EN PROCESO') {
-            console.log(`[CheckInvoiceStatus] Invoice Status: ${authResult.estado}. Attempting RECOVERY/RESEND...`);
+            logger.info(`[CheckInvoiceStatus] Invoice Status: ${authResult.estado}. Attempting RECOVERY/RESEND...`);
 
             // Fetch full bill data to reconstruct XML
             const fullBill = await this.billRepository.findById(billInDb.id);
@@ -60,16 +61,16 @@ export class CheckInvoiceStatus {
                     
                     if (lastRetryDate !== todayISO) {
                         // NEW DAY: Reset everything and force NEW key (because date in key must match emission date)
-                        console.log(`[CheckInvoiceStatus] New day detected (${lastRetryDate} -> ${todayISO}). Resetting retries and forcing NEW key.`);
+                        logger.info(`[CheckInvoiceStatus] New day detected (${lastRetryDate} -> ${todayISO}). Resetting retries and forcing NEW key.`);
                         newRetryCount = 1; // First attempt of the new day
                         shouldGenerateNewKey = true;
                     } else {
                         // SAME DAY: Increment and check limit
                         newRetryCount++;
-                        console.log(`[CheckInvoiceStatus] Incrementing daily retryCount for ${fullBill.documentNumber}: ${fullBill.retryCount} -> ${newRetryCount}`);
-                        
+                        logger.debug(`[CheckInvoiceStatus] Incrementing daily retryCount for ${fullBill.documentNumber}: ${fullBill.retryCount} -> ${newRetryCount}`);
+
                         if (newRetryCount > 3) {
-                            console.log(`[CheckInvoiceStatus] Daily limit reached (3 attempts) for today (${todayISO}). Stopping.`);
+                            logger.warn(`[CheckInvoiceStatus] Daily limit reached (3 attempts) for today (${todayISO}). Stopping.`);
                             return { 
                                 success: false, 
                                 error: 'Límite de 3 intentos diarios alcanzado para esta factura (1 emisión + 2 reintentos). Por favor intente mañana con una nueva clave automática.',
@@ -134,7 +135,7 @@ export class CheckInvoiceStatus {
                     const finalKey = invoiceToResend.info.claveAcceso;
 
                     // Update DB with results and NEW/SAME Key + Retry Count
-                    console.log(`[CheckInvoiceStatus] ${shouldGenerateNewKey ? 'NEW' : 'SAME'} Access Key for attempt: ${finalKey}`);
+                    logger.info(`[CheckInvoiceStatus] ${shouldGenerateNewKey ? 'NEW' : 'SAME'} Access Key for attempt: ${finalKey}`);
                     
                     await this.billRepository.upsert({
                         id: fullBill.id,
@@ -150,7 +151,7 @@ export class CheckInvoiceStatus {
                     (fullBill as any).accessKey = finalKey;
 
                     // Resend to Reception
-                    console.log(`[CheckInvoiceStatus] Resending to Reception (Attempt ${newRetryCount})...`);
+                    logger.info(`[CheckInvoiceStatus] Resending to Reception (Attempt ${newRetryCount})...`);
                     const receptionResult = await this.sriService.sendToSRI(signedXml, isProd);
 
                     const responseStr = JSON.stringify(receptionResult);
@@ -162,7 +163,7 @@ export class CheckInvoiceStatus {
                             return await this.handleSuccess(fullBill, newAuthResult, isProd);
                         }
                     } else if (receptionResult.estado === 'DEVUELTA' && responseStr.includes('ERROR SECUENCIAL REGISTRADO')) {
-                        console.log('⚠️ Sequence Registered Error detected. Auto-healing...');
+                        logger.warn('⚠️ Sequence Registered Error detected. Auto-healing...');
                         const nextSequential = await this.configRepository.getNextSequential();
                         const newSecuencial = nextSequential.toString().padStart(9, '0');
                         invoiceToResend.info.secuencial = newSecuencial;
@@ -189,7 +190,7 @@ export class CheckInvoiceStatus {
                     }
 
                 } catch (resendError) {
-                    console.error('[CheckInvoiceStatus] Error during automatic resend:', resendError);
+                    logger.error('[CheckInvoiceStatus] Error during automatic resend:', resendError);
                     // Fallback to returning original auth error
                 }
             }
@@ -225,15 +226,15 @@ export class CheckInvoiceStatus {
 
         if (!isConsumidorFinal && isValidEmail) {
             try {
-                console.log(`[CheckInvoiceStatus] Preparing to send email to ${clientEmail}...`);
+                logger.info(`[CheckInvoiceStatus] Preparing to send email to ${clientEmail}...`);
 
                 const config = await this.configRepository.get();
                 const info = config || {} as any;
 
-                console.log('[CheckInvoiceStatus] Config from DB:', !!config);
-                console.log('[CheckInvoiceStatus] Logo field:', info.logo ? 'EXISTS' : 'MISSING', 'Fiscal Logo field:', info.fiscalLogo ? 'EXISTS' : 'MISSING');
-                if (info.logo) console.log('[CheckInvoiceStatus] Logo starts with:', info.logo.substring(0, 30));
-                console.log('[CheckInvoiceStatus] Final logoUrl will be:', this.billingService.getLogoUrl(info));
+                logger.debug('[CheckInvoiceStatus] Config from DB:', !!config);
+                logger.debug(`[CheckInvoiceStatus] Logo field: ${info.logo ? 'EXISTS' : 'MISSING'}, Fiscal Logo field: ${info.fiscalLogo ? 'EXISTS' : 'MISSING'}`);
+                if (info.logo) logger.debug(`[CheckInvoiceStatus] Logo starts with: ${info.logo.substring(0, 30)}`);
+                logger.debug('[CheckInvoiceStatus] Final logoUrl will be:', this.billingService.getLogoUrl(info));
 
                 const [estab, ptoEmi, secuencial] = bill.documentNumber.split('-');
 
@@ -294,14 +295,14 @@ export class CheckInvoiceStatus {
 
                 // Send
                 await this.emailService.sendInvoiceEmail(clientEmail, invoiceObj, pdfBuffer, signedXml);
-                console.log(`[CheckInvoiceStatus] Email sent successfully to ${clientEmail}`);
+                logger.info(`[CheckInvoiceStatus] Email sent successfully to ${clientEmail}`);
 
             } catch (emailError) {
-                console.error('[CheckInvoiceStatus] Failed to send email during recovery:', emailError);
+                logger.error('[CheckInvoiceStatus] Failed to send email during recovery:', emailError);
                 // Non-blocking error
             }
         } else {
-            console.log('[CheckInvoiceStatus] Skipping email (Consumidor Final or Invalid Email).');
+            logger.debug('[CheckInvoiceStatus] Skipping email (Consumidor Final or Invalid Email).');
         }
 
         return { success: true, authorization: authResult, invoiceNumber: bill.documentNumber };

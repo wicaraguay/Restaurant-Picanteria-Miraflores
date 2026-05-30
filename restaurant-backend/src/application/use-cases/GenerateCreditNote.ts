@@ -7,6 +7,7 @@ import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { CreditNote, CreditNoteDetail, CREDIT_NOTE_REASONS } from '../../domain/billing/creditNote';
 
 import { BillingService } from '../services/BillingService';
+import { logger } from '../../infrastructure/utils/Logger';
 
 export class GenerateCreditNote {
     constructor(
@@ -27,7 +28,7 @@ export class GenerateCreditNote {
     }): Promise<any> {
         const { billId, reason, customDescription, taxRate = 15 } = data;
 
-        console.log(`[GenerateCreditNote] Starting credit note generation for bill: ${billId}`);
+        logger.info(`[GenerateCreditNote] Starting credit note generation for bill: ${billId}`);
 
         // 1. Validate that the bill exists and is authorized
         const originalBill = await this.billRepository.findById(billId);
@@ -54,7 +55,7 @@ export class GenerateCreditNote {
         // Resolution NAC-DGERCGC25-00000017 (2026): Credit notes have NO time limit to correct errors.
         // The 7-day limit applies only to ANNULMENT (fully deleting the record from SRI).
         // If the user missed the 7-day deadline to annul, the only way to correct is a credit note.
-        console.log(`[GenerateCreditNote] Bill validated: ${originalBill.documentNumber}`);
+        logger.info(`[GenerateCreditNote] Bill validated: ${originalBill.documentNumber}`);
 
         // --- RETRY LIMIT CHECK ---
         const todayISO = this.billingService.getCurrentDateEcuador().split('/').reverse().join('-');
@@ -97,11 +98,11 @@ export class GenerateCreditNote {
             const parts = pendingNC.documentNumber.split('-');
             secuencial = parts[parts.length - 1];
             existingPendingAccessKey = pendingNC.accessKey || undefined;
-            console.log(`[GenerateCreditNote] ♻️ Found PENDING credit note. Reusing sequential: ${secuencial} | accessKey: ${existingPendingAccessKey}`);
+            logger.info(`[GenerateCreditNote] ♻️ Found PENDING credit note. Reusing sequential: ${secuencial} | accessKey: ${existingPendingAccessKey}`);
         } else {
             const nextSequential = await this.configRepository.getNextCreditNoteSequential();
             secuencial = nextSequential.toString().padStart(9, '0');
-            console.log(`[GenerateCreditNote] New sequential generated: ${secuencial}`);
+            logger.info(`[GenerateCreditNote] New sequential generated: ${secuencial}`);
         }
 
         // 5. Build Credit Note Object
@@ -155,7 +156,7 @@ export class GenerateCreditNote {
         };
 
         // 6. Generate XML and Send to SRI with Auto-Retry for Duplicate Sequential
-        console.log('[GenerateCreditNote] Generating XML...');
+        logger.info('[GenerateCreditNote] Generating XML...');
         const isProd = process.env.SRI_ENV === '2';
 
         // Retry logic: If SRI rejects due to duplicate sequential, get new one and retry
@@ -168,7 +169,7 @@ export class GenerateCreditNote {
 
         while (attempts < MAX_ATTEMPTS) {
             attempts++;
-            console.log(`[GenerateCreditNote] Attempt ${attempts}/${MAX_ATTEMPTS} - Using sequential: ${currentSequential}`);
+            logger.info(`[GenerateCreditNote] Attempt ${attempts}/${MAX_ATTEMPTS} - Using sequential: ${currentSequential}`);
 
             try {
                 // Update credit note with current sequential
@@ -185,15 +186,15 @@ export class GenerateCreditNote {
                 signedXml = await this.sriService.signXML(xml);
 
                 // Send to SRI
-                console.log('[GenerateCreditNote] Sending to SRI...');
+                logger.info('[GenerateCreditNote] Sending to SRI...');
                 result = await this.sriService.sendCreditNoteToSRI(signedXml, isProd);
 
                 // SUCCESS: Break out of retry loop
-                console.log('[GenerateCreditNote] Successfully sent to SRI');
+                logger.info('[GenerateCreditNote] Successfully sent to SRI');
                 break;
 
             } catch (error: any) {
-                console.error(`[GenerateCreditNote] Attempt ${attempts} failed:`, error.message);
+                logger.error(`[GenerateCreditNote] Attempt ${attempts} failed:`, error.message);
 
                 // Check if it's a duplicate sequential error
                 const isDuplicateSequentialError =
@@ -202,19 +203,19 @@ export class GenerateCreditNote {
                     error.message.includes('SECUENCIAL REGISTRADO');
 
                 if (isDuplicateSequentialError && attempts < MAX_ATTEMPTS) {
-                    console.log(`[GenerateCreditNote] 🔄 Duplicate sequential detected. Requesting new sequential and retrying...`);
+                    logger.info(`[GenerateCreditNote] 🔄 Duplicate sequential detected. Requesting new sequential and retrying...`);
 
                     // Get new sequential from database
                     const newSequential = await this.configRepository.getNextCreditNoteSequential();
                     currentSequential = newSequential.toString().padStart(9, '0');
-                    console.log(`[GenerateCreditNote] ✅ New sequential obtained: ${currentSequential}`);
+                    logger.info(`[GenerateCreditNote] ✅ New sequential obtained: ${currentSequential}`);
 
                     // Continue to next attempt with new sequential
                     continue;
                 } else {
                     // Not a duplicate error OR we've exhausted attempts - propagate error
                     if (attempts >= MAX_ATTEMPTS) {
-                        console.error('[GenerateCreditNote] ❌ Max retry attempts reached. Unable to send credit note.');
+                        logger.error('[GenerateCreditNote] ❌ Max retry attempts reached. Unable to send credit note.');
                         throw new Error(`Failed to send credit note after ${MAX_ATTEMPTS} attempts. Last error: ${error.message}`);
                     }
                     throw error;
@@ -235,11 +236,11 @@ export class GenerateCreditNote {
         let authResult = null;
         if (result.estado === 'RECIBIDA' || isAlreadyRegistered) {
             if (!isAlreadyRegistered) {
-                console.log('[GenerateCreditNote] Waiting 3 seconds before authorization...');
+                logger.info('[GenerateCreditNote] Waiting 3 seconds before authorization...');
                 await new Promise(resolve => setTimeout(resolve, 3000));
             }
 
-            console.log('[GenerateCreditNote] Requesting authorization...');
+            logger.info('[GenerateCreditNote] Requesting authorization...');
             authResult = await this.sriService.authorizeCreditNote(creditNote.info.claveAcceso!, isProd);
 
             // 9. Persist Credit Note
@@ -289,7 +290,7 @@ export class GenerateCreditNote {
                 }
             }
 
-            console.log('[GenerateCreditNote] Credit note persisted successfully');
+            logger.info('[GenerateCreditNote] Credit note persisted successfully');
 
             // Auto-learn/Update customer data
             await this.billingService.autoLearnCustomer({
@@ -307,9 +308,9 @@ export class GenerateCreditNote {
                     hasCreditNote: true,
                     sriStatus: 'CANCELLED'
                 } as any);
-                console.log('[GenerateCreditNote] Original bill marked as CANCELLED');
+                logger.info('[GenerateCreditNote] Original bill marked as CANCELLED');
             } else {
-                console.log('[GenerateCreditNote] Credit note not authorized, bill status unchanged');
+                logger.info('[GenerateCreditNote] Credit note not authorized, bill status unchanged');
             }
 
             // 10.2. Send Email (optional - only for authorized and valid emails)
@@ -321,7 +322,7 @@ export class GenerateCreditNote {
 
             if (authResult.estado === 'AUTORIZADO' && isValidEmail) {
                 try {
-                    console.log(`[GenerateCreditNote] Sending email to ${originalBill.customerEmail}`);
+                    logger.info(`[GenerateCreditNote] Sending email to ${originalBill.customerEmail}`);
                     if (authResult.fechaAutorizacion) creditNote.authorizationDate = authResult.fechaAutorizacion;
 
                     // Generate PDF for Credit Note
@@ -335,13 +336,13 @@ export class GenerateCreditNote {
                         signedXml
                     );
 
-                    console.log('[GenerateCreditNote] Credit note email sent successfully');
+                    logger.info('[GenerateCreditNote] Credit note email sent successfully');
                 } catch (emailError) {
-                    console.error('[GenerateCreditNote] Failed to send credit note email:', emailError);
+                    logger.error('[GenerateCreditNote] Failed to send credit note email:', emailError);
                     // We don't throw here to avoid failing the whole process just because of an email error
                 }
             } else {
-                console.log('[GenerateCreditNote] Skipping email - Conditions not met (Not Authorized or Invalid Email)');
+                logger.info('[GenerateCreditNote] Skipping email - Conditions not met (Not Authorized or Invalid Email)');
             }
         }
 
