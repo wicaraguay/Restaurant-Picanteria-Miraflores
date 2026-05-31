@@ -111,6 +111,8 @@ app.use((req, res, next) => {
 
 import billingRoutes from './infrastructure/web/routes/billingRoutes';
 import whatsappApiRoutes from './infrastructure/web/routes/whatsappApiRoutes';
+import exportRoutes from './interfaces/http/routes/exportRoutes';
+import maintenanceRoutes from './interfaces/http/routes/maintenanceRoutes';
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -125,6 +127,8 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/credit-notes', creditNoteRoutes); // Notas de crédito SRI
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/whatsapp', whatsappApiRoutes); // WhatsApp API para frontend
+app.use('/api/export', exportRoutes); // Exportación de datos (Excel/CSV)
+app.use('/api/maintenance', maintenanceRoutes); // Operaciones de mantenimiento y limpieza
 
 app.get('/health', (req, res) => {
     const cacheStats = cacheService.getStats();

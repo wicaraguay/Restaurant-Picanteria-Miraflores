@@ -81,7 +81,7 @@ export class BillController {
             }
 
             const pdfService = new PDFService();
-            const invoice = await this.mapBillToInvoice(billData);
+            const { invoice } = await this.mapBillToInvoice(billData);
 
             const format = (req.query.format as 'A4' | 'ticket') || 'A4';
             const pdfBuffer = await pdfService.generateInvoicePDF(invoice, format);
@@ -113,11 +113,11 @@ export class BillController {
                 throw new Error('Esta transacción no tiene Clave de Acceso generada en el SRI.');
             }
 
-            const invoice = await this.mapBillToInvoice(billData);
+            const { invoice, config } = await this.mapBillToInvoice(billData);
 
             // Generar y firmar el XML
             const xml = this.sriService.generateInvoiceXML(invoice, billData.accessKey);
-            const signedXml = await this.sriService.signXML(xml);
+            const signedXml = await this.sriService.signXML(xml, config);
 
             res.setHeader('Content-Type', 'application/xml');
             res.setHeader('Content-Disposition', `attachment; filename=Factura-${billData.documentNumber}.xml`);
@@ -130,12 +130,12 @@ export class BillController {
     /**
      * Mapea los datos de una Bill persistida al formato Invoice usado por SRI/PDF Service
      */
-    private mapBillToInvoice = async (billData: any): Promise<any> => {
+    private mapBillToInvoice = async (billData: any): Promise<{ invoice: any; config: any }> => {
         const config: any = await RestaurantConfigModel.findOne();
         const [estab, ptoEmi, secuencial] = billData.documentNumber.split('-');
         const taxRate: number = config?.billing?.taxRate || 15;
 
-        return {
+        const invoice = {
             orderId: billData.orderId,
             authorizationDate: billData.authorizationDate,
             creationDate: billData.createdAt,
@@ -185,6 +185,8 @@ export class BillController {
                 logoUrl: this.billingService.getLogoUrl(config)
             }
         };
+
+        return { invoice, config };
     };
 
 

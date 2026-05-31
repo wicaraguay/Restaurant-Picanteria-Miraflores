@@ -73,4 +73,14 @@ export interface RestaurantConfig {
     taxRate?: number; // Porcentaje (e.g., 15 for 15%)
     environment?: '1' | '2'; // 1: Pruebas, 2: Producción
   };
+
+  // Certificado Digital SRI (firma electrónica .p12)
+  sriCertificate?: {
+    certificateBase64: string;      // Certificado .p12 en base64 ENCRIPTADO (solo para lectura)
+    passwordEncrypted: string;      // Contraseña ENCRIPTADA (solo para lectura)
+    environment: '1' | '2';         // 1 = Pruebas, 2 = Producción
+    uploadedAt: Date;
+    validUntil?: Date;              // Fecha de expiración
+    rucInCertificate?: string;      // RUC del certificado
+  };
 }

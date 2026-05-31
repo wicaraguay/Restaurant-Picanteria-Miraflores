@@ -237,6 +237,25 @@ export class ApiService {
         }
     }
 
+    /**
+     * Método PATCH genérico
+     */
+    public async patch<T>(endpoint: string, data: any): Promise<T> {
+        const url = `${this.baseURL}${endpoint}`;
+        logger.debug(`PATCH ${url}`, { data });
+
+        try {
+            const response = await this.fetchWithTimeout(url, {
+                method: 'PATCH',
+                body: JSON.stringify(data),
+            });
+            return await this.processResponse<T>(response);
+        } catch (error) {
+            logger.error(`PATCH ${url} failed`, error);
+            throw error;
+        }
+    }
+
     // ==================== Métodos de API específicos ====================
 
     /**
@@ -391,6 +410,15 @@ export class ApiService {
         update: async (data: any): Promise<any> => {
             return this.put('/config', data);
         },
+        uploadCertificate: async (data: { certificateBase64: string; password: string; environment: '1' | '2' }): Promise<any> => {
+            return this.post('/config/certificate', data);
+        },
+        deleteCertificate: async (): Promise<any> => {
+            return this.delete('/config/certificate');
+        },
+        updateCertificateEnvironment: async (environment: '1' | '2'): Promise<any> => {
+            return this.patch('/config/certificate/environment', { environment });
+        },
     };
 
     /**
@@ -485,6 +513,86 @@ export class ApiService {
             return this.delete(API_ENDPOINTS.ROLES.BY_ID(id));
         },
     };
+
+    /**
+     * Exportación de datos
+     */
+    public export = {
+        menu: async (): Promise<Blob> => {
+            const response = await this.fetchWithTimeout(
+                `${this.baseURL}/export/menu`,
+                {
+                    method: 'GET',
+                    headers: {
+                        ...DEFAULT_HEADERS,
+                        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+                    }
+                }
+            );
+            if (!response.ok) throw new Error('Error al exportar menú');
+            return response.blob();
+        },
+        clients: async (): Promise<Blob> => {
+            const response = await this.fetchWithTimeout(
+                `${this.baseURL}/export/clients`,
+                {
+                    method: 'GET',
+                    headers: {
+                        ...DEFAULT_HEADERS,
+                        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+                    }
+                }
+            );
+            if (!response.ok) throw new Error('Error al exportar clientes');
+            return response.blob();
+        },
+        bills: async (): Promise<Blob> => {
+            const response = await this.fetchWithTimeout(
+                `${this.baseURL}/export/bills`,
+                {
+                    method: 'GET',
+                    headers: {
+                        ...DEFAULT_HEADERS,
+                        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+                    }
+                }
+            );
+            if (!response.ok) throw new Error('Error al exportar facturas');
+            return response.blob();
+        },
+        orders: async (): Promise<Blob> => {
+            const response = await this.fetchWithTimeout(
+                `${this.baseURL}/export/orders`,
+                {
+                    method: 'GET',
+                    headers: {
+                        ...DEFAULT_HEADERS,
+                        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+                    }
+                }
+            );
+            if (!response.ok) throw new Error('Error al exportar órdenes');
+            return response.blob();
+        }
+    };
+
+    /**
+     * Mantenimiento y operaciones peligrosas
+     */
+    public maintenance = {
+        deleteOldOrders: async (monthsOld: number): Promise<any> => {
+            return this.post('/maintenance/delete-old-orders', { monthsOld });
+        },
+        deleteInactiveClients: async (monthsInactive: number): Promise<any> => {
+            return this.post('/maintenance/delete-inactive-clients', { monthsInactive });
+        },
+        deleteDisabledProducts: async (): Promise<any> => {
+            return this.post('/maintenance/delete-disabled-products', {});
+        },
+        fiscalYearClose: async (year: number): Promise<any> => {
+            return this.post('/maintenance/fiscal-year-close', { year });
+        }
+    };
 }
 
 // Exportar instancia singleton
@@ -501,6 +609,8 @@ export const api = {
     billing: apiService.billing,
     employees: apiService.employees,
     roles: apiService.roles,
+    export: apiService.export,
+    maintenance: apiService.maintenance,
     getToken: () => apiService.getToken(),
     setToken: (token: string | null) => apiService.setToken(token),
 };

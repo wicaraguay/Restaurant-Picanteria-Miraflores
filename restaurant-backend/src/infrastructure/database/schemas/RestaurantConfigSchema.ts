@@ -57,6 +57,16 @@ const RestaurantConfigSchema = new Schema({
         currentSequenceFactura: { type: Number, required: true, default: 1 },
         currentSequenceNotaCredito: { type: Number, required: true, default: 1 },
         currentSequenceNotaVenta: { type: Number, required: true, default: 1 }
+    },
+
+    // Certificado Digital SRI (firma electrónica .p12)
+    sriCertificate: {
+        certificateBase64: { type: String },       // Certificado .p12 en base64 ENCRIPTADO
+        passwordEncrypted: { type: String },       // Contraseña del certificado ENCRIPTADA
+        environment: { type: String, enum: ['1', '2'] }, // 1 = Pruebas, 2 = Producción
+        uploadedAt: { type: Date },
+        validUntil: { type: Date },                // Fecha de expiración del certificado
+        rucInCertificate: { type: String }         // RUC extraído del certificado (validación)
     }
 }, {
     timestamps: true,

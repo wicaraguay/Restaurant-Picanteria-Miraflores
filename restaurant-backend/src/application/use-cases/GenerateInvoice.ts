@@ -176,7 +176,7 @@ export class GenerateInvoice {
 
         // 6. ETAPA 2: Generar y Firmar XML (VALIDADO)
         const xml = this.sriService.generateInvoiceXML(invoice);
-        const signedXml = await this.sriService.signXML(xml);
+        const signedXml = await this.sriService.signXML(xml, config || undefined);
         const isProd = process.env.SRI_ENV === '2';
 
         await this.billRepository.upsert({
@@ -212,7 +212,7 @@ export class GenerateInvoice {
                 invoice.info.secuencial = newSecuencial;
                 // Regenerate XML
                 const newXml = this.sriService.generateInvoiceXML(invoice);
-                const newSignedXml = await this.sriService.signXML(newXml);
+                const newSignedXml = await this.sriService.signXML(newXml, config || undefined);
 
                 // Resend
                 const retryResult = await this.sriService.sendToSRI(newSignedXml, isProd);

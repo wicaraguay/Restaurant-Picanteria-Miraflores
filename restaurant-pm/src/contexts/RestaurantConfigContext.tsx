@@ -50,7 +50,22 @@ export const RestaurantConfigProvider: React.FC<RestaurantConfigProviderProps> =
             const cached = localStorage.getItem('restaurant_config');
             if (cached) {
                 try {
-                    return JSON.parse(cached);
+                    const parsed = JSON.parse(cached);
+                    // Validate sriCertificate - remove if corrupted (missing required fields or empty values)
+                    // A valid certificate MUST have: uploadedAt (Date), certificateBase64 (non-empty string)
+                    if (parsed.sriCertificate) {
+                        const cert = parsed.sriCertificate;
+                        const isValid = cert.uploadedAt &&
+                                       cert.certificateBase64 &&
+                                       typeof cert.certificateBase64 === 'string' &&
+                                       cert.certificateBase64.length > 0;
+                        if (!isValid) {
+                            console.warn('Removing corrupted/empty sriCertificate from cache');
+                            delete parsed.sriCertificate;
+                            localStorage.setItem('restaurant_config', JSON.stringify(parsed));
+                        }
+                    }
+                    return parsed;
                 } catch (e) {
                     console.error('Error parsing cached config', e);
                 }
@@ -88,11 +103,18 @@ export const RestaurantConfigProvider: React.FC<RestaurantConfigProviderProps> =
 
     /**
      * Actualiza la configuración (merge con la existente y guarda en backend)
+     * IMPORTANT: sriCertificate is stripped - use dedicated certificate endpoints
      */
     const updateConfig = useCallback(async (newConfig: Partial<RestaurantConfig>) => {
+        // Strip sriCertificate from updates - it should only be modified via dedicated endpoints
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { sriCertificate: _, ...safeConfig } = config;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { sriCertificate: __, ...safeNewConfig } = newConfig;
+
         const updatedConfig: RestaurantConfig = {
-            ...config,
-            ...newConfig,
+            ...safeConfig,
+            ...safeNewConfig,
             // Merge profundo para objetos anidados
             brandColors: {
                 ...config.brandColors,
@@ -102,10 +124,10 @@ export const RestaurantConfigProvider: React.FC<RestaurantConfigProviderProps> =
                 ...config.billing,
                 ...(newConfig.billing || {}),
             },
-        };
+        } as RestaurantConfig;
 
         try {
-            logger.info('Updating restaurant config', { changes: Object.keys(newConfig) });
+            logger.info('Updating restaurant config', { changes: Object.keys(safeNewConfig) });
             const savedConfig = await api.config.update(updatedConfig);
             setConfig(savedConfig);
             // ✅ Actualizar caché

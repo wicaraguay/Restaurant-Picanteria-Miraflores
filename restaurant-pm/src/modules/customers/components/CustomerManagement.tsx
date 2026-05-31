@@ -32,7 +32,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
     const [isSaving, setIsSaving] = useState(false);
     
     // Confirmations
-    const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
+    const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null; type: 'customer' | 'reservation' }>({ isOpen: false, id: null, type: 'customer' });
     
     // UI State
     const [activeTab, setActiveTab] = useState<'customers' | 'reservations'>('customers');
@@ -72,7 +72,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
     };
 
     const handleDeleteCustomer = (id: string) => {
-        setConfirmDelete({ isOpen: true, id });
+        setConfirmDelete({ isOpen: true, id, type: 'customer' });
     };
 
     const confirmDeleteCustomer = async () => {
@@ -83,6 +83,8 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
             toast.success('Cliente eliminado correctamente', 'Éxito');
         } catch (error) {
             ErrorHandler.showError(error, 'Error al eliminar el cliente');
+        } finally {
+            setConfirmDelete({ isOpen: false, id: null, type: 'customer' });
         }
     };
 
@@ -101,10 +103,16 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
         setIsReservationModalOpen(false);
     };
 
-    const handleDeleteReservation = (id: string) => {
-        if (window.confirm('¿Seguro que quieres eliminar esta reserva?')) {
-            setReservations(prev => prev.filter(r => r.id !== id));
+    const handleDeleteReservationClick = (id: string) => {
+        setConfirmDelete({ isOpen: true, id, type: 'reservation' });
+    };
+
+    const handleDeleteReservationConfirm = () => {
+        if (confirmDelete.id) {
+            setReservations(prev => prev.filter(r => r.id !== confirmDelete.id));
+            toast.success('Reserva eliminada correctamente', 'Éxito');
         }
+        setConfirmDelete({ isOpen: false, id: null, type: 'reservation' });
     };
 
     // Filtering logic
@@ -222,10 +230,13 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
 
             <ConfirmModal
                 isOpen={confirmDelete.isOpen}
-                onClose={() => setConfirmDelete({ isOpen: false, id: null })}
-                onConfirm={confirmDeleteCustomer}
-                title="Eliminar Cliente"
-                message="¿Estás seguro de que deseas eliminar este cliente? Esta acción no se puede deshacer."
+                onClose={() => setConfirmDelete({ isOpen: false, id: null, type: 'customer' })}
+                onConfirm={confirmDelete.type === 'customer' ? confirmDeleteCustomer : handleDeleteReservationConfirm}
+                title={confirmDelete.type === 'customer' ? 'Eliminar Cliente' : 'Eliminar Reserva'}
+                message={confirmDelete.type === 'customer'
+                    ? '¿Estás seguro de que deseas eliminar este cliente? Esta acción no se puede deshacer.'
+                    : '¿Estás seguro de que deseas eliminar esta reserva? Esta acción no se puede deshacer.'
+                }
                 confirmText="Eliminar"
                 type="danger"
             />
@@ -355,7 +366,7 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
                                         </div>
                                         <div className="flex gap-2 mt-8 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button onClick={() => handleOpenReservationForm(r)} className="flex-1 py-3 bg-gray-50 dark:bg-dark-700 text-blue-600 dark:text-blue-400 rounded-2xl font-black text-[10px] hover:bg-white dark:hover:bg-dark-600 transition-all uppercase tracking-widest border border-transparent hover:border-blue-100 shadow-sm">Editar</button>
-                                            <button onClick={() => handleDeleteReservation(r.id)} className="flex-1 py-3 bg-gray-50 dark:bg-dark-700 text-red-600 dark:text-red-400 rounded-2xl font-black text-[10px] hover:bg-white dark:hover:bg-dark-600 transition-all uppercase tracking-widest border border-transparent hover:border-red-100 shadow-sm">Eliminar</button>
+                                            <button onClick={() => handleDeleteReservationClick(r.id)} className="flex-1 py-3 bg-gray-50 dark:bg-dark-700 text-red-600 dark:text-red-400 rounded-2xl font-black text-[10px] hover:bg-white dark:hover:bg-dark-600 transition-all uppercase tracking-widest border border-transparent hover:border-red-100 shadow-sm">Eliminar</button>
                                         </div>
                                     </div>
                                 ))}

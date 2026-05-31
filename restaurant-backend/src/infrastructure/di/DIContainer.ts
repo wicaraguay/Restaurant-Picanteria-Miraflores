@@ -52,6 +52,9 @@ import { ValidateSession } from '../../application/use-cases/ValidateSession';
 import { Logout } from '../../application/use-cases/Logout';
 import { GetRestaurantConfig } from '../../application/use-cases/GetRestaurantConfig';
 import { UpdateRestaurantConfig } from '../../application/use-cases/UpdateRestaurantConfig';
+import { UploadSRICertificate } from '../../application/use-cases/UploadSRICertificate';
+import { DeleteSRICertificate } from '../../application/use-cases/DeleteSRICertificate';
+import { UpdateCertificateEnvironment } from '../../application/use-cases/UpdateCertificateEnvironment';
 import { CreateBill } from '../../application/use-cases/CreateBill';
 import { GetBills } from '../../application/use-cases/GetBills';
 import { DeleteBill } from '../../application/use-cases/DeleteBill';
@@ -144,6 +147,9 @@ export class DIContainer {
     public getLookupCustomerUseCase(): LookupCustomer { return this.orderModule.getLookupCustomerUseCase(); }
     public getGetRestaurantConfigUseCase(): GetRestaurantConfig { return this.orderModule.getGetRestaurantConfigUseCase(); }
     public getUpdateRestaurantConfigUseCase(): UpdateRestaurantConfig { return this.orderModule.getUpdateRestaurantConfigUseCase(); }
+    public getUploadSRICertificateUseCase(): UploadSRICertificate { return this.orderModule.getUploadSRICertificateUseCase(); }
+    public getDeleteSRICertificateUseCase(): DeleteSRICertificate { return this.orderModule.getDeleteSRICertificateUseCase(); }
+    public getUpdateCertificateEnvironmentUseCase(): UpdateCertificateEnvironment { return this.orderModule.getUpdateCertificateEnvironmentUseCase(); }
 
     // Billing / SRI
     public getGenerateInvoiceUseCase(): GenerateInvoice { return this.billingModule.getGenerateInvoiceUseCase(); }

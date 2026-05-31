@@ -79,7 +79,7 @@ export class CheckCreditNoteStatus {
                 // Generate new XML (pass undefined to force new access key)
                 const xml = this.sriService.generateCreditNoteXML(billingNC, undefined);
                 const newAccessKey = billingNC.info.claveAcceso!;
-                const signedXml = await this.sriService.signXML(xml);
+                const signedXml = await this.sriService.signXML(xml, config || undefined);
 
                 logger.info(`[CheckCreditNoteStatus] New Access Key generated: ${newAccessKey}`);
 
@@ -119,7 +119,7 @@ export class CheckCreditNoteStatus {
                     if (config && originalBill) {
                         const billingNC = this.mapToBillingCreditNote(creditNote, config, originalBill);
                         const xml = this.sriService.generateCreditNoteXML(billingNC, accessKey);
-                        const signedXml = await this.sriService.signXML(xml);
+                        const signedXml = await this.sriService.signXML(xml, config || undefined);
                         await this.sriService.sendCreditNoteToSRI(signedXml, isProd);
 
                         // Re-query authorization

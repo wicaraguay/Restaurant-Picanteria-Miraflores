@@ -15,6 +15,7 @@ import InvoiceProcessingModal, { InvoiceProcessState } from './InvoiceProcessing
 import { XMLViewerModal } from './XMLViewerModal';
 import { EditBillModal } from './EditBillModal';
 import ErrorLogPanel from './ErrorLogPanel';
+import ConfirmModal from '../../../components/ui/ConfirmModal';
 import { useAuth } from '../../auth';
 import { toast } from '../../../components/ui/AlertProvider';
 
@@ -101,6 +102,76 @@ const BillingHistory: React.FC = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedBillForXml, setSelectedBillForXml] = useState<Bill | null>(null);
     const [selectedBillForEdit, setSelectedBillForEdit] = useState<Bill | null>(null);
+
+    // Estados para modales de confirmación
+    const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+        isOpen: boolean;
+        type: 'bill' | 'creditNote' | 'manualSale';
+        id: string;
+        title: string;
+        message: string;
+    }>({
+        isOpen: false,
+        type: 'bill',
+        id: '',
+        title: '',
+        message: ''
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FUNCIONES DE ELIMINACIÓN CON MODAL
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    const openDeleteModal = (type: 'bill' | 'creditNote' | 'manualSale', id: string) => {
+        const titles = {
+            bill: 'Eliminar Factura',
+            creditNote: 'Eliminar Nota de Crédito',
+            manualSale: 'Eliminar Registro de Venta'
+        };
+        const messages = {
+            bill: '¿Estás seguro de que deseas eliminar esta factura? Esta acción no se puede deshacer.',
+            creditNote: '¿Estás seguro de que deseas eliminar esta nota de crédito? Esta acción no se puede deshacer.',
+            manualSale: '¿Estás seguro de que deseas eliminar este registro de venta? Esta acción no se puede deshacer.'
+        };
+        setDeleteConfirmModal({
+            isOpen: true,
+            type,
+            id,
+            title: titles[type],
+            message: messages[type]
+        });
+    };
+
+    const handleDeleteConfirm = async () => {
+        const { type, id } = deleteConfirmModal;
+        try {
+            if (type === 'bill') {
+                setBillsLoading(true);
+                await billingService.delete(id);
+                await fetchBills();
+                toast.success('Factura eliminada correctamente', 'Éxito');
+            } else if (type === 'creditNote') {
+                setCreditNotesLoading(true);
+                await billingService.deleteCreditNote(id);
+                await fetchCreditNotes();
+                await fetchBills();
+                toast.success('Nota de crédito eliminada correctamente', 'Éxito');
+            } else if (type === 'manualSale') {
+                setManualSalesLoading(true);
+                await orderService.delete(id);
+                await fetchManualSales();
+                toast.success('Registro de venta eliminado correctamente', 'Éxito');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            toast.error('Error al eliminar el registro', 'Error');
+        } finally {
+            setBillsLoading(false);
+            setCreditNotesLoading(false);
+            setManualSalesLoading(false);
+            setDeleteConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }
+    };
 
     // ═══════════════════════════════════════════════════════════════════════════
     // FUNCIONES DE CARGA DE DATOS
@@ -873,19 +944,9 @@ const BillingHistory: React.FC = () => {
 
                                                             {/* Eliminar */}
                                                             <button
-                                                                onClick={async (e) => {
+                                                                onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    if (confirm('¿Eliminar factura?')) {
-                                                                        try {
-                                                                            setBillsLoading(true);
-                                                                            await billingService.delete(bill.id);
-                                                                            await fetchBills();
-                                                                        } catch (error) {
-                                                                            console.error('Error:', error);
-                                                                        } finally {
-                                                                            setBillsLoading(false);
-                                                                        }
-                                                                    }
+                                                                    openDeleteModal('bill', bill.id);
                                                                 }}
                                                                 className="p-1.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-dark-600 transition-all"
                                                                 title="Eliminar Registro"
@@ -1087,21 +1148,9 @@ const BillingHistory: React.FC = () => {
                                                             {/* Eliminar (Solo Admin) */}
                                                             {isAdmin && (
                                                                 <button
-                                                                    onClick={async (e) => {
+                                                                    onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        if (confirm('¿Eliminar nota de crédito? Esta acción no se puede deshacer.')) {
-                                                                            try {
-                                                                                setCreditNotesLoading(true);
-                                                                                await billingService.deleteCreditNote(cn.id);
-                                                                                await fetchCreditNotes();
-                                                                                await fetchBills(); // Refresh bills to update hasCreditNote flag
-                                                                            } catch (error) {
-                                                                                console.error('Error eliminando nota de crédito:', error);
-                                                                                toast.error('Error al eliminar la nota de crédito', 'Error');
-                                                                            } finally {
-                                                                                setCreditNotesLoading(false);
-                                                                            }
-                                                                        }
+                                                                        openDeleteModal('creditNote', cn.id);
                                                                     }}
                                                                     className="p-1.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-dark-600 transition-all"
                                                                     title="Eliminar Nota de Crédito"
@@ -1309,19 +1358,9 @@ const BillingHistory: React.FC = () => {
                                                             {isAdmin && (
                                                                 <button
                                                                     title="Eliminar Registro de Venta"
-                                                                    onClick={async (e) => {
+                                                                    onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        if (confirm('¿Estás seguro de que deseas eliminar este registro de venta?')) {
-                                                                            try {
-                                                                                setManualSalesLoading(true);
-                                                                                await orderService.delete(saleId);
-                                                                                await fetchManualSales();
-                                                                            } catch (error) {
-                                                                                console.error('Error deleting manual sale:', error);
-                                                                            } finally {
-                                                                                setManualSalesLoading(false);
-                                                                            }
-                                                                        }
+                                                                        openDeleteModal('manualSale', saleId);
                                                                     }}
                                                                     className="flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30 text-red-700 dark:text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 border border-red-100 dark:border-red-900/30"
                                                                 >
@@ -1524,6 +1563,18 @@ const BillingHistory: React.FC = () => {
                     await billingService.updateBill(id, data);
                     await fetchBills();
                 }}
+            />
+
+            {/* Modal de confirmación para eliminar */}
+            <ConfirmModal
+                isOpen={deleteConfirmModal.isOpen}
+                onClose={() => setDeleteConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={handleDeleteConfirm}
+                title={deleteConfirmModal.title}
+                message={deleteConfirmModal.message}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                type="danger"
             />
         </div>
     );

@@ -131,7 +131,7 @@ export class CheckInvoiceStatus {
                     // If shouldGenerateNewKey is true, we pass undefined to generate a fresh random key.
                     // Otherwise we pass the existing key to maintain it for the retry.
                     const xml = this.sriService.generateInvoiceXML(invoiceToResend, shouldGenerateNewKey ? undefined : fullBill.accessKey);
-                    const signedXml = await this.sriService.signXML(xml);
+                    const signedXml = await this.sriService.signXML(xml, config || undefined);
                     const finalKey = invoiceToResend.info.claveAcceso;
 
                     // Update DB with results and NEW/SAME Key + Retry Count
@@ -169,7 +169,7 @@ export class CheckInvoiceStatus {
                         invoiceToResend.info.secuencial = newSecuencial;
 
                         const newXml = this.sriService.generateInvoiceXML(invoiceToResend);
-                        const newSignedXml = await this.sriService.signXML(newXml);
+                        const newSignedXml = await this.sriService.signXML(newXml, config || undefined);
                         const finalXmlKey = invoiceToResend.info.claveAcceso;
 
                         const retryResult = await this.sriService.sendToSRI(newSignedXml, isProd);
@@ -288,7 +288,7 @@ export class CheckInvoiceStatus {
                 // CRITICAL: Pass the EXISTING authorized access key to avoid generating a new random one.
                 // Without this, the PDF/XML in the email would have a different (unauthorized) access key.
                 const xml = this.sriService.generateInvoiceXML(invoiceObj, bill.accessKey);
-                const signedXml = await this.sriService.signXML(xml);
+                const signedXml = await this.sriService.signXML(xml, config || undefined);
 
                 // Generate PDF
                 const pdfBuffer = await this.pdfService.generateInvoicePDF(invoiceObj);

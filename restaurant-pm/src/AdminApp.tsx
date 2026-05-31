@@ -291,6 +291,7 @@ const AdminContent: React.FC = () => {
                                     />
                                 } />
                                 <Route path="settings" element={<SettingsManagement />} />
+                                <Route path="settings/:tab" element={<SettingsManagement />} />
                                 <Route path="billing" element={<BillingHistory />} />
                                 <Route path="whatsapp" element={<WhatsAppManagement />} />
 

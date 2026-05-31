@@ -5,6 +5,8 @@ import { Invoice, InvoiceDetail } from '../../domain/billing/invoice';
 import { CreditNote, CreditNoteDetail } from '../../domain/billing/creditNote';
 import { signInvoiceXml, signCreditNoteXml } from 'ec-sri-invoice-signer';
 import { logger } from '../utils/Logger';
+import { certificateEncryption } from '../utils/CertificateEncryption';
+import { RestaurantConfig } from '../../domain/entities/RestaurantConfig';
 
 // Solo loguear XMLs completos en desarrollo
 const DEBUG_XML = process.env.NODE_ENV === 'development';
@@ -201,47 +203,58 @@ export class SRIService {
      * Firma el XML usando el certificado digital (.p12) con XAdES-BES
      * Implementación usando librería 'ec-sri-invoice-signer'
      */
-    public async signXML(xmlContent: string): Promise<string> {
+    public async signXML(xmlContent: string, config?: RestaurantConfig): Promise<string> {
         try {
             logger.info('[SRI] Signing XML...');
 
-            const signaturePath = process.env.SRI_SIGNATURE_PATH;
-            const signaturePassword = process.env.SRI_SIGNATURE_PASSWORD;
-            // 1. Try to load from Base64 (Preferred for Cloud/Render)
-            const p12Base64 = process.env.SRI_SIGNATURE_BASE64;
+            let p12Base64: string;
+            let signaturePassword: string;
 
-            if ((!signaturePath && !p12Base64) || !signaturePassword) {
-                throw new Error('SRI Signature configuration missing. You must provide either SRI_SIGNATURE_PATH or SRI_SIGNATURE_BASE64, and SRI_SIGNATURE_PASSWORD.');
-            }
-
-            let p12Buffer: Buffer;
-
-            if (p12Base64) {
-                logger.debug('[SRI] Loading P12 from environment variable');
-                p12Buffer = Buffer.from(p12Base64, 'base64');
+            // 1. Try to load from database (encriptado)
+            if (config?.sriCertificate) {
+                logger.info('[SRI] Loading certificate from database');
+                p12Base64 = certificateEncryption.decrypt(config.sriCertificate.certificateBase64);
+                signaturePassword = certificateEncryption.decrypt(config.sriCertificate.passwordEncrypted);
             } else {
-                // 2. Fallback to File System if Base64 is missing
-                if (!signaturePath) throw new Error('SRI_SIGNATURE_PATH is missing'); // Should not happen due to initial check
+                // 2. Fallback to environment variables (legacy)
+                logger.warn('[SRI] Certificate not found in database, falling back to environment variables');
+                const signaturePath = process.env.SRI_SIGNATURE_PATH;
+                const p12Base64Env = process.env.SRI_SIGNATURE_BASE64;
+                const signaturePasswordEnv = process.env.SRI_SIGNATURE_PASSWORD;
 
-                let p12Path = path.resolve(process.cwd(), signaturePath);
-
-                // Smart Fallback for Render/Cloud Environments
-                if (!fs.existsSync(p12Path)) {
-                    const filename = path.basename(signaturePath!);
-                    const renderSecretPath = path.join('/etc/secrets', filename);
-
-                    if (fs.existsSync(renderSecretPath)) {
-                        logger.debug('[SRI] Using Render secret path for P12');
-                        p12Path = renderSecretPath;
-                    } else {
-                        // Only throw if NEITHER exists
-                        throw new Error(`Signature file not found at: ${p12Path} OR ${renderSecretPath} (Ensure the file is uploaded to Render Secret Files OR set SRI_SIGNATURE_BASE64)`);
-                    }
+                if ((!signaturePath && !p12Base64Env) || !signaturePasswordEnv) {
+                    throw new Error('SRI Signature configuration missing. You must provide either SRI_SIGNATURE_PATH or SRI_SIGNATURE_BASE64, and SRI_SIGNATURE_PASSWORD.');
                 }
 
-                p12Buffer = fs.readFileSync(p12Path);
-                logger.debug('[SRI] P12 file loaded', { size: p12Buffer.length });
+                if (p12Base64Env) {
+                    p12Base64 = p12Base64Env;
+                } else {
+                    // Read from file system
+                    let p12Path = path.resolve(process.cwd(), signaturePath!);
+
+                    // Smart Fallback for Render/Cloud Environments
+                    if (!fs.existsSync(p12Path)) {
+                        const filename = path.basename(signaturePath!);
+                        const renderSecretPath = path.join('/etc/secrets', filename);
+
+                        if (fs.existsSync(renderSecretPath)) {
+                            logger.debug('[SRI] Using Render secret path for P12');
+                            p12Path = renderSecretPath;
+                        } else {
+                            throw new Error(`Signature file not found at: ${p12Path} OR ${renderSecretPath}`);
+                        }
+                    }
+
+                    const p12Buffer = fs.readFileSync(p12Path);
+                    p12Base64 = p12Buffer.toString('base64');
+                }
+
+                signaturePassword = signaturePasswordEnv!;
             }
+
+            // Convert base64 to buffer
+            logger.debug('[SRI] Converting P12 from base64 to buffer');
+            const p12Buffer = Buffer.from(p12Base64, 'base64');
 
             if (p12Buffer.length === 0) {
                 throw new Error('The loaded P12 certificate is empty (0 bytes)!');

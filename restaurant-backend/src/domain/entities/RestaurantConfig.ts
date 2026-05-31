@@ -53,6 +53,16 @@ export interface RestaurantConfig {
         currentSequenceNotaVenta: number;
     };
 
+    // Certificado Digital SRI (firma electrónica .p12)
+    sriCertificate?: {
+        certificateBase64: string;      // Certificado .p12 en base64 ENCRIPTADO
+        passwordEncrypted: string;      // Contraseña del certificado ENCRIPTADA
+        environment: '1' | '2';         // 1 = Pruebas, 2 = Producción
+        uploadedAt: Date;
+        validUntil?: Date;              // Fecha de expiración del certificado
+        rucInCertificate?: string;      // RUC extraído del certificado (validación)
+    };
+
     // Metadata
     createdAt?: Date;
     updatedAt?: Date;

@@ -14,6 +14,9 @@ import { UpdateCustomer } from '../../../application/use-cases/UpdateCustomer';
 import { DeleteCustomer } from '../../../application/use-cases/DeleteCustomer';
 import { GetRestaurantConfig } from '../../../application/use-cases/GetRestaurantConfig';
 import { UpdateRestaurantConfig } from '../../../application/use-cases/UpdateRestaurantConfig';
+import { UploadSRICertificate } from '../../../application/use-cases/UploadSRICertificate';
+import { DeleteSRICertificate } from '../../../application/use-cases/DeleteSRICertificate';
+import { UpdateCertificateEnvironment } from '../../../application/use-cases/UpdateCertificateEnvironment';
 import { LookupCustomer } from '../../../application/use-cases/LookupCustomer';
 import { OrderController } from '../../controllers/OrderController';
 import { CustomerController } from '../../controllers/CustomerController';
@@ -35,6 +38,9 @@ export class OrderModule {
     private lookupCustomerUseCase?: LookupCustomer;
     private getRestaurantConfigUseCase?: GetRestaurantConfig;
     private updateRestaurantConfigUseCase?: UpdateRestaurantConfig;
+    private uploadSRICertificateUseCase?: UploadSRICertificate;
+    private deleteSRICertificateUseCase?: DeleteSRICertificate;
+    private updateCertificateEnvironmentUseCase?: UpdateCertificateEnvironment;
     private orderController?: OrderController;
     private customerController?: CustomerController;
 
@@ -163,6 +169,30 @@ export class OrderModule {
         return this.updateRestaurantConfigUseCase;
     }
 
+    public getUploadSRICertificateUseCase(): UploadSRICertificate {
+        if (!this.uploadSRICertificateUseCase) {
+            this.uploadSRICertificateUseCase = new UploadSRICertificate(this.repoModule.getRestaurantConfigRepository());
+            logger.debug('UploadSRICertificate use case instantiated');
+        }
+        return this.uploadSRICertificateUseCase;
+    }
+
+    public getDeleteSRICertificateUseCase(): DeleteSRICertificate {
+        if (!this.deleteSRICertificateUseCase) {
+            this.deleteSRICertificateUseCase = new DeleteSRICertificate(this.repoModule.getRestaurantConfigRepository());
+            logger.debug('DeleteSRICertificate use case instantiated');
+        }
+        return this.deleteSRICertificateUseCase;
+    }
+
+    public getUpdateCertificateEnvironmentUseCase(): UpdateCertificateEnvironment {
+        if (!this.updateCertificateEnvironmentUseCase) {
+            this.updateCertificateEnvironmentUseCase = new UpdateCertificateEnvironment(this.repoModule.getRestaurantConfigRepository());
+            logger.debug('UpdateCertificateEnvironment use case instantiated');
+        }
+        return this.updateCertificateEnvironmentUseCase;
+    }
+
     public getOrderController(): OrderController {
         if (!this.orderController) {
             this.orderController = new OrderController(
@@ -206,6 +236,7 @@ export class OrderModule {
         this.lookupCustomerUseCase = undefined;
         this.getRestaurantConfigUseCase = undefined;
         this.updateRestaurantConfigUseCase = undefined;
+        this.uploadSRICertificateUseCase = undefined;
         this.orderController = undefined;
         this.customerController = undefined;
     }

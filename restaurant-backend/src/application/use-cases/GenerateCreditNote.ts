@@ -183,7 +183,7 @@ export class GenerateCreditNote {
                 currentAccessKey = creditNote.info.claveAcceso!; // Access key is generated in generateCreditNoteXML
 
                 // Sign XML
-                signedXml = await this.sriService.signXML(xml);
+                signedXml = await this.sriService.signXML(xml, config || undefined);
 
                 // Send to SRI
                 logger.info('[GenerateCreditNote] Sending to SRI...');

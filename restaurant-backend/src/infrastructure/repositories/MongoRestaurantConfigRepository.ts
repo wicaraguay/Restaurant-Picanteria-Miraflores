@@ -80,6 +80,16 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
                 currentSequenceNotaCredito: doc.billing.currentSequenceNotaCredito,
                 currentSequenceNotaVenta: doc.billing.currentSequenceNotaVenta
             },
+            // Certificado Digital SRI
+            // Only include if certificate has VALID data (uploadedAt is required for a valid certificate)
+            sriCertificate: (doc.sriCertificate && doc.sriCertificate.uploadedAt && doc.sriCertificate.certificateBase64) ? {
+                certificateBase64: doc.sriCertificate.certificateBase64,
+                passwordEncrypted: doc.sriCertificate.passwordEncrypted,
+                environment: doc.sriCertificate.environment,
+                uploadedAt: doc.sriCertificate.uploadedAt,
+                validUntil: doc.sriCertificate.validUntil,
+                rucInCertificate: doc.sriCertificate.rucInCertificate
+            } : undefined,
             createdAt: doc.createdAt,
             updatedAt: doc.updatedAt
         };
@@ -124,8 +134,30 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
         // Example: { $set: { billing: { taxRate: 12 } } } would ERASE billing.currentSequenceFactura!
         // We flatten nested objects to dot-notation so MongoDB does a granular field-level merge:
         // { $set: { 'billing.taxRate': 12 } } → only updates taxRate, leaves other billing fields intact.
+        //
+        // EXCEPTION: Some objects like sriCertificate should be REPLACED entirely, not merged.
+        // These are "atomic" objects where partial updates don't make sense.
+        const REPLACE_WHOLE_OBJECT = ['sriCertificate']; // Objects that should be replaced, not merged
+
         const flatConfig: Record<string, any> = {};
-        for (const [key, value] of Object.entries(config)) {
+        const unsetFields: Record<string, any> = {};
+
+        // Use Object.keys to iterate, as Object.entries skips undefined values
+        for (const key of Object.keys(config)) {
+            const value = (config as any)[key];
+
+            // Handle undefined values - need to $unset these fields in MongoDB
+            if (value === undefined) {
+                unsetFields[key] = '';
+                continue;
+            }
+
+            // Check if this is an "atomic" object that should be replaced entirely
+            if (REPLACE_WHOLE_OBJECT.includes(key)) {
+                flatConfig[key] = value;
+                continue;
+            }
+
             if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
                 // Flatten one level deep (billing.*, brandColors.*)
                 for (const [subKey, subValue] of Object.entries(value as Record<string, any>)) {
@@ -136,10 +168,19 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
             }
         }
 
+        // Build update operation
+        const updateOp: Record<string, any> = {};
+        if (Object.keys(flatConfig).length > 0) {
+            updateOp.$set = flatConfig;
+        }
+        if (Object.keys(unsetFields).length > 0) {
+            updateOp.$unset = unsetFields;
+        }
+
         // Actualizar usando dot-notation para merge granular
         const doc = await RestaurantConfigModel.findByIdAndUpdate(
             FIXED_CONFIG_ID,
-            { $set: flatConfig },
+            updateOp,
             { new: true, runValidators: false } // runValidators:false to avoid issues with partial updates
         );
 
