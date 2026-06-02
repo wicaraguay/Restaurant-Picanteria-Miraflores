@@ -232,7 +232,7 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
             const { cacheService } = await import('../utils/CacheService');
             await cacheService.invalidate('config:restaurant');
         } catch (e) {
-            console.error('Failed to invalidate cache', e);
+            logger.warn('Failed to invalidate cache', { error: e });
         }
 
         return nextSequential;
@@ -270,7 +270,7 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
             const { cacheService } = await import('../utils/CacheService');
             await cacheService.invalidate('config:restaurant');
         } catch (e) {
-            console.error('Failed to invalidate cache', e);
+            logger.warn('Failed to invalidate cache', { error: e });
         }
 
         return nextSequential;

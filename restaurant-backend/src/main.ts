@@ -31,7 +31,7 @@ import dashboardRoutes from './infrastructure/web/routes/dashboard.routes';
 
 import { cacheService } from './infrastructure/utils/CacheService';
 import { container } from './infrastructure/di/DIContainer';
-import { getWhatsAppChatbot, getWhatsAppClient, initWhatsAppClient } from './infrastructure/services/whatsapp';
+import { getWhatsAppChatbot, getWhatsAppClient, initWhatsAppClient, isWhatsAppEnabled } from './infrastructure/services/whatsapp';
 import { OrderStatus } from './domain/entities/Order';
 
 
@@ -163,62 +163,70 @@ const startServer = async () => {
 
         // Start background tasks (Cron Jobs)
         container.getCronService().init();
-        // Initialize WhatsApp Client from database config
-        // WhatsApp client se inicia bajo demanda desde el panel
 
-        // Initialize WhatsApp Chatbot with dynamic menu from database
-        const chatbot = getWhatsAppChatbot();
-        const whatsappClient = getWhatsAppClient();
-        chatbot.setMenuRepository(container.getMenuRepository());
-        chatbot.setOrderRepository(container.getOrderRepository());
-        await chatbot.loadMenuFromDatabase();
+        // Initialize WhatsApp only if enabled
+        if (isWhatsAppEnabled()) {
+            logger.info('📱 WhatsApp is ENABLED - initializing...');
 
-        // Connect WhatsApp client messages to chatbot
-        whatsappClient.on('message', async (message: any) => {
-            try {
-                // Convert whatsapp-web.js message to our format
-                const incomingMessage = {
-                    from: message.from.replace('@c.us', ''),
-                    messageId: message.id._serialized || message.id.id,
-                    type: message.type === 'chat' ? 'text' : message.type,
-                    text: message.body,
-                    buttonPayload: message.selectedButtonId,
-                    listReplyId: message.selectedRowId,
-                    timestamp: message.timestamp
-                };
+            // Initialize WhatsApp Chatbot with dynamic menu from database
+            const chatbot = getWhatsAppChatbot();
+            const whatsappClient = getWhatsAppClient();
 
-                logger.info('[WhatsApp] Message received, forwarding to chatbot', {
-                    from: incomingMessage.from,
-                    text: incomingMessage.text?.substring(0, 30)
+            if (whatsappClient) {
+                chatbot.setMenuRepository(container.getMenuRepository());
+                chatbot.setOrderRepository(container.getOrderRepository());
+                await chatbot.loadMenuFromDatabase();
+
+                // Connect WhatsApp client messages to chatbot
+                whatsappClient.on('message', async (message: any) => {
+                    try {
+                        // Convert whatsapp-web.js message to our format
+                        const incomingMessage = {
+                            from: message.from.replace('@c.us', ''),
+                            messageId: message.id._serialized || message.id.id,
+                            type: message.type === 'chat' ? 'text' : message.type,
+                            text: message.body,
+                            buttonPayload: message.selectedButtonId,
+                            listReplyId: message.selectedRowId,
+                            timestamp: message.timestamp
+                        };
+
+                        logger.info('[WhatsApp] Message received, forwarding to chatbot', {
+                            from: incomingMessage.from,
+                            text: incomingMessage.text?.substring(0, 30)
+                        });
+
+                        await chatbot.processMessage(incomingMessage as any);
+                    } catch (error) {
+                        logger.error('[WhatsApp] Error processing message', { error });
+                    }
                 });
 
-                await chatbot.processMessage(incomingMessage as any);
-            } catch (error) {
-                logger.error('[WhatsApp] Error processing message', { error });
+                // Connect chatbot to order creation system (retorna el ID del pedido)
+                const createOrderUseCase = container.getCreateOrderUseCase();
+                chatbot.setOrderCallback(async (orderData): Promise<string> => {
+                    const addressInfo = orderData.customerAddress ? ` (${orderData.customerAddress})` : '';
+                    const customerNameWithInfo = `${orderData.customerName} [WhatsApp: ${orderData.customerPhone}]${addressInfo}`;
+
+                    const order = await createOrderUseCase.execute({
+                        customerName: customerNameWithInfo,
+                        items: orderData.items.map((item: any) => ({
+                            name: item.name,
+                            quantity: item.quantity,
+                            price: item.price
+                        })),
+                        type: orderData.type as 'En Local' | 'Delivery' | 'Para Llevar',
+                        status: OrderStatus.New
+                    });
+                    logger.info('WhatsApp order created', { orderId: order.id, customer: orderData.customerName, items: orderData.items.length });
+                    return order.id;
+                });
+
+                logger.info('📱 WhatsApp Chatbot initialized with dynamic menu');
             }
-        });
-
-        // Connect chatbot to order creation system (retorna el ID del pedido)
-        const createOrderUseCase = container.getCreateOrderUseCase();
-        chatbot.setOrderCallback(async (orderData): Promise<string> => {
-            const addressInfo = orderData.customerAddress ? ` (${orderData.customerAddress})` : '';
-            const customerNameWithInfo = `${orderData.customerName} [WhatsApp: ${orderData.customerPhone}]${addressInfo}`;
-
-            const order = await createOrderUseCase.execute({
-                customerName: customerNameWithInfo,
-                items: orderData.items.map((item: any) => ({
-                    name: item.name,
-                    quantity: item.quantity,
-                    price: item.price
-                })),
-                type: orderData.type as 'En Local' | 'Delivery' | 'Para Llevar',
-                status: OrderStatus.New
-            });
-            logger.info('WhatsApp order created', { orderId: order.id, customer: orderData.customerName, items: orderData.items.length });
-            return order.id;
-        });
-
-        logger.info('📱 WhatsApp Chatbot initialized with dynamic menu');
+        } else {
+            logger.info('📱 WhatsApp is DISABLED (set WHATSAPP_ENABLED=true to enable)');
+        }
 
         // Start listening
         app.listen(PORT, () => {

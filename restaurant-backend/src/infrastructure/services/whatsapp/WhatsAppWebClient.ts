@@ -56,6 +56,8 @@ export class WhatsAppWebClient extends EventEmitter {
                 }),
                 puppeteer: {
                     headless: true,
+                    // Use system Chromium if available (Docker/production)
+                    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
                     args: [
                         '--no-sandbox',
                         '--disable-setuid-sandbox',
@@ -63,7 +65,8 @@ export class WhatsAppWebClient extends EventEmitter {
                         '--disable-accelerated-2d-canvas',
                         '--no-first-run',
                         '--no-zygote',
-                        '--disable-gpu'
+                        '--disable-gpu',
+                        '--single-process' // Important for Alpine Linux
                     ]
                 }
             });
@@ -338,7 +341,23 @@ export class WhatsAppWebClient extends EventEmitter {
 // Singleton instance
 let whatsAppWebClientInstance: WhatsAppWebClient | null = null;
 
-export function getWhatsAppClient(): WhatsAppWebClient {
+/**
+ * Check if WhatsApp is enabled via environment variable
+ */
+export function isWhatsAppEnabled(): boolean {
+    const enabled = process.env.WHATSAPP_ENABLED?.toLowerCase();
+    // Default to false in production if not explicitly set
+    if (enabled === undefined || enabled === '') {
+        return process.env.NODE_ENV !== 'production';
+    }
+    return enabled === 'true' || enabled === '1';
+}
+
+export function getWhatsAppClient(): WhatsAppWebClient | null {
+    if (!isWhatsAppEnabled()) {
+        logger.info('[WhatsAppWeb] WhatsApp is DISABLED (set WHATSAPP_ENABLED=true to enable)');
+        return null;
+    }
     if (!whatsAppWebClientInstance) {
         whatsAppWebClientInstance = new WhatsAppWebClient();
     }
@@ -347,5 +366,7 @@ export function getWhatsAppClient(): WhatsAppWebClient {
 
 export async function initWhatsAppClient(): Promise<void> {
     const client = getWhatsAppClient();
-    await client.start();
+    if (client) {
+        await client.start();
+    }
 }

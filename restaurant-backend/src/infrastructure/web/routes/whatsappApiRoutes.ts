@@ -3,8 +3,8 @@
  * Endpoints para gestión de WhatsApp desde el panel
  */
 
-import { Router, Request, Response } from 'express';
-import { getWhatsAppChatbot, getWhatsAppClient } from '../../services/whatsapp';
+import { Router, Request, Response, NextFunction } from 'express';
+import { getWhatsAppChatbot, getWhatsAppClient, isWhatsAppEnabled } from '../../services/whatsapp';
 import { logger } from '../../utils/Logger';
 import QRCode from 'qrcode';
 import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepository';
@@ -12,12 +12,59 @@ import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepo
 const router = Router();
 
 /**
+ * Middleware: Check if WhatsApp is enabled
+ */
+const requireWhatsAppEnabled = (req: Request, res: Response, next: NextFunction) => {
+    if (!isWhatsAppEnabled()) {
+        return res.status(503).json({
+            success: false,
+            error: {
+                code: 'WHATSAPP_DISABLED',
+                message: 'WhatsApp está deshabilitado en este servidor. Configure WHATSAPP_ENABLED=true para habilitarlo.'
+            }
+        });
+    }
+    next();
+};
+
+/**
+ * Helper to get WhatsApp client with non-null assertion
+ * Safe to use after requireWhatsAppEnabled middleware
+ */
+const getClient = () => {
+    const client = getClient();
+    if (!client) {
+        throw new Error('WhatsApp client not available');
+    }
+    return client;
+};
+
+/**
+ * GET /api/whatsapp/enabled
+ * Check if WhatsApp is enabled (always works, no middleware)
+ */
+router.get('/enabled', (req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            enabled: isWhatsAppEnabled(),
+            message: isWhatsAppEnabled()
+                ? 'WhatsApp está habilitado'
+                : 'WhatsApp está deshabilitado. Configure WHATSAPP_ENABLED=true para habilitarlo.'
+        }
+    });
+});
+
+// Apply middleware to all OTHER routes
+router.use(requireWhatsAppEnabled);
+
+/**
  * GET /api/whatsapp/status
  * Obtiene el estado de conexión de WhatsApp
  */
 router.get('/status', async (req: Request, res: Response) => {
     try {
-        const client = getWhatsAppClient();
+        const client = getClient();
         const status = client.getStatus();
 
         res.json({
@@ -45,7 +92,7 @@ router.get('/status', async (req: Request, res: Response) => {
  */
 router.get('/qr', async (req: Request, res: Response) => {
     try {
-        const client = getWhatsAppClient();
+        const client = getClient();
         const status = client.getStatus();
 
         if (status.isAuthenticated) {
@@ -97,7 +144,7 @@ router.get('/qr', async (req: Request, res: Response) => {
  */
 router.post('/connect', async (req: Request, res: Response) => {
     try {
-        const client = getWhatsAppClient();
+        const client = getClient();
         const status = client.getStatus();
 
         if (status.isReady) {
@@ -131,7 +178,7 @@ router.post('/connect', async (req: Request, res: Response) => {
  */
 router.post('/disconnect', async (req: Request, res: Response) => {
     try {
-        const client = getWhatsAppClient();
+        const client = getClient();
         await client.logout();
 
         res.json({
@@ -199,7 +246,7 @@ router.get('/conversations/:id', async (req: Request, res: Response) => {
 router.get('/stats', async (req: Request, res: Response) => {
     try {
         const chatbot = getWhatsAppChatbot();
-        const client = getWhatsAppClient();
+        const client = getClient();
         const conversations = chatbot.getActiveConversations();
         const status = client.getStatus();
 
@@ -237,7 +284,7 @@ router.post('/send', async (req: Request, res: Response) => {
             });
         }
 
-        const client = getWhatsAppClient();
+        const client = getClient();
 
         if (!client.isEnabled()) {
             return res.status(400).json({
