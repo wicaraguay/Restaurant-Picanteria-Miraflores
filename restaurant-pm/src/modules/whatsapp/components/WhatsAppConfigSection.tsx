@@ -7,14 +7,38 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { whatsappService, WhatsAppStatus, WhatsAppQR } from '../services/whatsappService';
 
 export const WhatsAppConfigSection: React.FC = () => {
+    const [isEnabled, setIsEnabled] = useState<boolean | null>(null);
+    const [disabledMessage, setDisabledMessage] = useState<string>('');
     const [status, setStatus] = useState<WhatsAppStatus | null>(null);
     const [qrData, setQrData] = useState<WhatsAppQR | null>(null);
     const [loading, setLoading] = useState(true);
     const [connecting, setConnecting] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
+    // Check if WhatsApp is enabled on server
+    const checkEnabled = useCallback(async () => {
+        try {
+            const response = await whatsappService.isEnabled();
+            setIsEnabled(response.enabled);
+            setDisabledMessage(response.message);
+            return response.enabled;
+        } catch (err) {
+            console.error('Error checking if WhatsApp is enabled:', err);
+            setIsEnabled(false);
+            setDisabledMessage('Error al verificar el estado de WhatsApp');
+            return false;
+        }
+    }, []);
+
     const loadStatus = useCallback(async () => {
         try {
+            // First check if enabled
+            const enabled = await checkEnabled();
+            if (!enabled) {
+                setLoading(false);
+                return;
+            }
+
             const statusData = await whatsappService.getStatus();
             setStatus(statusData);
 
@@ -29,17 +53,18 @@ export const WhatsAppConfigSection: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [checkEnabled]);
 
     useEffect(() => {
         loadStatus();
         const interval = setInterval(() => {
-            if (!status?.isConnected) {
+            // Only poll if enabled and not connected
+            if (isEnabled && !status?.isConnected) {
                 loadStatus();
             }
         }, 3000);
         return () => clearInterval(interval);
-    }, [loadStatus, status?.isConnected]);
+    }, [loadStatus, status?.isConnected, isEnabled]);
 
     const handleConnect = async () => {
         try {
@@ -82,6 +107,43 @@ export const WhatsAppConfigSection: React.FC = () => {
         return (
             <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+            </div>
+        );
+    }
+
+    // Show disabled message if WhatsApp is not enabled on server
+    if (isEnabled === false) {
+        return (
+            <div className="space-y-6">
+                {/* Disabled Status Card */}
+                <div className="p-4 rounded-lg border bg-gray-500/10 border-gray-500/30">
+                    <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                        <div>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                                WhatsApp No Disponible
+                            </p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {disabledMessage}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Info Card */}
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-orange-600 dark:text-orange-400 mb-3">
+                        ¿Por qué está deshabilitado?
+                    </h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+                        WhatsApp requiere recursos adicionales del servidor (Chromium).
+                        Para habilitar esta función, el administrador del servidor debe configurar
+                        la variable de entorno <code className="bg-gray-200 dark:bg-dark-700 px-2 py-0.5 rounded">WHATSAPP_ENABLED=true</code>.
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Contacta al administrador si necesitas esta funcionalidad.
+                    </p>
+                </div>
             </div>
         );
     }

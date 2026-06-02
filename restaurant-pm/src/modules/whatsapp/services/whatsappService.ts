@@ -6,6 +6,7 @@
 import { apiService } from '../../../api';
 
 const WHATSAPP_ENDPOINTS = {
+    ENABLED: '/whatsapp/enabled',
     STATUS: '/whatsapp/status',
     QR: '/whatsapp/qr',
     CONNECT: '/whatsapp/connect',
@@ -18,6 +19,11 @@ const WHATSAPP_ENDPOINTS = {
     TAKE_CONVERSATION: '/whatsapp/take-conversation',
     RELEASE_CONVERSATION: '/whatsapp/release-conversation'
 };
+
+export interface WhatsAppEnabledResponse {
+    enabled: boolean;
+    message: string;
+}
 
 export interface WhatsAppStatus {
     isConnected: boolean;
@@ -99,6 +105,13 @@ export interface ChatbotConfig {
 }
 
 export class WhatsAppService {
+    /**
+     * Check if WhatsApp is enabled on the server
+     */
+    async isEnabled(): Promise<WhatsAppEnabledResponse> {
+        return apiService.get<WhatsAppEnabledResponse>(WHATSAPP_ENDPOINTS.ENABLED);
+    }
+
     async getStatus(): Promise<WhatsAppStatus> {
         return apiService.get<WhatsAppStatus>(WHATSAPP_ENDPOINTS.STATUS);
     }
