@@ -31,8 +31,8 @@ const requireWhatsAppEnabled = (req: Request, res: Response, next: NextFunction)
  * Helper to get WhatsApp client with non-null assertion
  * Safe to use after requireWhatsAppEnabled middleware
  */
-const getClient = () => {
-    const client = getClient();
+const getClient = (): NonNullable<ReturnType<typeof getWhatsAppClient>> => {
+    const client = getWhatsAppClient();
     if (!client) {
         throw new Error('WhatsApp client not available');
     }
@@ -155,7 +155,7 @@ router.post('/connect', async (req: Request, res: Response) => {
         }
 
         // Iniciar cliente (generará QR)
-        client.start().catch(err => {
+        client.start().catch((err: Error) => {
             logger.error('[WhatsAppAPI] Error starting client', { error: err });
         });
 

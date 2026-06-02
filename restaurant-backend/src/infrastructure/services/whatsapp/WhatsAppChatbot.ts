@@ -62,7 +62,7 @@ export interface ChatMenuItem {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export class WhatsAppChatbot {
-    private client: WhatsAppWebClient;
+    private client: WhatsAppWebClient | null;
     private conversations: Map<string, ConversationState> = new Map();
     private menuItems: ChatMenuItem[] = [];
     private menuRepository?: IMenuRepository;
@@ -76,6 +76,23 @@ export class WhatsAppChatbot {
         this.client = getWhatsAppClient();
         this.loadConfig();
         this.startCleanupScheduler();
+    }
+
+    /**
+     * Check if chatbot is available (WhatsApp client exists)
+     */
+    public isAvailable(): boolean {
+        return this.client !== null;
+    }
+
+    /**
+     * Get client with null check - throws if not available
+     */
+    private getClientOrThrow(): WhatsAppWebClient {
+        if (!this.client) {
+            throw new Error('WhatsApp client not available - chatbot is disabled');
+        }
+        return this.client;
     }
 
     /**
@@ -133,7 +150,7 @@ export class WhatsAppChatbot {
                     // Notificar al cliente
                     try {
                         const phoneForSending = phone.replace('@c.us', '');
-                        await this.client.sendText(phoneForSending,
+                        await this.getClientOrThrow().sendText(phoneForSending,
                             `⏰ *Tiempo de espera agotado*\n\n` +
                             `No hemos recibido respuesta del equipo.\n` +
                             `Te devolvemos al asistente automático.\n\n` +
@@ -348,7 +365,7 @@ export class WhatsAppChatbot {
                 state.manualModeStartedAt = undefined;
                 state.step = 'IDLE';
                 logger.info('[WhatsAppChatbot] Manual mode deactivated by customer', { normalizedFrom });
-                await this.client.sendText(from,
+                await this.getClientOrThrow().sendText(from,
                     `🤖 *¡De vuelta al asistente automático!*\n\n` +
                     `¿En qué puedo ayudarte?`
                 );
@@ -408,7 +425,7 @@ export class WhatsAppChatbot {
             await this.sendMenu(from, state);
 
             // Confirmar que se recibió el pedido desde la web
-            await this.client.sendText(from,
+            await this.getClientOrThrow().sendText(from,
                 `✅ *¡Recibimos tu pedido desde nuestra página web!*\n\n` +
                 `🛒 *Tu pedido actual:*\n` +
                 `• 1x ${webOrderResult.name} - $${webOrderResult.price.toFixed(2)}\n\n` +
@@ -485,7 +502,7 @@ export class WhatsAppChatbot {
             state.step = 'IDLE';
             state.items = [];
             const cancelMsg = this.config?.messages?.orderCancelled || 'Pedido cancelado. Escribe "Hola" para comenzar de nuevo.';
-            await this.client.sendText(from, `❌ ${cancelMsg}`);
+            await this.getClientOrThrow().sendText(from, `❌ ${cancelMsg}`);
             return;
         }
 
@@ -495,7 +512,7 @@ export class WhatsAppChatbot {
                 state.customerName = text;
                 state.step = 'WAITING_ADDRESS';
                 const askAddressMsg = this.config?.messages?.askAddress || '¿Cuál es tu dirección para el delivery?';
-                await this.client.sendText(from, `✅ Gracias ${text}!\n\n📍 ${askAddressMsg}`);
+                await this.getClientOrThrow().sendText(from, `✅ Gracias ${text}!\n\n📍 ${askAddressMsg}`);
                 break;
 
             case 'WAITING_ADDRESS':
@@ -513,9 +530,9 @@ export class WhatsAppChatbot {
                     state.customerName = undefined;
                     state.customerAddress = undefined;
                     const cancelMsg = this.config?.messages?.orderCancelled || 'Pedido cancelado. Escribe "Hola" para comenzar de nuevo.';
-                    await this.client.sendText(from, `❌ ${cancelMsg}`);
+                    await this.getClientOrThrow().sendText(from, `❌ ${cancelMsg}`);
                 } else {
-                    await this.client.sendText(from, '❓ Por favor responde *Si* para confirmar o *No* para cancelar.');
+                    await this.getClientOrThrow().sendText(from, '❓ Por favor responde *Si* para confirmar o *No* para cancelar.');
                 }
                 break;
 
@@ -531,7 +548,7 @@ export class WhatsAppChatbot {
                 if (numberSelection) {
                     state.items.push(numberSelection);
                     state.step = 'SELECTING_ITEMS';
-                    await this.client.sendText(from,
+                    await this.getClientOrThrow().sendText(from,
                         `✅ *Agregado:* ${numberSelection.quantity}x ${numberSelection.name}\n` +
                         `💵 Subtotal: $${(numberSelection.price * numberSelection.quantity).toFixed(2)}\n\n` +
                         `🛒 *Tu pedido actual:*\n${this.formatOrderItems(state.items)}\n` +
@@ -546,7 +563,7 @@ export class WhatsAppChatbot {
                 if (parsed) {
                     state.items.push(parsed);
                     state.step = 'SELECTING_ITEMS';
-                    await this.client.sendText(from,
+                    await this.getClientOrThrow().sendText(from,
                         `✅ *Agregado:* ${parsed.quantity}x ${parsed.name}\n` +
                         `💵 Subtotal: $${(parsed.price * parsed.quantity).toFixed(2)}\n\n` +
                         `🛒 *Tu pedido actual:*\n${this.formatOrderItems(state.items)}\n` +
@@ -555,14 +572,14 @@ export class WhatsAppChatbot {
                     );
                 } else if (text === 'listo' || text === 'confirmar' || text === 'pedir') {
                     if (state.items.length === 0) {
-                        await this.client.sendText(from, '⚠️ No has agregado productos. Escribe un número del menú para agregar.');
+                        await this.getClientOrThrow().sendText(from, '⚠️ No has agregado productos. Escribe un número del menú para agregar.');
                     } else {
                         state.step = 'WAITING_NAME';
                         const askNameMsg = this.config?.messages?.askName || '¿A nombre de quién va el pedido?';
-                        await this.client.sendText(from, `👤 ${askNameMsg}`);
+                        await this.getClientOrThrow().sendText(from, `👤 ${askNameMsg}`);
                     }
                 } else {
-                    await this.client.sendText(from,
+                    await this.getClientOrThrow().sendText(from,
                         '❓ No entendí. Puedes escribir:\n' +
                         '• Un *número* del menú (ej: "1")\n' +
                         '• Cantidad + número (ej: "2 del 1")\n' +
@@ -600,14 +617,14 @@ export class WhatsAppChatbot {
             case 'CONFIRM_ORDER':
                 state.step = 'WAITING_NAME';
                 const askNameMsgBtn = this.config?.messages?.askName || '¿A nombre de quién va el pedido?';
-                await this.client.sendText(from, `👤 ${askNameMsgBtn}`);
+                await this.getClientOrThrow().sendText(from, `👤 ${askNameMsgBtn}`);
                 break;
 
             case 'CANCEL_ORDER':
                 state.step = 'IDLE';
                 state.items = [];
                 const cancelMsgBtn = this.config?.messages?.orderCancelled || 'Pedido cancelado. Escribe "Hola" para comenzar de nuevo.';
-                await this.client.sendText(from, `❌ ${cancelMsgBtn}`);
+                await this.getClientOrThrow().sendText(from, `❌ ${cancelMsgBtn}`);
                 break;
 
             case 'CONFIRM_FINAL':
@@ -634,7 +651,7 @@ export class WhatsAppChatbot {
             state.items.push({ name: item.name, quantity: 1, price: item.price });
             state.step = 'SELECTING_ITEMS';
 
-            await this.client.sendButtons(from,
+            await this.getClientOrThrow().sendButtons(from,
                 `✅ Agregado: ${item.name} ($${item.price.toFixed(2)})\n\n` +
                 `🛒 Tu pedido:\n${this.formatOrderItems(state.items)}\n` +
                 `💰 Total: $${this.calculateTotal(state.items).toFixed(2)}`,
@@ -656,7 +673,7 @@ export class WhatsAppChatbot {
         const welcomeMsg = welcomeTemplate.replace('{businessName}', businessName);
 
         // Enviamos texto con opciones numeradas (más compatible)
-        await this.client.sendText(from,
+        await this.getClientOrThrow().sendText(from,
             `👋 *${welcomeMsg}*\n\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
             `*1️⃣ Ver Menú* - Conoce nuestros productos\n` +
@@ -683,7 +700,7 @@ export class WhatsAppChatbot {
         logger.info('[WhatsAppChatbot] Human support activated by customer', { from: normalizedFrom });
 
         // Enviar mensaje al cliente
-        await this.client.sendText(from,
+        await this.getClientOrThrow().sendText(from,
             `👤 *¡Conectándote con una persona!*\n\n` +
             `Un miembro de nuestro equipo te atenderá en breve.\n\n` +
             `⏱️ Por favor espera, te responderemos lo antes posible.\n\n` +
@@ -700,7 +717,7 @@ export class WhatsAppChatbot {
         const noMenuMsg = this.config?.messages?.noMenu || 'No hay productos disponibles en este momento.';
 
         if (menuItems.length === 0) {
-            await this.client.sendText(from,
+            await this.getClientOrThrow().sendText(from,
                 `📋 *MENÚ NO DISPONIBLE*\n\n${noMenuMsg}`
             );
             return;
@@ -737,14 +754,14 @@ export class WhatsAppChatbot {
             state.menuIndexMap = indexMap;
         }
 
-        await this.client.sendText(from, menuText);
+        await this.getClientOrThrow().sendText(from, menuText);
     }
 
     /**
      * Envia ayuda
      */
     private async sendHelp(from: string): Promise<void> {
-        await this.client.sendText(from,
+        await this.getClientOrThrow().sendText(from,
             '❓ *¿Necesitas ayuda?*\n\n' +
             'Puedes escribir:\n' +
             '• "Hola" - Iniciar conversación\n' +
@@ -801,7 +818,7 @@ export class WhatsAppChatbot {
 
                     message += `\n_Escribe *Hola* para hacer un nuevo pedido._`;
 
-                    await this.client.sendText(from, message);
+                    await this.getClientOrThrow().sendText(from, message);
                     return;
                 }
             } catch (error) {
@@ -847,7 +864,7 @@ export class WhatsAppChatbot {
 
                     message += `\n\n_Escribe *Hola* para hacer un nuevo pedido._`;
 
-                    await this.client.sendText(from, message);
+                    await this.getClientOrThrow().sendText(from, message);
                     return;
                 }
             } catch (error) {
@@ -856,7 +873,7 @@ export class WhatsAppChatbot {
         }
 
         // No se encontro ningun pedido
-        await this.client.sendText(from,
+        await this.getClientOrThrow().sendText(from,
             '📦 *Estado de tu pedido*\n\n' +
             'No encontramos pedidos recientes de este número.\n\n' +
             '_Escribe *Hola* para hacer un nuevo pedido._'
@@ -901,7 +918,7 @@ export class WhatsAppChatbot {
                 state.items.push({ name: item.name, quantity: 1, price: item.price });
             }
 
-            await this.client.sendText(from,
+            await this.getClientOrThrow().sendText(from,
                 `✅ Agregado: ${item.name}\n\n` +
                 `🛒 Tu pedido:\n${this.formatOrderItems(state.items)}\n` +
                 `💰 Total: $${this.calculateTotal(state.items).toFixed(2)}\n\n` +
@@ -916,7 +933,7 @@ export class WhatsAppChatbot {
     private async confirmOrder(from: string, state: ConversationState): Promise<void> {
         const total = this.calculateTotal(state.items);
 
-        await this.client.sendText(from,
+        await this.getClientOrThrow().sendText(from,
             `📋 *RESUMEN DE TU PEDIDO*\n\n` +
             `👤 *Cliente:* ${state.customerName}\n` +
             `📍 *Dirección:* ${state.customerAddress}\n\n` +
@@ -991,7 +1008,7 @@ export class WhatsAppChatbot {
                     confirmationMessage += `_Escribe *OK* para ver los datos bancarios_`;
                 }
 
-                await this.client.sendText(from, confirmationMessage);
+                await this.getClientOrThrow().sendText(from, confirmationMessage);
                 state.step = 'WAITING_PAYMENT';
                 // Limpiar items pero mantener otros datos para consultas
                 state.items = [];
@@ -999,14 +1016,14 @@ export class WhatsAppChatbot {
             } else {
                 // Si no hay metodos de pago configurados, finalizar directamente
                 confirmationMessage += `¡Gracias por tu preferencia! 🍽️`;
-                await this.client.sendText(from, confirmationMessage);
+                await this.getClientOrThrow().sendText(from, confirmationMessage);
                 this.resetConversation(state);
             }
 
         } catch (error) {
             logger.error('[WhatsAppChatbot] Error creating order', { error });
             const errorMsg = this.config?.messages?.error || 'Hubo un error. Por favor intenta de nuevo.';
-            await this.client.sendText(from, `❌ ${errorMsg}`);
+            await this.getClientOrThrow().sendText(from, `❌ ${errorMsg}`);
         }
     }
 
@@ -1025,7 +1042,7 @@ export class WhatsAppChatbot {
             } else if (text === '2' || text.includes('transferencia')) {
                 await this.showBankDetails(from, state);
             } else {
-                await this.client.sendText(from,
+                await this.getClientOrThrow().sendText(from,
                     '❓ Por favor responde *1* para efectivo o *2* para transferencia.'
                 );
             }
@@ -1034,14 +1051,14 @@ export class WhatsAppChatbot {
             if (text.toLowerCase() === 'ok' || text.includes('efectivo') || text === '1') {
                 await this.confirmCashPayment(from, state);
             } else {
-                await this.client.sendText(from, '❓ Escribe *OK* para confirmar pago en efectivo.');
+                await this.getClientOrThrow().sendText(from, '❓ Escribe *OK* para confirmar pago en efectivo.');
             }
         } else if (hasTransfer) {
             // Solo transferencia
             if (text.toLowerCase() === 'ok' || text.includes('transferencia') || text === '1') {
                 await this.showBankDetails(from, state);
             } else {
-                await this.client.sendText(from, '❓ Escribe *OK* para ver los datos de transferencia.');
+                await this.getClientOrThrow().sendText(from, '❓ Escribe *OK* para ver los datos de transferencia.');
             }
         }
     }
@@ -1052,7 +1069,7 @@ export class WhatsAppChatbot {
     private async confirmCashPayment(from: string, state: ConversationState): Promise<void> {
         const estimatedTime = this.config?.estimatedDeliveryTime || '30-45 minutos';
 
-        await this.client.sendText(from,
+        await this.getClientOrThrow().sendText(from,
             `💵 *PAGO EN EFECTIVO CONFIRMADO*\n\n` +
             `Ten el monto exacto listo para cuando llegue tu pedido.\n\n` +
             `⏱️ Tiempo estimado: ${estimatedTime}\n\n` +
@@ -1101,7 +1118,7 @@ export class WhatsAppChatbot {
         bankMessage += `📸 *Envía la foto del comprobante* a este chat para confirmar tu pago.\n\n`;
         bankMessage += `_Tu pedido será procesado al recibir el comprobante._`;
 
-        await this.client.sendText(from, bankMessage);
+        await this.getClientOrThrow().sendText(from, bankMessage);
         // Mantenemos WAITING_PAYMENT para esperar la imagen
     }
 
@@ -1111,7 +1128,7 @@ export class WhatsAppChatbot {
     private async confirmTransferPayment(from: string, state: ConversationState): Promise<void> {
         const estimatedTime = this.config?.estimatedDeliveryTime || '30-45 minutos';
 
-        await this.client.sendText(from,
+        await this.getClientOrThrow().sendText(from,
             `✅ *COMPROBANTE RECIBIDO*\n\n` +
             `Hemos recibido tu comprobante de transferencia.\n` +
             `Verificaremos el pago y procesaremos tu pedido.\n\n` +
