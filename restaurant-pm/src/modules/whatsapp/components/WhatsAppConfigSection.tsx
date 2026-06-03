@@ -58,12 +58,12 @@ export const WhatsAppConfigSection: React.FC = () => {
     useEffect(() => {
         loadStatus();
 
-        // Poll every 3 seconds to detect connection changes
+        // Poll every 10 seconds to detect connection changes (reduced to avoid rate limits)
         const interval = setInterval(() => {
             if (isEnabled) {
                 loadStatus();
             }
-        }, 3000);
+        }, 10000);
 
         return () => clearInterval(interval);
     }, [loadStatus, isEnabled]);
