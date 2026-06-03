@@ -243,12 +243,40 @@ const startServer = async () => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down gracefully...');
+
+    // Stop WhatsApp client if running
+    if (isWhatsAppEnabled()) {
+        const whatsappClient = getWhatsAppClient();
+        if (whatsappClient) {
+            logger.info('Stopping WhatsApp client...');
+            try {
+                await whatsappClient.stop();
+            } catch (error) {
+                logger.error('Error stopping WhatsApp client', { error });
+            }
+        }
+    }
+
     await dbConnection.disconnect();
     process.exit(0);
 });
 
 process.on('SIGINT', async () => {
     logger.info('SIGINT received, shutting down gracefully...');
+
+    // Stop WhatsApp client if running
+    if (isWhatsAppEnabled()) {
+        const whatsappClient = getWhatsAppClient();
+        if (whatsappClient) {
+            logger.info('Stopping WhatsApp client...');
+            try {
+                await whatsappClient.stop();
+            } catch (error) {
+                logger.error('Error stopping WhatsApp client', { error });
+            }
+        }
+    }
+
     await dbConnection.disconnect();
     process.exit(0);
 });
