@@ -67,10 +67,13 @@ router.get('/status', async (req: Request, res: Response) => {
         const client = getClient();
         const status = client.getStatus();
 
+        // isConnected debe ser true solo si está autenticado Y listo
+        const isConnected = status.isReady && status.isAuthenticated;
+
         res.json({
             success: true,
             data: {
-                isConnected: status.isReady,
+                isConnected: isConnected,
                 isAuthenticated: status.isAuthenticated,
                 phoneNumber: status.phoneNumber,
                 hasQR: !!status.qrCode,
