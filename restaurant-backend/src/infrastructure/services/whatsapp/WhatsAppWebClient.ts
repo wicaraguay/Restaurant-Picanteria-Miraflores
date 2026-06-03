@@ -66,8 +66,14 @@ export class WhatsAppWebClient extends EventEmitter {
                         '--no-first-run',
                         '--no-zygote',
                         '--disable-gpu',
-                        '--single-process' // Important for Alpine Linux
+                        '--single-process', // Important for Alpine Linux
+                        '--disable-features=VizDisplayCompositor',
+                        '--disable-software-rasterizer'
                     ]
+                },
+                webVersionCache: {
+                    type: 'remote',
+                    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
                 }
             });
 
@@ -162,7 +168,7 @@ export class WhatsAppWebClient extends EventEmitter {
             logger.info('[WhatsAppWeb] Starting client... (this may take 30-60 seconds)');
             logger.info('[WhatsAppWeb] Launching Puppeteer/Chrome...');
 
-            // Initialize with better error handling
+            // Initialize with timeout and retry logic
             const initPromise = this.client.initialize();
 
             // Log progress
@@ -170,7 +176,12 @@ export class WhatsAppWebClient extends EventEmitter {
                 logger.info('[WhatsAppWeb] Still initializing... waiting for Chrome');
             }, 10000);
 
-            await initPromise;
+            // Add timeout to detect stuck initialization
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('WhatsApp initialization timeout after 90 seconds')), 90000)
+            );
+
+            await Promise.race([initPromise, timeoutPromise]);
 
             clearInterval(progressInterval);
             logger.info('[WhatsAppWeb] Client initialized successfully');
@@ -179,6 +190,13 @@ export class WhatsAppWebClient extends EventEmitter {
                 error: error.message,
                 stack: error.stack
             });
+
+            // If it's a "browser already running" error, suggest clearing session
+            if (error.message?.includes('browser is already running')) {
+                logger.error('[WhatsAppWeb] CRITICAL: Session files are locked. This usually means a previous instance did not shut down cleanly.');
+                logger.error('[WhatsAppWeb] To fix: Set WHATSAPP_ENABLED=false temporarily, redeploy, then set back to true');
+            }
+
             throw error;
         }
     }
