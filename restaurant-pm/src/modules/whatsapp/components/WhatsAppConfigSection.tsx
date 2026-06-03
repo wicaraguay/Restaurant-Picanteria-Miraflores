@@ -30,11 +30,19 @@ export const WhatsAppConfigSection: React.FC = () => {
         }
     }, []);
 
-    const loadStatus = useCallback(async () => {
+    const loadStatus = useCallback(async (skipEnabledCheck = false) => {
         try {
-            // First check if enabled
-            const enabled = await checkEnabled();
-            if (!enabled) {
+            // Only check if enabled on first load, not on every poll
+            if (!skipEnabledCheck) {
+                const enabled = await checkEnabled();
+                if (!enabled) {
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            // If we already know it's disabled, don't make the status request
+            if (isEnabled === false) {
                 setLoading(false);
                 return;
             }
@@ -53,15 +61,15 @@ export const WhatsAppConfigSection: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [checkEnabled]);
+    }, [checkEnabled, isEnabled]);
 
     useEffect(() => {
-        loadStatus();
+        loadStatus(); // First load - checks if enabled
 
-        // Poll every 10 seconds to detect connection changes (reduced to avoid rate limits)
+        // Poll every 10 seconds to detect connection changes (skip enabled check after first load)
         const interval = setInterval(() => {
             if (isEnabled) {
-                loadStatus();
+                loadStatus(true); // Skip enabled check on polling
             }
         }, 10000);
 
@@ -201,7 +209,7 @@ export const WhatsAppConfigSection: React.FC = () => {
                             <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-sm">
                                 Abre WhatsApp en tu telefono, ve a <strong>Dispositivos vinculados</strong> y escanea este codigo
                             </p>
-                            <button onClick={loadStatus} className="text-sm text-green-600 hover:text-green-700 underline">
+                            <button onClick={() => loadStatus(true)} className="text-sm text-green-600 hover:text-green-700 underline">
                                 Refrescar QR
                             </button>
                         </div>
