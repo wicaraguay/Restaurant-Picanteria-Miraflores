@@ -68,7 +68,25 @@ export class WhatsAppWebClient extends EventEmitter {
                         '--disable-gpu',
                         '--single-process', // Important for Alpine Linux
                         '--disable-features=VizDisplayCompositor',
-                        '--disable-software-rasterizer'
+                        '--disable-software-rasterizer',
+                        // Memory optimization flags
+                        '--disable-extensions',
+                        '--disable-background-networking',
+                        '--disable-background-timer-throttling',
+                        '--disable-backgrounding-occluded-windows',
+                        '--disable-breakpad',
+                        '--disable-component-extensions-with-background-pages',
+                        '--disable-default-apps',
+                        '--disable-hang-monitor',
+                        '--disable-prompt-on-repost',
+                        '--disable-sync',
+                        '--metrics-recording-only',
+                        '--no-default-browser-check',
+                        '--no-pings',
+                        '--password-store=basic',
+                        '--use-mock-keychain',
+                        '--disable-blink-features=AutomationControlled',
+                        '--js-flags=--max-old-space-size=256' // Limit V8 heap to 256MB
                     ]
                 },
                 webVersionCache: {
