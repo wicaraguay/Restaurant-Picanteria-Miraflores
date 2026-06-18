@@ -1,0 +1,98 @@
+# ============================================
+# Docker Compose para Produccion (VPS)
+# Solo Backend + MongoDB (Frontend en Vercel)
+# ============================================
+
+services:
+  # ============================================
+  # MongoDB Database
+  # ============================================
+  mongodb:
+    image: mongo:7
+    container_name: restaurant-pm-db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: restaurant-pm
+    volumes:
+      - mongodb_data:/data/db
+      - ./backups:/backups
+    networks:
+      - restaurant-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # ============================================
+  # Backend API (Node.js/Express + WhatsApp)
+  # ============================================
+  backend:
+    build:
+      context: ./restaurant-backend
+      dockerfile: Dockerfile
+    container_name: restaurant-pm-backend
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongodb:27017/restaurant-pm?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-24h}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      # WhatsApp
+      - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-true}
+      # SRI Ecuador
+      - SRI_ENV=${SRI_ENV:-1}
+      - SRI_SIGNATURE_BASE64=${SRI_SIGNATURE_BASE64}
+      - SRI_SIGNATURE_PASSWORD=${SRI_SIGNATURE_PASSWORD}
+      # Datos del negocio
+      - BUSINESS_NAME=${BUSINESS_NAME}
+      - COMMERCIAL_NAME=${COMMERCIAL_NAME}
+      - RUC=${RUC}
+      - DIR_MATRIZ=${DIR_MATRIZ}
+      - DIR_ESTABLECIMIENTO=${DIR_ESTABLECIMIENTO}
+      - ESTAB=${ESTAB:-001}
+      - PTO_EMI=${PTO_EMI:-001}
+      # Email
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - SMTP_FROM=${SMTP_FROM}
+      - TEST_EMAIL=${TEST_EMAIL}
+      - BUSINESS_LOGO_URL=${BUSINESS_LOGO_URL}
+    ports:
+      - "3000:3000"
+    volumes:
+      - whatsapp_session:/app/whatsapp-session
+      - whatsapp_cache:/app/.wwebjs_cache
+    networks:
+      - restaurant-network
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# ============================================
+# Volumenes persistentes
+# ============================================
+volumes:
+  mongodb_data:
+    driver: local
+  whatsapp_session:
+    driver: local
+  whatsapp_cache:
+    driver: local
+
+# ============================================
+# Red interna
+# ============================================
+networks:
+  restaurant-network:
+    driver: bridge
