@@ -45,6 +45,7 @@ services:
       - MONGODB_URI=mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongodb:27017/restaurant-pm?authSource=admin
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION=${JWT_EXPIRATION:-24h}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       # WhatsApp
       - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-true}
