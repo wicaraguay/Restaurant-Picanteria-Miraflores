@@ -58,6 +58,7 @@ const Login = lazy(() => import('./modules/auth/components/Login'));
 const MobileBottomNav = lazy(() => import('./components/layout/MobileBottomNav'));
 const BillingHistory = lazy(() => import('./modules/billing/components/BillingHistory'));
 const WhatsAppManagement = lazy(() => import('./modules/whatsapp/components/WhatsAppManagement'));
+const WebsiteManagement = lazy(() => import('./modules/website/components/WebsiteManagement'));
 
 /**
  * Loading fallback component
@@ -294,6 +295,7 @@ const AdminContent: React.FC = () => {
                                 <Route path="settings/:tab" element={<SettingsManagement />} />
                                 <Route path="billing" element={<BillingHistory />} />
                                 <Route path="whatsapp" element={<WhatsAppManagement />} />
+                                <Route path="website" element={<WebsiteManagement />} />
 
                                 <Route path="" element={<Navigate to="dashboard" replace />} />
                                 <Route path="*" element={<Navigate to="dashboard" replace />} />

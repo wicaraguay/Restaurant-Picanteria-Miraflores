@@ -79,7 +79,7 @@ const SettingsManagement: React.FC = () => {
         phone: config.phone,
         email: config.email,
         address: config.address,
-        website: config.website || '',
+        websiteUrl: config.websiteUrl || '',
     });
 
     const [fiscalInfo, setFiscalInfo] = useState({
@@ -102,7 +102,7 @@ const SettingsManagement: React.FC = () => {
             phone: config.phone,
             email: config.email,
             address: config.address,
-            website: config.website || '',
+            websiteUrl: config.websiteUrl || '',
         });
         setFiscalInfo({
             ruc: config.ruc,

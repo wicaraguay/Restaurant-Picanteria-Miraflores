@@ -65,6 +65,12 @@ export const RestaurantConfigProvider: React.FC<RestaurantConfigProviderProps> =
                             localStorage.setItem('restaurant_config', JSON.stringify(parsed));
                         }
                     }
+                    // Validate website - if it's a string (old format), remove it so default CMS config is used
+                    if (parsed.website && typeof parsed.website === 'string') {
+                        console.warn('Removing legacy website string from cache (now uses WebsiteConfig object)');
+                        delete parsed.website;
+                        localStorage.setItem('restaurant_config', JSON.stringify(parsed));
+                    }
                     return parsed;
                 } catch (e) {
                     console.error('Error parsing cached config', e);
@@ -124,6 +130,31 @@ export const RestaurantConfigProvider: React.FC<RestaurantConfigProviderProps> =
                 ...config.billing,
                 ...(newConfig.billing || {}),
             },
+            // Merge profundo para website (CMS)
+            website: newConfig.website ? {
+                hero: {
+                    ...(config.website?.hero || {}),
+                    ...(newConfig.website.hero || {}),
+                },
+                footer: {
+                    ...(config.website?.footer || {}),
+                    ...(newConfig.website.footer || {}),
+                },
+                theme: {
+                    colors: {
+                        ...(config.website?.theme?.colors || {}),
+                        ...(newConfig.website.theme?.colors || {}),
+                    },
+                    fonts: {
+                        ...(config.website?.theme?.fonts || {}),
+                        ...(newConfig.website.theme?.fonts || {}),
+                    },
+                },
+                sections: {
+                    ...(config.website?.sections || {}),
+                    ...(newConfig.website.sections || {}),
+                },
+            } : config.website,
         } as RestaurantConfig;
 
         try {

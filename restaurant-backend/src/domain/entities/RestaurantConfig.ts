@@ -17,7 +17,7 @@ export interface RestaurantConfig {
     phone: string;
     email: string;
     address: string;
-    website?: string;
+    websiteUrl?: string;  // URL del sitio web del restaurante (ej: "https://mirestaurante.com")
 
     // Información fiscal (Ecuador)
     ruc: string;
@@ -63,7 +63,64 @@ export interface RestaurantConfig {
         rucInCertificate?: string;      // RUC extraído del certificado (validación)
     };
 
+    // Configuración del Sitio Web Público (CMS)
+    website?: WebsiteConfig;
+
     // Metadata
     createdAt?: Date;
     updatedAt?: Date;
+}
+
+/**
+ * Configuración del Sitio Web Público
+ */
+export interface WebsiteConfig {
+    hero: {
+        slides: HeroSlide[];
+        badge?: string;
+        ctaText?: string;
+        autoplay?: boolean;
+        interval?: number;
+    };
+    footer: {
+        aboutText?: string;
+        schedules: Schedule[];
+        socialLinks: SocialLink[];
+    };
+    theme: {
+        colors: {
+            primary: string;
+            secondary: string;
+            accent: string;
+            background: string;
+            text: string;
+        };
+        fonts?: {
+            heading: string;
+            body: string;
+        };
+    };
+    sections?: {
+        showHero?: boolean;
+        showMenu?: boolean;
+        showFooter?: boolean;
+    };
+}
+
+export interface HeroSlide {
+    id: string;
+    imageUrl: string;
+    title: string;
+    subtitle: string;
+}
+
+export interface Schedule {
+    days: string;
+    hours: string;
+    isClosed?: boolean;
+}
+
+export interface SocialLink {
+    platform: 'whatsapp' | 'instagram' | 'facebook' | 'twitter' | 'tiktok';
+    url: string;
 }

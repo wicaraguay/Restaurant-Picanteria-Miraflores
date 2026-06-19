@@ -9,7 +9,7 @@ interface BusinessInfoSectionProps {
         phone: string;
         email: string;
         address: string;
-        website: string;
+        websiteUrl: string;
     };
     onInfoChange: (info: any) => void;
     onSave: (e: React.FormEvent) => void;
@@ -105,14 +105,14 @@ const BusinessInfoSection: React.FC<BusinessInfoSectionProps> = ({ businessInfo,
                                 />
                             </div>
                             <div className="md:col-span-2 space-y-1.5">
-                                <label htmlFor="website" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Sitio Web (Para Menú Digital)</label>
+                                <label htmlFor="websiteUrl" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Sitio Web (Para Menú Digital)</label>
                                 <div className="relative">
                                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">https://</div>
                                     <input
                                         type="text"
-                                        id="website"
-                                        value={businessInfo.website.replace(/^https?:\/\//, '')}
-                                        onChange={(e) => onInfoChange({ ...businessInfo, website: 'https://' + e.target.value.replace(/^https?:\/\//, '') })}
+                                        id="websiteUrl"
+                                        value={(businessInfo.websiteUrl || '').replace(/^https?:\/\//, '')}
+                                        onChange={(e) => onInfoChange({ ...businessInfo, websiteUrl: 'https://' + e.target.value.replace(/^https?:\/\//, '') })}
                                         className={`${inputClass} pl-16`}
                                         placeholder="mirestaurante.com"
                                     />
@@ -146,12 +146,12 @@ const BusinessInfoSection: React.FC<BusinessInfoSectionProps> = ({ businessInfo,
                     </div>
 
                     <div className="flex flex-col items-center justify-center space-y-6">
-                        {businessInfo.website ? (
+                        {businessInfo.websiteUrl ? (
                             <>
                                 <div className="bg-white p-6 rounded-3xl shadow-2xl shadow-blue-500/10 border border-gray-100 dark:border-dark-700">
                                     <QRCodeCanvas
                                         id="qr-code-canvas"
-                                        value={businessInfo.website}
+                                        value={businessInfo.websiteUrl}
                                         size={220}
                                         level={"H"}
                                         includeMargin={false}
@@ -159,8 +159,8 @@ const BusinessInfoSection: React.FC<BusinessInfoSectionProps> = ({ businessInfo,
                                 </div>
                                 <div className="text-center space-y-2">
                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Escanea para ver el menú en:</p>
-                                    <a href={businessInfo.website} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-blue-600 dark:text-blue-400 hover:underline break-all">
-                                        {businessInfo.website}
+                                    <a href={businessInfo.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-blue-600 dark:text-blue-400 hover:underline break-all">
+                                        {businessInfo.websiteUrl}
                                     </a>
                                 </div>
                                 <button
