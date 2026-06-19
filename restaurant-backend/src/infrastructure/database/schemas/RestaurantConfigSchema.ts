@@ -19,7 +19,7 @@ const RestaurantConfigSchema = new Schema({
     phone: { type: String, required: true },
     email: { type: String, required: true },
     address: { type: String, required: true },
-    website: { type: String },
+    websiteUrl: { type: String },  // URL del sitio web (ej: "https://mirestaurante.com")
 
     // Información fiscal
     ruc: { type: String, required: true },
@@ -67,6 +67,56 @@ const RestaurantConfigSchema = new Schema({
         uploadedAt: { type: Date },
         validUntil: { type: Date },                // Fecha de expiración del certificado
         rucInCertificate: { type: String }         // RUC extraído del certificado (validación)
+    },
+
+    // Configuración del Sitio Web Público (CMS)
+    website: {
+        // Hero / Carrusel
+        hero: {
+            slides: [{
+                id: { type: String, required: true },
+                imageUrl: { type: String, required: true },
+                title: { type: String, required: true },
+                subtitle: { type: String }
+            }],
+            badge: { type: String },
+            ctaText: { type: String },
+            autoplay: { type: Boolean, default: true },
+            interval: { type: Number, default: 6000 }
+        },
+        // Footer
+        footer: {
+            aboutText: { type: String },
+            schedules: [{
+                days: { type: String, required: true },
+                hours: { type: String, required: true },
+                isClosed: { type: Boolean, default: false }
+            }],
+            socialLinks: [{
+                platform: { type: String, enum: ['whatsapp', 'instagram', 'facebook', 'twitter', 'tiktok'], required: true },
+                url: { type: String, required: true }
+            }]
+        },
+        // Tema / Colores
+        theme: {
+            colors: {
+                primary: { type: String },
+                secondary: { type: String },
+                accent: { type: String },
+                background: { type: String },
+                text: { type: String }
+            },
+            fonts: {
+                heading: { type: String },
+                body: { type: String }
+            }
+        },
+        // Secciones visibles
+        sections: {
+            showHero: { type: Boolean, default: true },
+            showMenu: { type: Boolean, default: true },
+            showFooter: { type: Boolean, default: true }
+        }
     }
 }, {
     timestamps: true,

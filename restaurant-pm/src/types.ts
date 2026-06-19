@@ -10,7 +10,7 @@ import type { Dispatch, SetStateAction } from 'react';
 /**
  * Tipo para vistas de la aplicación
  */
-export type ViewType = 'dashboard' | 'orders' | 'customers' | 'menu' | 'kitchen' | 'hr' | 'settings' | 'billing' | 'whatsapp';
+export type ViewType = 'dashboard' | 'orders' | 'customers' | 'menu' | 'kitchen' | 'hr' | 'settings' | 'billing' | 'whatsapp' | 'website';
 
 /**
  * Tipo helper para setState de React
@@ -36,7 +36,7 @@ export interface RestaurantConfig {
   phone: string;
   email: string;
   address: string;
-  website?: string;
+  websiteUrl?: string;  // URL del sitio web del restaurante (ej: "https://mirestaurante.com")
 
   // Información fiscal (Ecuador) - CENTRALIZADA
   ruc: string;
@@ -83,4 +83,78 @@ export interface RestaurantConfig {
     validUntil?: Date;              // Fecha de expiración
     rucInCertificate?: string;      // RUC del certificado
   };
+
+  // Configuración del Sitio Web Público (CMS)
+  website?: WebsiteConfig;
+}
+
+/**
+ * Configuración del Sitio Web Público
+ * Permite personalizar el contenido de la página pública del menú
+ */
+export interface WebsiteConfig {
+  // Hero / Carrusel
+  hero: {
+    slides: HeroSlide[];
+    badge?: string;           // Texto del badge (ej: "🍲 Tradición desde el 2000 🍲")
+    ctaText?: string;         // Texto del botón CTA
+    autoplay?: boolean;
+    interval?: number;        // Milisegundos entre slides
+  };
+
+  // Footer
+  footer: {
+    aboutText?: string;       // Descripción del restaurante
+    schedules: Schedule[];    // Horarios de atención
+    socialLinks: SocialLink[];
+  };
+
+  // Tema / Colores extendidos
+  theme: {
+    colors: {
+      primary: string;        // Color principal (ej: #E65100)
+      secondary: string;      // Color secundario (ej: #F57C00)
+      accent: string;         // Color de acento (ej: #FFB74D)
+      background: string;     // Fondo de página (ej: #FFF8E1)
+      text: string;           // Color de texto (ej: #5D4037)
+    };
+    fonts?: {
+      heading: string;        // Fuente para títulos (ej: "Fredoka")
+      body: string;           // Fuente para cuerpo (ej: "Nunito")
+    };
+  };
+
+  // Secciones visibles
+  sections?: {
+    showHero?: boolean;
+    showMenu?: boolean;
+    showFooter?: boolean;
+  };
+}
+
+/**
+ * Slide del carrusel Hero
+ */
+export interface HeroSlide {
+  id: string;
+  imageUrl: string;           // URL de Cloudinary
+  title: string;
+  subtitle: string;
+}
+
+/**
+ * Horario de atención
+ */
+export interface Schedule {
+  days: string;               // "Viernes a Domingo"
+  hours: string;              // "09:00 AM - 09:00 PM"
+  isClosed?: boolean;
+}
+
+/**
+ * Link a red social
+ */
+export interface SocialLink {
+  platform: 'whatsapp' | 'instagram' | 'facebook' | 'twitter' | 'tiktok';
+  url: string;
 }

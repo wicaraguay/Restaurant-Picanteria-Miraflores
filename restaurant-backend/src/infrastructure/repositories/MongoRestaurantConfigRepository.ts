@@ -19,7 +19,7 @@ const DEFAULT_CONFIG: Omit<RestaurantConfig, 'id' | 'createdAt' | 'updatedAt'> =
     phone: '+593 967812717',
     email: 'picanterimiraflores@gmail.com',
     address: 'Av. Eugenio Espejo Vía Antigua a Catamayo, calles entre collas e inés jiménez',
-    website: 'https://restoai.com',
+    websiteUrl: 'https://restoai.com',
     ruc: '1790012345001',
     businessName: 'Restaurante Ejemplo CIA LTDA',
     currency: 'USD',
@@ -53,7 +53,7 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
             phone: doc.phone,
             email: doc.email,
             address: doc.address,
-            website: doc.website,
+            websiteUrl: doc.websiteUrl,
             ruc: doc.ruc,
             businessName: doc.businessName,
             fiscalEmail: doc.fiscalEmail,
@@ -89,6 +89,13 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
                 uploadedAt: doc.sriCertificate.uploadedAt,
                 validUntil: doc.sriCertificate.validUntil,
                 rucInCertificate: doc.sriCertificate.rucInCertificate
+            } : undefined,
+            // Configuración del Sitio Web Público (CMS)
+            website: doc.website ? {
+                hero: doc.website.hero,
+                footer: doc.website.footer,
+                theme: doc.website.theme,
+                sections: doc.website.sections
             } : undefined,
             createdAt: doc.createdAt,
             updatedAt: doc.updatedAt
@@ -137,7 +144,7 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
         //
         // EXCEPTION: Some objects like sriCertificate should be REPLACED entirely, not merged.
         // These are "atomic" objects where partial updates don't make sense.
-        const REPLACE_WHOLE_OBJECT = ['sriCertificate']; // Objects that should be replaced, not merged
+        const REPLACE_WHOLE_OBJECT = ['sriCertificate', 'website']; // Objects that should be replaced, not merged
 
         const flatConfig: Record<string, any> = {};
         const unsetFields: Record<string, any> = {};
