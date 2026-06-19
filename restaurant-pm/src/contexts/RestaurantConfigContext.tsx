@@ -8,10 +8,31 @@
 
 import React, { createContext, useContext, useEffect, ReactNode, useState, useCallback } from 'react';
 import { RestaurantConfig } from '../types';
-import { defaultRestaurantConfig } from '../utils/defaultConfig';
+import { defaultRestaurantConfig, defaultWebsiteConfig } from '../utils/defaultConfig';
 import { applyBrandTheme } from '../utils/themeUtils';
 import { logger } from '../utils/logger';
 import { api } from '../api';
+
+/**
+ * Migra configuración legacy (website como string) al nuevo formato (objeto WebsiteConfig)
+ * Esto es necesario porque en producción puede haber datos antiguos con website como URL string
+ */
+const migrateConfig = (config: any): RestaurantConfig => {
+    const migrated = { ...config };
+
+    // Si website es string (formato antiguo), reemplazar con defaultWebsiteConfig
+    if (migrated.website && typeof migrated.website === 'string') {
+        logger.warn('Migrating legacy website string to WebsiteConfig object');
+        migrated.website = defaultWebsiteConfig;
+    }
+
+    // Si website no existe, es null, o no es objeto válido, usar default
+    if (!migrated.website || typeof migrated.website !== 'object') {
+        migrated.website = defaultWebsiteConfig;
+    }
+
+    return migrated as RestaurantConfig;
+};
 
 /**
  * Interfaz del contexto
@@ -65,13 +86,12 @@ export const RestaurantConfigProvider: React.FC<RestaurantConfigProviderProps> =
                             localStorage.setItem('restaurant_config', JSON.stringify(parsed));
                         }
                     }
-                    // Validate website - if it's a string (old format), remove it so default CMS config is used
-                    if (parsed.website && typeof parsed.website === 'string') {
-                        console.warn('Removing legacy website string from cache (now uses WebsiteConfig object)');
-                        delete parsed.website;
-                        localStorage.setItem('restaurant_config', JSON.stringify(parsed));
+                    // Migrar website si es string (formato antiguo) a objeto WebsiteConfig
+                    const migrated = migrateConfig(parsed);
+                    if (migrated !== parsed) {
+                        localStorage.setItem('restaurant_config', JSON.stringify(migrated));
                     }
-                    return parsed;
+                    return migrated;
                 } catch (e) {
                     console.error('Error parsing cached config', e);
                 }
@@ -89,9 +109,11 @@ export const RestaurantConfigProvider: React.FC<RestaurantConfigProviderProps> =
         try {
             // logger.info('Fetching restaurant config from backend'); // Reduce log noise
             const fetchedConfig = await api.config.get();
-            setConfig(fetchedConfig);
-            // ✅ Actualizar caché
-            localStorage.setItem('restaurant_config', JSON.stringify(fetchedConfig));
+            // ✅ Migrar configuración legacy (website como string → objeto)
+            const migratedConfig = migrateConfig(fetchedConfig);
+            setConfig(migratedConfig);
+            // ✅ Actualizar caché con config migrada
+            localStorage.setItem('restaurant_config', JSON.stringify(migratedConfig));
             // logger.info('Restaurant config loaded successfully');
         } catch (error) {
             logger.error('Failed to fetch restaurant config, using defaults', error);
@@ -160,9 +182,11 @@ export const RestaurantConfigProvider: React.FC<RestaurantConfigProviderProps> =
         try {
             logger.info('Updating restaurant config', { changes: Object.keys(safeNewConfig) });
             const savedConfig = await api.config.update(updatedConfig);
-            setConfig(savedConfig);
+            // ✅ Migrar por si el backend devuelve formato legacy
+            const migratedConfig = migrateConfig(savedConfig);
+            setConfig(migratedConfig);
             // ✅ Actualizar caché
-            localStorage.setItem('restaurant_config', JSON.stringify(savedConfig));
+            localStorage.setItem('restaurant_config', JSON.stringify(migratedConfig));
             logger.info('Restaurant config updated successfully');
         } catch (error) {
             logger.error('Failed to update restaurant config', error);
@@ -177,9 +201,11 @@ export const RestaurantConfigProvider: React.FC<RestaurantConfigProviderProps> =
         try {
             logger.info('Resetting restaurant config to defaults');
             const savedConfig = await api.config.update(defaultRestaurantConfig);
-            setConfig(savedConfig);
+            // ✅ Migrar por si el backend devuelve formato legacy
+            const migratedConfig = migrateConfig(savedConfig);
+            setConfig(migratedConfig);
             // ✅ Actualizar caché
-            localStorage.setItem('restaurant_config', JSON.stringify(savedConfig));
+            localStorage.setItem('restaurant_config', JSON.stringify(migratedConfig));
             logger.info('Restaurant config reset successfully');
         } catch (error) {
             logger.error('Failed to reset restaurant config', error);
