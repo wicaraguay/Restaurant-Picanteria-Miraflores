@@ -9,7 +9,7 @@ const mockBusinessInfo = {
     phone: '0987654321',
     email: 'info@miraflores.com',
     address: 'Calle Falsa 123',
-    website: 'https://miraflores.com'
+    websiteUrl: 'https://miraflores.com'
 };
 
 describe('BusinessInfoSection Component', () => {
@@ -65,7 +65,7 @@ describe('BusinessInfoSection Component', () => {
     });
 
     it('shows warning when website is missing in QR section', () => {
-        const infoWithoutWebsite = { ...mockBusinessInfo, website: '' };
+        const infoWithoutWebsite = { ...mockBusinessInfo, websiteUrl: '' };
         render(
             <BusinessInfoSection 
                 businessInfo={infoWithoutWebsite}
