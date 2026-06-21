@@ -10,7 +10,7 @@ import { PlusIcon, EditIcon, TrashIcon, SearchIcon, MinusIcon, ClipboardListIcon
 import { OrderNumberGenerator } from '../utils/orderNumberGenerator';
 import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
 import { generateAccessKey } from '../../billing/utils/sri';
-import { generateInvoiceHtml, ClientData } from '../../billing/utils/invoiceGenerator';
+import { ClientData } from '../../billing/utils/invoiceGenerator';
 import InvoiceProcessingModal, { InvoiceProcessState } from '../../billing/components/InvoiceProcessingModal';
 import { useAuth } from '../../auth/contexts/AuthContext';
 import { toast } from '../../../components/ui/AlertProvider';
@@ -391,19 +391,14 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         }
     };
 
-    const handlePrintInvoice = (accessKey?: string, authDate?: string) => {
-        if (!billingOrder) return;
-
-        const printWindow = window.open('', '_blank', 'width=800,height=600');
-        if (!printWindow) {
-            alert('Por favor permite ventanas emergentes para imprimir.');
+    const handlePrintInvoice = () => {
+        // Usar el ticket del backend para impresión térmica (80mm)
+        if (!tempBillId) {
+            toast.error('No se pudo obtener el ID de la factura para imprimir.', 'Error');
             return;
         }
-
-        const html = generateInvoiceHtml(billingOrder, config, billingData, accessKey, authDate);
-
-        printWindow.document.write(html);
-        printWindow.document.close();
+        // Abrir el ticket del backend - formato térmico 80mm
+        window.open(`${API_BASE_URL}/bills/${tempBillId}/pdf?format=ticket`, '_blank');
     };
 
     const handleCloseProcessingModal = () => {
@@ -419,7 +414,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     };
 
     const handlePrintFromProcessingModal = () => {
-        handlePrintInvoice(tempAccessKey, tempAuthDate);
+        handlePrintInvoice();
         handleCloseProcessingModal();
     };
 

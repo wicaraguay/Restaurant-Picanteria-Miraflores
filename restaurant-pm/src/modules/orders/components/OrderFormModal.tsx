@@ -56,11 +56,15 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
                 setCustomerName(order.customerName);
                 setType(order.type);
                 setStatus(order.status);
-                // Enrich items with price if missing
+                // Enrich items with price and taxRate if missing
                 const enrichedItems = order.items.map(item => {
-                    if (item.price !== undefined) return { ...item, isNew: false };
                     const menuItem = menuItems.find(m => m.name === item.name);
-                    return { ...item, price: menuItem ? menuItem.price : 0, isNew: false };
+                    return {
+                        ...item,
+                        price: item.price ?? menuItem?.price ?? 0,
+                        taxRate: item.taxRate ?? menuItem?.taxRate ?? 15, // CRÍTICO: heredar taxRate del menú
+                        isNew: false
+                    };
                 });
                 setItems(enrichedItems);
             } else {
@@ -106,11 +110,20 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
     const handleAddManualItem = () => {
         const name = prompt("Nombre del producto manual:");
         if (!name) return;
-        const priceStr = prompt("Precio del producto:");
+        const priceStr = prompt("Precio del producto (incluye IVA si aplica):");
         const price = parseFloat(priceStr || '0');
-        if (isNaN(price)) return;
+        if (isNaN(price) || price < 0) return;
 
-        setItems([...items, { name, quantity: 1, price, prepared: false, isNew: true }]);
+        // Preguntar tasa de IVA
+        const taxRateStr = prompt("Tasa de IVA del producto (0, 5, 12, 15):", "15");
+        const taxRate = parseInt(taxRateStr || '15', 10);
+        const validRates = [0, 5, 12, 15];
+        if (!validRates.includes(taxRate)) {
+            toast.error(`Tasa de IVA inválida. Debe ser: ${validRates.join(', ')}`, 'Error');
+            return;
+        }
+
+        setItems([...items, { name, quantity: 1, price, prepared: false, isNew: true, taxRate }]);
     };
 
     const handleSubmit = (e?: React.FormEvent) => {

@@ -77,9 +77,43 @@ export const EditBillModal: React.FC<EditBillModalProps> = ({
     };
 
     const calculateTotals = () => {
-        const total = formData.items.reduce((sum, item) => sum + (item.total || 0), 0);
-        const subtotal = total / 1.15;
-        const tax = total - subtotal;
+        let subtotal = 0;
+        let tax = 0;
+        let total = 0;
+        let totalInclusive15 = 0;
+        let subtotal15 = 0;
+        let iva15 = 0;
+
+        formData.items.forEach((item: any) => {
+            const itemTotal = item.total || 0;
+            total += itemTotal;
+
+            const itemTaxRate = item.taxRate !== undefined ? item.taxRate : 15;
+            if (itemTaxRate > 0) {
+                // Redondear cada item a 2 decimales (igual que el backend)
+                const base = parseFloat((itemTotal / (1 + (itemTaxRate / 100))).toFixed(2));
+                const iva = parseFloat((itemTotal - base).toFixed(2));
+                subtotal15 += base;
+                iva15 += iva;
+                totalInclusive15 += itemTotal;
+            } else {
+                subtotal += itemTotal;
+            }
+        });
+
+        // Penny adjustment para IVA 15% (igual que el backend)
+        if (totalInclusive15 > 0) {
+            const targetSubtotal15 = parseFloat((totalInclusive15 / 1.15).toFixed(2));
+            const difference = parseFloat((targetSubtotal15 - subtotal15).toFixed(2));
+            if (Math.abs(difference) > 0 && Math.abs(difference) < 0.10) {
+                subtotal15 = targetSubtotal15;
+                iva15 = parseFloat((totalInclusive15 - subtotal15).toFixed(2));
+            }
+        }
+
+        subtotal += subtotal15;
+        tax = iva15;
+
         return { subtotal, tax, total };
     };
 

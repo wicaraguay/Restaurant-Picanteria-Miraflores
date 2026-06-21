@@ -24,6 +24,7 @@ export interface BillItem {
     quantity: number;
     price: number;
     total: number;
+    taxRate?: number;  // Tasa de IVA por item (0, 5, 12, 15) - default 15
 }
 
 /** Registro de un intento fallido de envío al SRI */

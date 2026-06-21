@@ -559,20 +559,34 @@ const BillingHistory: React.FC = () => {
         let subtotal15 = 0;
         let iva15 = 0;
         let total = 0;
+        let totalInclusive15 = 0;
 
         items.forEach((item: any) => {
             const itemTotal = (item.price || 0) * (item.quantity || 0);
             total += itemTotal;
 
-            const is15Percent = item.taxRate === 15;
-            if (is15Percent) {
-                const base = itemTotal / 1.15;
+            const itemTaxRate = item.taxRate !== undefined ? item.taxRate : 15;
+            if (itemTaxRate > 0) {
+                // Redondear cada item a 2 decimales (igual que el backend)
+                const base = parseFloat((itemTotal / (1 + (itemTaxRate / 100))).toFixed(2));
+                const iva = parseFloat((itemTotal - base).toFixed(2));
                 subtotal15 += base;
-                iva15 += itemTotal - base;
+                iva15 += iva;
+                totalInclusive15 += itemTotal;
             } else {
                 subtotal0 += itemTotal;
             }
         });
+
+        // Penny adjustment para IVA 15% (igual que el backend)
+        if (totalInclusive15 > 0) {
+            const targetSubtotal15 = parseFloat((totalInclusive15 / 1.15).toFixed(2));
+            const difference = parseFloat((targetSubtotal15 - subtotal15).toFixed(2));
+            if (Math.abs(difference) > 0 && Math.abs(difference) < 0.10) {
+                subtotal15 = targetSubtotal15;
+                iva15 = parseFloat((totalInclusive15 - subtotal15).toFixed(2));
+            }
+        }
 
         return {
             subtotal0: parseFloat(subtotal0.toFixed(2)),
@@ -868,12 +882,11 @@ const BillingHistory: React.FC = () => {
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     {(() => {
-                                                        const displayTotal = (bill.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
-                                                        const displaySubtotal = displayTotal / 1.15;
+                                                        const totals = calculateOrderTotals(bill.items || []);
                                                         return (
                                                             <>
-                                                                <div className="font-black text-blue-600 dark:text-blue-400 text-base">${displayTotal.toFixed(2)}</div>
-                                                                <div className="text-[10px] font-bold text-gray-400 tracking-tighter uppercase">Sub: ${displaySubtotal.toFixed(2)}</div>
+                                                                <div className="font-black text-blue-600 dark:text-blue-400 text-base">${totals.total.toFixed(2)}</div>
+                                                                <div className="text-[10px] font-bold text-gray-400 tracking-tighter uppercase">Sub: ${(totals.subtotal0 + totals.subtotal15).toFixed(2)}</div>
                                                             </>
                                                         );
                                                     })()}
@@ -1030,9 +1043,8 @@ const BillingHistory: React.FC = () => {
                                                                     </tbody>
                                                                     <tfoot className="bg-gray-50/20 dark:bg-dark-750/30 border-t border-gray-100 dark:border-dark-700">
                                                                         {(() => {
-                                                                            const displayTotal = (bill.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
-                                                                            const displaySubtotal = displayTotal / 1.15;
-                                                                            const displayTax = displayTotal - displaySubtotal;
+                                                                            const totals = calculateOrderTotals(bill.items || []);
+                                                                            const displaySubtotal = totals.subtotal0 + totals.subtotal15;
                                                                             return (
                                                                                 <>
                                                                                     <tr>
@@ -1041,11 +1053,11 @@ const BillingHistory: React.FC = () => {
                                                                                     </tr>
                                                                                     <tr>
                                                                                         <td colSpan={3} className="px-5 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">IVA (15%)</td>
-                                                                                        <td className="px-5 py-3 text-right font-bold text-gray-600 dark:text-gray-400">${displayTax.toFixed(2)}</td>
+                                                                                        <td className="px-5 py-3 text-right font-bold text-gray-600 dark:text-gray-400">${totals.iva15.toFixed(2)}</td>
                                                                                     </tr>
                                                                                     <tr className="bg-blue-50/30 dark:bg-blue-900/10">
                                                                                         <td colSpan={3} className="px-5 py-4 text-right text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Total Factura</td>
-                                                                                        <td className="px-5 py-4 text-right font-black text-blue-700 dark:text-blue-300 text-sm">${displayTotal.toFixed(2)}</td>
+                                                                                        <td className="px-5 py-4 text-right font-black text-blue-700 dark:text-blue-300 text-sm">${totals.total.toFixed(2)}</td>
                                                                                     </tr>
                                                                                 </>
                                                                             );

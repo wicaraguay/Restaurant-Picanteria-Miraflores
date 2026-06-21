@@ -297,7 +297,8 @@ export class GenerateInvoice {
                 name: d.descripcion,
                 quantity: d.cantidad,
                 price: parseFloat(((d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)) / d.cantidad).toFixed(6)),
-                total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)
+                total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0),
+                taxRate: d.impuestos[0]?.tarifa ?? 15  // Guardar tasa de IVA por ítem (0%, 15%, etc.)
             })),
             subtotal: invoice.info.totalSinImpuestos,
             tax: totalImpuestos,

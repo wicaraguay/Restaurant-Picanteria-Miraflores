@@ -131,35 +131,100 @@ export class BillController {
 
     /**
      * Mapea los datos de una Bill persistida al formato Invoice usado por SRI/PDF Service
+     * Incluye PENNY ADJUSTMENT para consistencia con BillingService.calculateDetails()
      */
     private mapBillToInvoice = async (billData: any): Promise<{ invoice: any; config: any }> => {
         const config: any = await RestaurantConfigModel.findOne();
         const [estab, ptoEmi, secuencial] = billData.documentNumber.split('-');
         const taxRate: number = config?.billing?.taxRate || 15;
 
+        // 1. Primera pasada: calcular subtotales por item
+        const detalles = billData.items.map((item: any) => {
+            const itemTaxRate = (item.taxRate !== undefined && item.taxRate !== null) ? item.taxRate : taxRate;
+            const rateDecimal = itemTaxRate / 100;
+            const totalConIva = item.total || (item.price * item.quantity);
+
+            let subtotal: number;
+            let taxValue: number;
+
+            if (itemTaxRate === 0) {
+                subtotal = parseFloat(totalConIva.toFixed(2));
+                taxValue = 0;
+            } else {
+                subtotal = parseFloat((totalConIva / (1 + rateDecimal)).toFixed(2));
+                taxValue = parseFloat((totalConIva - subtotal).toFixed(2));
+            }
+
+            return {
+                codigoPrincipal: item.id || item.name || 'ITEM',
+                descripcion: item.name,
+                cantidad: item.quantity,
+                precioUnitario: parseFloat((subtotal / item.quantity).toFixed(6)),
+                descuento: 0,
+                precioTotalSinImpuesto: subtotal,
+                price: item.price,
+                total: totalConIva,
+                impuestos: [{
+                    codigo: '2',
+                    codigoPorcentaje: this.billingService.getTaxCode(itemTaxRate),
+                    tarifa: itemTaxRate,
+                    baseImponible: subtotal,
+                    valor: taxValue
+                }],
+                // Guardar referencia al item original para penny adjustment
+                _originalItem: item,
+                _itemTaxRate: itemTaxRate
+            };
+        });
+
+        // 2. PENNY ADJUSTMENT por grupo de IVA (igual que BillingService.calculateDetails)
+        const groupsByRate = new Map<number, { detalles: any[], totalInclusive: number }>();
+
+        detalles.forEach((detalle: any) => {
+            const rate = detalle._itemTaxRate;
+            if (!groupsByRate.has(rate)) {
+                groupsByRate.set(rate, { detalles: [], totalInclusive: 0 });
+            }
+            const group = groupsByRate.get(rate)!;
+            group.detalles.push(detalle);
+            group.totalInclusive += detalle.total;
+        });
+
+        for (const [rate, group] of groupsByRate.entries()) {
+            if (group.detalles.length === 0) continue;
+
+            const rateDecimal = rate / 100;
+            const groupSubtotalSum = group.detalles.reduce((sum: number, d: any) => sum + d.precioTotalSinImpuesto, 0);
+
+            const targetGroupSubtotal = rate === 0
+                ? parseFloat(group.totalInclusive.toFixed(2))
+                : parseFloat((group.totalInclusive / (1 + rateDecimal)).toFixed(2));
+
+            const difference = parseFloat((targetGroupSubtotal - groupSubtotalSum).toFixed(2));
+
+            if (Math.abs(difference) > 0 && Math.abs(difference) < 0.10) {
+                const lastDetalle = group.detalles[group.detalles.length - 1];
+
+                lastDetalle.precioTotalSinImpuesto = parseFloat((lastDetalle.precioTotalSinImpuesto + difference).toFixed(2));
+                lastDetalle.precioUnitario = parseFloat((lastDetalle.precioTotalSinImpuesto / lastDetalle.cantidad).toFixed(6));
+
+                const newTaxValue = rate === 0 ? 0 : parseFloat((lastDetalle.total - lastDetalle.precioTotalSinImpuesto).toFixed(2));
+                lastDetalle.impuestos[0].baseImponible = lastDetalle.precioTotalSinImpuesto;
+                lastDetalle.impuestos[0].valor = newTaxValue;
+            }
+        }
+
+        // 3. Limpiar campos temporales
+        detalles.forEach((d: any) => {
+            delete d._originalItem;
+            delete d._itemTaxRate;
+        });
+
         const invoice = {
             orderId: billData.orderId,
             authorizationDate: billData.authorizationDate,
             creationDate: billData.createdAt,
-            detalles: billData.items.map((item: any) => {
-                const subtotal = parseFloat((item.price * item.quantity).toFixed(2));
-                const taxValue = parseFloat(Math.max(0, (item.total || 0) - subtotal).toFixed(2));
-                return {
-                    codigoPrincipal: item.id || item.name || 'ITEM',
-                    descripcion: item.name,
-                    cantidad: item.quantity,
-                    precioUnitario: parseFloat((subtotal / item.quantity).toFixed(6)),
-                    descuento: 0,
-                    precioTotalSinImpuesto: subtotal,
-                    impuestos: [{
-                        codigo: '2',
-                        codigoPorcentaje: this.billingService.getTaxCode(taxRate),
-                        tarifa: taxRate,
-                        baseImponible: subtotal,
-                        valor: taxValue
-                    }]
-                };
-            }),
+            detalles,
             info: {
                 estab, ptoEmi, secuencial,
                 fechaEmision: billData.date,

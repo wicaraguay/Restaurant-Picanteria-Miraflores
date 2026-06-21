@@ -19,6 +19,9 @@ export interface BillingDetail {
     precioUnitario: number;
     descuento: number;
     precioTotalSinImpuesto: number;
+    // Campos para PDF: precios ORIGINALES con IVA incluido
+    price?: number;
+    total?: number;
     impuestos: TaxDetail[];
 }
 
@@ -72,6 +75,9 @@ export class BillingService {
                 precioUnitario: parseFloat((subtotalRounded / quantity).toFixed(6)),
                 descuento: 0,
                 precioTotalSinImpuesto: subtotalRounded,
+                // Campos para PDF: precios ORIGINALES con IVA incluido
+                price: item.price || parseFloat((totalInclusive / quantity).toFixed(2)),
+                total: totalInclusive,
                 impuestos: [{
                     codigo: '2',
                     codigoPorcentaje: this.getTaxCode(itemTaxRate),
@@ -82,32 +88,58 @@ export class BillingService {
             };
         });
 
-        // 2. PENNY ADJUSTMENT (Total-driven logic)
-        // Group by tax rate and adjust within each group
+        // 2. PENNY ADJUSTMENT (Per-tax-group logic for mixed IVA sales)
+        // Agrupa items por tasa de IVA y ajusta centavos dentro de cada grupo
         if (details.length > 0) {
-            // Only apply penny adjustment for items with the same tax rate (simplified)
-            const rateDecimal = taxRate / 100;
-            const targetTotalSubtotal = parseFloat((totalInclusiveSum / (1 + rateDecimal)).toFixed(2));
-            const subtotalDifference = parseFloat((targetTotalSubtotal - totalSubtotalSum).toFixed(2));
+            // Agrupar items por tarifa de IVA
+            const groupsByRate = new Map<number, { details: BillingDetail[], items: any[], totalInclusive: number }>();
 
-            // Only apply if all items share the same tax rate (original behavior)
-            const allSameRate = details.every(d => d.impuestos[0].tarifa === details[0].impuestos[0].tarifa);
+            details.forEach((detail, idx) => {
+                const rate = detail.impuestos[0].tarifa;
+                if (!groupsByRate.has(rate)) {
+                    groupsByRate.set(rate, { details: [], items: [], totalInclusive: 0 });
+                }
+                const group = groupsByRate.get(rate)!;
+                group.details.push(detail);
+                group.items.push(items[idx]);
 
-            if (allSameRate && Math.abs(subtotalDifference) > 0 && Math.abs(subtotalDifference) < 0.10) {
-                logger.debug(`[BillingService] Applying penny adjustment: ${subtotalDifference > 0 ? '+' : ''}${subtotalDifference} to last item subtotal`);
+                // Calcular el total inclusivo del item original
+                const itemTotal = items[idx].total || ((items[idx].price || 0) * (items[idx].quantity || 1));
+                group.totalInclusive += itemTotal;
+            });
 
-                const lastItem = details[details.length - 1];
-                lastItem.precioTotalSinImpuesto = parseFloat((lastItem.precioTotalSinImpuesto + subtotalDifference).toFixed(2));
-                lastItem.precioUnitario = parseFloat((lastItem.precioTotalSinImpuesto / lastItem.cantidad).toFixed(6));
+            // Aplicar penny adjustment a cada grupo de forma independiente
+            for (const [rate, group] of groupsByRate.entries()) {
+                if (group.details.length === 0) continue;
 
-                // Adjust baseImponible and valor for the last item's tax
-                const lastItemTotal = items[items.length - 1].total || (items[items.length - 1].price * (items[items.length - 1].quantity || 1));
-                const newTaxValue = parseFloat((lastItemTotal - lastItem.precioTotalSinImpuesto).toFixed(2));
+                const rateDecimal = rate / 100;
+                const groupSubtotalSum = group.details.reduce((sum, d) => sum + d.precioTotalSinImpuesto, 0);
 
-                lastItem.impuestos[0].baseImponible = lastItem.precioTotalSinImpuesto;
-                lastItem.impuestos[0].valor = newTaxValue;
+                // Para IVA 0%, el target es igual al total (sin división)
+                const targetGroupSubtotal = rate === 0
+                    ? parseFloat(group.totalInclusive.toFixed(2))
+                    : parseFloat((group.totalInclusive / (1 + rateDecimal)).toFixed(2));
 
-                logger.debug(`[BillingService] New Last Item: Sub=${lastItem.precioTotalSinImpuesto}, Tax=${newTaxValue}, Total=${(lastItem.precioTotalSinImpuesto + newTaxValue).toFixed(2)}`);
+                const difference = parseFloat((targetGroupSubtotal - groupSubtotalSum).toFixed(2));
+
+                if (Math.abs(difference) > 0 && Math.abs(difference) < 0.10) {
+                    logger.debug(`[BillingService] Penny adjustment for IVA ${rate}%: ${difference > 0 ? '+' : ''}${difference}`);
+
+                    const lastDetail = group.details[group.details.length - 1];
+                    const lastItem = group.items[group.items.length - 1];
+
+                    lastDetail.precioTotalSinImpuesto = parseFloat((lastDetail.precioTotalSinImpuesto + difference).toFixed(2));
+                    lastDetail.precioUnitario = parseFloat((lastDetail.precioTotalSinImpuesto / lastDetail.cantidad).toFixed(6));
+
+                    // Recalcular IVA del último item
+                    const lastItemTotal = lastItem.total || ((lastItem.price || 0) * (lastItem.quantity || 1));
+                    const newTaxValue = rate === 0 ? 0 : parseFloat((lastItemTotal - lastDetail.precioTotalSinImpuesto).toFixed(2));
+
+                    lastDetail.impuestos[0].baseImponible = lastDetail.precioTotalSinImpuesto;
+                    lastDetail.impuestos[0].valor = newTaxValue;
+
+                    logger.debug(`[BillingService] Adjusted IVA ${rate}%: Sub=${lastDetail.precioTotalSinImpuesto}, Tax=${newTaxValue}`);
+                }
             }
         }
 

@@ -4,6 +4,7 @@ import { signInvoiceXml, signCreditNoteXml } from 'ec-sri-invoice-signer';
 import { logger } from '../../utils/Logger';
 import { certificateEncryption } from '../../utils/CertificateEncryption';
 import { RestaurantConfig } from '../../../domain/entities/RestaurantConfig';
+import { SRIError } from '../../../domain/errors/CustomErrors';
 
 /**
  * Handles digital signature of XML documents using P12 certificates
@@ -53,7 +54,10 @@ export class SRISigner {
             p12Buffer = Buffer.from(p12Base64, 'base64');
 
             if (p12Buffer.length === 0) {
-                throw new Error('The loaded P12 certificate is empty (0 bytes)!');
+                throw new SRIError(
+                    'El certificado .p12 está vacío o no se pudo cargar. Suba nuevamente el certificado.',
+                    'SRI_CERTIFICATE_EMPTY'
+                );
             }
 
             // Sign using appropriate function
@@ -72,12 +76,17 @@ export class SRISigner {
                 if (signingError.message?.includes('Only 8, 16, 24, or 32 bits supported') ||
                     signingError.message?.includes('Too few bytes to parse') ||
                     signingError.message?.includes('Invalid password')) {
-                    throw new Error(
-                        'Error de Firma Electrónica: Es probable que la CONTRASEÑA sea incorrecta ' +
-                        'o el archivo .p12 esté CORRUPTO/DAÑADO. Verifique sus credenciales.'
+                    throw new SRIError(
+                        'Error de Firma Electrónica: La CONTRASEÑA del certificado es incorrecta o el archivo .p12 está CORRUPTO. ' +
+                        'Por favor, suba nuevamente el certificado con la contraseña correcta en Configuración → Certificado.',
+                        'SRI_CERTIFICATE_PASSWORD_INVALID'
                     );
                 }
-                throw signingError;
+                // Re-throw as SRIError for other signing errors
+                throw new SRIError(
+                    `Error al firmar el documento: ${signingError.message}`,
+                    'SRI_SIGNING_ERROR'
+                );
             }
 
             // FIX S-03: Clear certificate buffer from memory after successful use
@@ -113,8 +122,17 @@ export class SRISigner {
         // 1. Try to load from database (encrypted)
         if (config?.sriCertificate) {
             logger.info('[SRISigner] Loading certificate from database');
-            p12Base64 = certificateEncryption.decrypt(config.sriCertificate.certificateBase64);
-            signaturePassword = certificateEncryption.decrypt(config.sriCertificate.passwordEncrypted);
+            try {
+                p12Base64 = certificateEncryption.decrypt(config.sriCertificate.certificateBase64);
+                signaturePassword = certificateEncryption.decrypt(config.sriCertificate.passwordEncrypted);
+            } catch (decryptError: any) {
+                logger.error('[SRISigner] Failed to decrypt certificate', { error: decryptError.message });
+                throw new SRIError(
+                    'Error al desencriptar el certificado. Es posible que la clave maestra del servidor haya cambiado. ' +
+                    'Por favor, suba nuevamente el certificado en Configuración → Certificado.',
+                    'SRI_CERTIFICATE_DECRYPT_ERROR'
+                );
+            }
         } else {
             // 2. Fallback to environment variables (legacy)
             logger.warn('[SRISigner] Certificate not found in database, falling back to environment variables');
@@ -136,9 +154,10 @@ export class SRISigner {
         const signaturePasswordEnv = process.env.SRI_SIGNATURE_PASSWORD;
 
         if ((!signaturePath && !p12Base64Env) || !signaturePasswordEnv) {
-            throw new Error(
-                'SRI Signature configuration missing. You must provide either ' +
-                'SRI_SIGNATURE_PATH or SRI_SIGNATURE_BASE64, and SRI_SIGNATURE_PASSWORD.'
+            throw new SRIError(
+                'No se encontró configuración de firma electrónica. ' +
+                'Por favor, suba su certificado .p12 en Configuración → Certificado.',
+                'SRI_CERTIFICATE_NOT_CONFIGURED'
             );
         }
 
@@ -159,7 +178,11 @@ export class SRISigner {
                     logger.debug('[SRISigner] Using Render secret path for P12');
                     p12Path = renderSecretPath;
                 } else {
-                    throw new Error(`Signature file not found at: ${p12Path} OR ${renderSecretPath}`);
+                    throw new SRIError(
+                        'No se encontró el archivo de certificado .p12. ' +
+                        'Por favor, suba su certificado en Configuración → Certificado.',
+                        'SRI_CERTIFICATE_FILE_NOT_FOUND'
+                    );
                 }
             }
 

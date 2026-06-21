@@ -139,3 +139,40 @@ export class ForbiddenError extends Error {
         };
     }
 }
+
+/**
+ * SRIError - Error relacionado con el SRI (Servicio de Rentas Internas)
+ * Se usa para errores de facturación electrónica, certificados, firma digital, etc.
+ * IMPORTANTE: Este error SIEMPRE muestra el mensaje al usuario (incluso en producción)
+ * porque son errores de negocio que el usuario debe resolver.
+ * Código HTTP: 400 (Bad Request) o 502 (Bad Gateway para errores del SRI)
+ */
+export class SRIError extends Error {
+    public readonly code: string;
+    public readonly statusCode: number;
+    public readonly metadata?: any;
+
+    constructor(
+        message: string,
+        code: string = 'SRI_ERROR',
+        statusCode: number = 400,
+        metadata?: any
+    ) {
+        super(message);
+        this.name = 'SRIError';
+        this.code = code;
+        this.statusCode = statusCode;
+        this.metadata = metadata;
+        Object.setPrototypeOf(this, SRIError.prototype);
+    }
+
+    toJSON() {
+        return {
+            name: this.name,
+            code: this.code,
+            message: this.message,
+            statusCode: this.statusCode,
+            metadata: this.metadata
+        };
+    }
+}
