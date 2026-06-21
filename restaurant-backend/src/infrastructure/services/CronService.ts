@@ -32,26 +32,33 @@ export class CronService {
         logger.info('[CronService] Initializing Cron Jobs...');
 
 
-        // 1. Retry SRI Documents Cron (Every 3 hours)
-        // Adjust schedule as needed.        // Scheduled to run every 15 minutes for testing (was every 3 hours)
-        const retryJob = cron.schedule('*/15 * * * *', async () => {
-            logger.info('[CronService] Running scheduled task: RetrySRIDocuments');
+        // 1. Retry Invoices Cron (Every 15 minutes, at :00, :15, :30, :45)
+        const invoiceJob = cron.schedule('*/15 * * * *', async () => {
+            logger.info('[CronService] Running scheduled task: RetryInvoices');
             try {
-                // Retry Invoices
-                const invoiceResults = await this.retryInvoices.execute();
-                logger.info('[CronService] RetryInvoices task completed', invoiceResults);
-
-                // Retry Credit Notes
-                const ncResults = await this.retryCreditNotes.execute();
-                logger.info('[CronService] RetryCreditNotes task completed', ncResults);
+                const results = await this.retryInvoices.execute();
+                logger.info('[CronService] RetryInvoices completed', results);
             } catch (error) {
-                logger.error('[CronService] Error during RetrySRIDocuments scheduled task:', error);
+                logger.error('[CronService] RetryInvoices failed:', error);
             }
         });
 
-        this.jobs.push(retryJob);
+        // 2. Retry Credit Notes Cron (Every 15 minutes, offset by 1 min: :01, :16, :31, :46)
+        // Offset prevents both jobs from hitting SRI simultaneously
+        const creditNoteJob = cron.schedule('1-59/15 * * * *', async () => {
+            logger.info('[CronService] Running scheduled task: RetryCreditNotes');
+            try {
+                const results = await this.retryCreditNotes.execute();
+                logger.info('[CronService] RetryCreditNotes completed', results);
+            } catch (error) {
+                logger.error('[CronService] RetryCreditNotes failed:', error);
+            }
+        });
+
+        this.jobs.push(invoiceJob, creditNoteJob);
 
         logger.info(`[CronService] ${this.jobs.length} jobs scheduled successfully.`);
+        logger.info('[CronService] Schedule: Invoices at :00/:15/:30/:45, CreditNotes at :01/:16/:31/:46');
     }
 
     /**

@@ -593,6 +593,34 @@ export class ApiService {
             return this.post('/maintenance/fiscal-year-close', { year });
         }
     };
+
+    /**
+     * Auditoría del sistema (solo admin)
+     */
+    public audit = {
+        getDocumentHistory: async (collection: string, documentId: string): Promise<any> => {
+            return this.get(`/audit/history/${collection}/${documentId}`);
+        },
+        getDeletedDocuments: async (since?: string, collection?: string): Promise<any> => {
+            const params = new URLSearchParams();
+            if (since) params.append('since', since);
+            if (collection) params.append('collection', collection);
+            const query = params.toString() ? `?${params}` : '';
+            return this.get(`/audit/deleted${query}`);
+        },
+        getUserActivity: async (userId: string, limit?: number): Promise<any> => {
+            const params = new URLSearchParams();
+            if (limit) params.append('limit', limit.toString());
+            const query = params.toString() ? `?${params}` : '';
+            return this.get(`/audit/user/${userId}${query}`);
+        },
+        getStats: async (since?: string): Promise<any> => {
+            const params = new URLSearchParams();
+            if (since) params.append('since', since);
+            const query = params.toString() ? `?${params}` : '';
+            return this.get(`/audit/stats${query}`);
+        }
+    };
 }
 
 // Exportar instancia singleton
@@ -611,6 +639,7 @@ export const api = {
     roles: apiService.roles,
     export: apiService.export,
     maintenance: apiService.maintenance,
+    audit: apiService.audit,
     getToken: () => apiService.getToken(),
     setToken: (token: string | null) => apiService.setToken(token),
 };
