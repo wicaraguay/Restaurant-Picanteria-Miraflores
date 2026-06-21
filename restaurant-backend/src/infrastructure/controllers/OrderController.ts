@@ -5,6 +5,7 @@ import { UpdateOrder } from '../../application/use-cases/UpdateOrder';
 import { DeleteOrder } from '../../application/use-cases/DeleteOrder';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
+import { sanitizeSort } from '../utils/QuerySanitizer'; // FIX S-01
 
 export class OrderController {
     constructor(
@@ -37,8 +38,8 @@ export class OrderController {
             if (req.query.customerName) filter.customerName = { $regex: req.query.customerName, $options: 'i' };
             if (req.query.billingType) filter.billingType = req.query.billingType;
 
-            // Build sort from query params (default: newest first)
-            const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { createdAt: -1 };
+            // FIX S-01: Sanitize sort params to prevent NoSQL injection
+            const sort = sanitizeSort(req.query.sort as string, 'orders');
 
             logger.debug('Fetching orders with pagination', { page, limit, filter });
 

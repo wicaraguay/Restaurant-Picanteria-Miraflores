@@ -49,8 +49,9 @@ export class Logger {
     }
 
     private log(level: LogLevel, message: string, context?: any): void {
-        if (!this.isDevelopment && level === LogLevel.DEBUG) {
-            return; // No mostrar debug en producción
+        // FIX M-03: In production, only show ERROR and WARN levels
+        if (!this.isDevelopment && (level === LogLevel.DEBUG || level === LogLevel.INFO)) {
+            return; // No mostrar debug ni info en producción
         }
 
         const entry: LogEntry = {

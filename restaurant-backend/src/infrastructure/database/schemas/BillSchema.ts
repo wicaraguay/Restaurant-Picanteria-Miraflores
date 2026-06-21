@@ -70,6 +70,10 @@ BillSchema.index({ date: -1 }); // For sorting by date
 BillSchema.index({ customerIdentification: 1 }); // For customer bill lookup
 BillSchema.index({ createdAt: -1 }); // For sorting by creation date
 
+// CRITICAL compound indexes for SRI monitoring and reporting
+BillSchema.index({ sriStatus: 1, customerIdentification: 1 }); // SRI status per customer
+BillSchema.index({ sriStatus: 1, createdAt: -1 }); // Failed/pending bills sorted by date
+
 // Configure toObject to map _id to id
 BillSchema.set('toObject', {
     transform: (doc, ret: any) => {

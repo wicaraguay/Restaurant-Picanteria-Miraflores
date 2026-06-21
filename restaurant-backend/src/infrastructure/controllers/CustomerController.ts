@@ -6,6 +6,7 @@ import { UpdateCustomer } from '../../application/use-cases/UpdateCustomer';
 import { DeleteCustomer } from '../../application/use-cases/DeleteCustomer';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger } from '../utils/Logger';
+import { sanitizeSort } from '../utils/QuerySanitizer'; // FIX S-01
 
 export class CustomerController {
     constructor(
@@ -39,8 +40,8 @@ export class CustomerController {
             if (req.query.email) filter.email = { $regex: req.query.email, $options: 'i' };
             if (req.query.phone) filter.phone = { $regex: req.query.phone, $options: 'i' };
 
-            // Build sort from query params (default: newest first)
-            const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { createdAt: -1 };
+            // FIX S-01: Sanitize sort params to prevent NoSQL injection
+            const sort = sanitizeSort(req.query.sort as string, 'customers');
 
             logger.debug('Fetching customers with pagination', { page, limit, filter });
 

@@ -7,7 +7,8 @@ import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { CreditNote, CreditNoteDetail, CREDIT_NOTE_REASONS } from '../../domain/billing/creditNote';
 
 import { BillingService } from '../services/BillingService';
-import { logger } from '../../infrastructure/utils/Logger';
+import { logger, maskAccessKey } from '../../infrastructure/utils/Logger';
+import { SRI_MAX_DAILY_RETRIES, SRI_MAX_SEND_ATTEMPTS } from '../../config/billing.constants';
 
 export class GenerateCreditNote {
     constructor(
@@ -57,13 +58,23 @@ export class GenerateCreditNote {
         // If the user missed the 7-day deadline to annul, the only way to correct is a credit note.
         logger.info(`[GenerateCreditNote] Bill validated: ${originalBill.documentNumber}`);
 
-        // --- RETRY LIMIT CHECK ---
-        const todayISO = this.billingService.getCurrentDateEcuador().split('/').reverse().join('-');
+        // --- CHECK FOR EXISTING AUTHORIZED CREDIT NOTE ---
         const existingCreditNotes = await this.creditNoteRepository.findByBillId(billId);
+        const authorizedNC = existingCreditNotes.find(nc => nc.sriStatus === 'AUTORIZADO');
+        if (authorizedNC) {
+            throw new Error(
+                `Ya existe una nota de crédito AUTORIZADA para esta factura (${authorizedNC.documentNumber}). ` +
+                `Una factura solo puede tener una nota de crédito autorizada.`
+            );
+        }
+        // -------------------------------------------------
+
+        // --- RETRY LIMIT CHECK (FIX M-02: Use configurable limit) ---
+        const todayISO = this.billingService.getCurrentDateEcuador().split('/').reverse().join('-');
         const todayNC = existingCreditNotes.find(nc => nc.lastRetryDate === todayISO);
 
-        if (todayNC && (todayNC.retryCount || 0) >= 3) {
-            throw new Error('SRI_LIMIT_REACHED: Límite de 3 intentos diarios alcanzado para este comprobante (1 emisión + 2 reintentos). Por favor, intente el día de mañana con una nueva clave de acceso automática.');
+        if (todayNC && (todayNC.retryCount || 0) >= SRI_MAX_DAILY_RETRIES) {
+            throw new Error(`SRI_LIMIT_REACHED: Límite de ${SRI_MAX_DAILY_RETRIES} intentos diarios alcanzado para este comprobante. Por favor, intente el día de mañana con una nueva clave de acceso automática.`);
         }
         // -------------------------
 
@@ -98,7 +109,8 @@ export class GenerateCreditNote {
             const parts = pendingNC.documentNumber.split('-');
             secuencial = parts[parts.length - 1];
             existingPendingAccessKey = pendingNC.accessKey || undefined;
-            logger.info(`[GenerateCreditNote] ♻️ Found PENDING credit note. Reusing sequential: ${secuencial} | accessKey: ${existingPendingAccessKey}`);
+            // FIX S-02: Mask access key in logs
+            logger.info(`[GenerateCreditNote] ♻️ Found PENDING credit note. Reusing sequential: ${secuencial} | accessKey: ${maskAccessKey(existingPendingAccessKey)}`);
         } else {
             const nextSequential = await this.configRepository.getNextCreditNoteSequential();
             secuencial = nextSequential.toString().padStart(9, '0');
@@ -159,17 +171,47 @@ export class GenerateCreditNote {
         logger.info('[GenerateCreditNote] Generating XML...');
         const isProd = process.env.SRI_ENV === '2';
 
+        // FIX I-06: Save DRAFT before sending to SRI to prevent duplicates on network errors
+        // This ensures we can reuse the same sequential/accessKey on retry
+        const draftCreditNote = await this.creditNoteRepository.upsert({
+            accessKey: pendingNC?.accessKey || '', // Will be updated after XML generation
+            documentNumber: `${creditNote.info.estab}-${creditNote.info.ptoEmi}-${secuencial}`,
+            billId: billId,
+            originalAccessKey: originalBill.accessKey,
+            orderId: creditNote.orderId,
+            date: now.toISOString(),
+            reason: reason,
+            reasonDescription: reasonDescription,
+            customerName: creditNote.info.razonSocialComprador,
+            customerIdentification: creditNote.info.identificacionComprador,
+            customerAddress: originalBill.customerAddress,
+            customerEmail: creditNote.info.emailComprador,
+            items: details.map(d => ({
+                name: d.descripcion,
+                quantity: d.cantidad,
+                price: d.precioUnitario,
+                total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)
+            })),
+            subtotal: creditNote.info.totalSinImpuestos,
+            tax: totalImpuestos,
+            total: creditNote.info.importeTotal,
+            sriStatus: 'BORRADOR',
+            environment: isProd ? '2' : '1',
+            sriMessage: 'Nota de crédito en proceso de envío al SRI'
+        });
+        logger.info(`[GenerateCreditNote] Draft credit note saved with ID: ${draftCreditNote.id}`);
+
         // Retry logic: If SRI rejects due to duplicate sequential, get new one and retry
-        const MAX_ATTEMPTS = 3;
+        // FIX M-02: Use configurable limit instead of hardcoded value
         let attempts = 0;
         let result = null;
         let currentSequential = secuencial;
         let currentAccessKey = '';
         let signedXml = '';
 
-        while (attempts < MAX_ATTEMPTS) {
+        while (attempts < SRI_MAX_SEND_ATTEMPTS) {
             attempts++;
-            logger.info(`[GenerateCreditNote] Attempt ${attempts}/${MAX_ATTEMPTS} - Using sequential: ${currentSequential}`);
+            logger.info(`[GenerateCreditNote] Attempt ${attempts}/${SRI_MAX_SEND_ATTEMPTS} - Using sequential: ${currentSequential}`);
 
             try {
                 // Update credit note with current sequential
@@ -181,6 +223,16 @@ export class GenerateCreditNote {
                 const reuseKey = attempts === 1 ? existingPendingAccessKey : undefined;
                 const xml = this.sriService.generateCreditNoteXML(creditNote, reuseKey);
                 currentAccessKey = creditNote.info.claveAcceso!; // Access key is generated in generateCreditNoteXML
+
+                // FIX I-06: Update draft with accessKey BEFORE sending to SRI
+                // This ensures we can reuse the same key on retry if there's a timeout
+                await this.creditNoteRepository.upsert({
+                    id: draftCreditNote.id,
+                    accessKey: currentAccessKey,
+                    documentNumber: `${creditNote.info.estab}-${creditNote.info.ptoEmi}-${currentSequential}`,
+                    sriStatus: 'ENVIANDO',
+                    sriMessage: `Enviando al SRI (intento ${attempts}/${SRI_MAX_SEND_ATTEMPTS})...`
+                });
 
                 // Sign XML
                 signedXml = await this.sriService.signXML(xml, config || undefined);
@@ -202,7 +254,7 @@ export class GenerateCreditNote {
                     error.message.includes('ya existe en el SRI') ||
                     error.message.includes('SECUENCIAL REGISTRADO');
 
-                if (isDuplicateSequentialError && attempts < MAX_ATTEMPTS) {
+                if (isDuplicateSequentialError && attempts < SRI_MAX_SEND_ATTEMPTS) {
                     logger.info(`[GenerateCreditNote] 🔄 Duplicate sequential detected. Requesting new sequential and retrying...`);
 
                     // Get new sequential from database
@@ -214,10 +266,22 @@ export class GenerateCreditNote {
                     continue;
                 } else {
                     // Not a duplicate error OR we've exhausted attempts - propagate error
-                    if (attempts >= MAX_ATTEMPTS) {
+                    if (attempts >= SRI_MAX_SEND_ATTEMPTS) {
                         logger.error('[GenerateCreditNote] ❌ Max retry attempts reached. Unable to send credit note.');
-                        throw new Error(`Failed to send credit note after ${MAX_ATTEMPTS} attempts. Last error: ${error.message}`);
+                        // FIX I-06: Update draft with ERROR status so user can retry later
+                        await this.creditNoteRepository.upsert({
+                            id: draftCreditNote.id,
+                            sriStatus: 'ERROR',
+                            sriMessage: `Falló después de ${SRI_MAX_SEND_ATTEMPTS} intentos: ${error.message}`
+                        });
+                        throw new Error(`Failed to send credit note after ${SRI_MAX_SEND_ATTEMPTS} attempts. Last error: ${error.message}`);
                     }
+                    // FIX I-06: Update draft with ERROR status on other errors
+                    await this.creditNoteRepository.upsert({
+                        id: draftCreditNote.id,
+                        sriStatus: 'ERROR',
+                        sriMessage: error.message || 'Error desconocido'
+                    });
                     throw error;
                 }
             }
@@ -243,31 +307,12 @@ export class GenerateCreditNote {
             logger.info('[GenerateCreditNote] Requesting authorization...');
             authResult = await this.sriService.authorizeCreditNote(creditNote.info.claveAcceso!, isProd);
 
-            // 9. Persist Credit Note
+            // 9. Update Draft Credit Note with SRI response (FIX I-06: use draft ID to update, not create new)
             await this.creditNoteRepository.upsert({
+                id: draftCreditNote.id, // FIX I-06: Use draft ID to update existing record
                 accessKey: creditNote.info.claveAcceso,
                 documentNumber: `${creditNote.info.estab}-${creditNote.info.ptoEmi}-${creditNote.info.secuencial}`,
-                billId: billId,
-                originalAccessKey: originalBill.accessKey,
-                orderId: creditNote.orderId,
-                date: now.toISOString(),
-                reason: reason,
-                reasonDescription: reasonDescription,
-                customerName: creditNote.info.razonSocialComprador,
-                customerIdentification: creditNote.info.identificacionComprador,
-                customerAddress: originalBill.customerAddress,
-                customerEmail: creditNote.info.emailComprador,
-                items: details.map(d => ({
-                    name: d.descripcion,
-                    quantity: d.cantidad,
-                    price: d.precioUnitario,
-                    total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)
-                })),
-                subtotal: creditNote.info.totalSinImpuestos,
-                tax: totalImpuestos,
-                total: creditNote.info.importeTotal,
                 sriStatus: authResult.estado || result.estado,
-                environment: creditNote.info.ambiente,
                 authorizationDate: authResult.fechaAutorizacion,
                 sriMessage: (authResult.mensajes || result.mensajes || []).join(' '),
                 retryCount: 1, // First attempt
@@ -278,10 +323,8 @@ export class GenerateCreditNote {
             const cnFinalStatus = authResult.estado || result.estado;
             const cnFinalMessage = (authResult.mensajes || result.mensajes || []).join(' ');
             if (cnFinalStatus !== 'AUTORIZADO' && cnFinalMessage) {
-                // Obtener el documento recién creado para obtener su ID
-                const savedCN = await this.creditNoteRepository.findByAccessKey(creditNote.info.claveAcceso!);
-                if (savedCN) {
-                    await (this.creditNoteRepository as any).pushErrorLog(savedCN.id, {
+                // FIX I-06: Use draft ID directly instead of searching
+                await (this.creditNoteRepository as any).pushErrorLog(draftCreditNote.id, {
                         timestamp: new Date().toISOString(),
                         sriStatus: cnFinalStatus || 'DESCONOCIDO',
                         message: cnFinalMessage,
@@ -302,7 +345,7 @@ export class GenerateCreditNote {
             }, now);
 
             // 10.1. Mark the original bill as cancelled (only if credit note was authorized)
-            if (authResult.estado === 'AUTORIZADO') {
+            if (authResult && authResult.estado === 'AUTORIZADO') {
                 await this.billRepository.upsert({
                     id: billId,
                     hasCreditNote: true,
@@ -320,39 +363,47 @@ export class GenerateCreditNote {
                 originalBill.customerEmail.includes('@') &&
                 originalBill.customerEmail.includes('.');
 
-            if (authResult.estado === 'AUTORIZADO' && isValidEmail) {
-                try {
-                    logger.info(`[GenerateCreditNote] Sending email to ${originalBill.customerEmail}`);
-                    if (authResult.fechaAutorizacion) creditNote.authorizationDate = authResult.fechaAutorizacion;
+            let emailStatus: { sent: boolean; skipped: boolean; error?: string; skipReason?: string } = {
+                sent: false,
+                skipped: false
+            };
 
-                    // Generate PDF for Credit Note
-                    const pdfBuffer = await this.pdfService.generateCreditNotePDF(creditNote);
+            if (authResult && authResult.estado === 'AUTORIZADO' && isValidEmail) {
+                logger.info(`[GenerateCreditNote] Sending email to ${originalBill.customerEmail}`);
+                if (authResult.fechaAutorizacion) creditNote.authorizationDate = authResult.fechaAutorizacion;
 
-                    // Send Email with PDF and Signed XML
-                    await this.emailService.sendCreditNoteEmail(
-                        originalBill.customerEmail!,
-                        creditNote,
-                        pdfBuffer,
-                        signedXml
-                    );
+                // Generate PDF for Credit Note
+                const pdfBuffer = await this.pdfService.generateCreditNotePDF(creditNote);
 
-                    logger.info('[GenerateCreditNote] Credit note email sent successfully');
-                } catch (emailError) {
-                    logger.error('[GenerateCreditNote] Failed to send credit note email:', emailError);
-                    // We don't throw here to avoid failing the whole process just because of an email error
+                // Send Email with PDF and Signed XML
+                const emailResult = await this.emailService.sendCreditNoteEmail(
+                    originalBill.customerEmail!,
+                    creditNote,
+                    pdfBuffer,
+                    signedXml
+                );
+
+                emailStatus.sent = emailResult.success;
+                if (!emailResult.success) {
+                    emailStatus.error = emailResult.error;
+                    logger.warn(`[GenerateCreditNote] Email failed: ${emailResult.error}`);
+                } else {
+                    logger.info(`[GenerateCreditNote] Credit note email sent successfully. MessageId: ${emailResult.messageId}`);
                 }
             } else {
+                emailStatus.skipped = true;
+                emailStatus.skipReason = !isValidEmail ? 'Email inválido' : 'Nota de crédito no autorizada';
                 logger.info('[GenerateCreditNote] Skipping email - Conditions not met (Not Authorized or Invalid Email)');
             }
-        }
 
-        return {
-            success: true,
-            creditNoteId: creditNote.info.secuencial,
-            accessKey: creditNote.info.claveAcceso,
-            sriResponse: result,
-            authorization: authResult
-        };
-    }
+            return {
+                success: true,
+                creditNoteId: creditNote.info.secuencial,
+                accessKey: creditNote.info.claveAcceso,
+                sriResponse: result,
+                authorization: authResult,
+                emailStatus
+            };
+        }
 
 }

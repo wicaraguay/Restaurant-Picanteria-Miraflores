@@ -17,8 +17,56 @@ import { JWTService } from '../../utils/JWTService';
 const router = express.Router();
 
 /**
- * POST /api/auth/login
- * Autentica un usuario y retorna JWT token
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Authenticate user
+ *     description: Authenticates a user with username and password, returns JWT token
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 example: admin
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: admin123
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       type: object
+ *                     token:
+ *                       type: string
+ *                     sessionId:
+ *                       type: string
+ *       401:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/login', ErrorHandler.asyncHandler(async (req, res) => {
     const { username, password } = req.body;
@@ -42,8 +90,36 @@ router.post('/login', ErrorHandler.asyncHandler(async (req, res) => {
 }));
 
 /**
- * GET /api/auth/validate
- * Valida un token JWT y retorna datos del usuario
+ * @swagger
+ * /api/auth/validate:
+ *   get:
+ *     summary: Validate JWT token
+ *     description: Validates a JWT token and returns user data
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Token is valid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       type: object
+ *       401:
+ *         description: Invalid or expired token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/validate', ErrorHandler.asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization;
@@ -66,8 +142,27 @@ router.get('/validate', ErrorHandler.asyncHandler(async (req, res) => {
 }));
 
 /**
- * POST /api/auth/logout
- * Cierra sesión invalidando el sessionId
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout user
+ *     description: Logs out user by invalidating the session
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logout successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       401:
+ *         description: Invalid or missing token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/logout', ErrorHandler.asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization;

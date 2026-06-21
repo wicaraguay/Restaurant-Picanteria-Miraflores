@@ -102,3 +102,24 @@ export class Logger {
 
 // Export singleton instance
 export const logger = Logger.getInstance();
+
+/**
+ * FIX S-02: Mask sensitive data for logging
+ * Access keys are 49 characters - show only first 8 and last 4
+ * Example: 2506202601179... → 25062026****...****9123
+ */
+export function maskAccessKey(key: string | undefined | null): string {
+    if (!key) return '[no-key]';
+    if (key.length < 16) return '***masked***';
+    return `${key.substring(0, 8)}****...****${key.slice(-4)}`;
+}
+
+/**
+ * Mask any string that looks like sensitive data
+ * Useful for general purpose masking in logs
+ */
+export function maskSensitive(value: string | undefined | null, showFirst: number = 4, showLast: number = 4): string {
+    if (!value) return '[empty]';
+    if (value.length <= showFirst + showLast) return '***';
+    return `${value.substring(0, showFirst)}${'*'.repeat(Math.min(8, value.length - showFirst - showLast))}${value.slice(-showLast)}`;
+}

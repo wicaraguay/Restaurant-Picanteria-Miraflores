@@ -7,7 +7,7 @@ import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 
 import { BillingService } from '../services/BillingService';
-import { logger } from '../../infrastructure/utils/Logger';
+import { logger, maskAccessKey } from '../../infrastructure/utils/Logger';
 
 export class CheckInvoiceStatus {
     constructor(
@@ -25,7 +25,8 @@ export class CheckInvoiceStatus {
         const billInDb = await this.billRepository.findByAccessKey(accessKey);
 
         if (!billInDb) {
-            logger.warn(`[CheckInvoiceStatus] Bill with Access Key ${accessKey} not found in DB.`);
+            // FIX S-02: Mask access key in logs
+            logger.warn(`[CheckInvoiceStatus] Bill with Access Key ${maskAccessKey(accessKey)} not found in DB.`);
             return { success: false, error: 'Factura no encontrada en base de datos local.' };
         }
 
@@ -52,6 +53,19 @@ export class CheckInvoiceStatus {
 
             if (fullBill) {
                 try {
+                    // IMPORTANT FIX I-02: Validate Consumidor Final $50 limit before resend
+                    // SRI 2026 regulation (NAC-DGERCGC25-00000017) prohibits CF invoices >= $50
+                    try {
+                        this.billingService.validateConsumidorFinal(fullBill.customerIdentification, fullBill.total);
+                    } catch (validationError: any) {
+                        logger.warn(`[CheckInvoiceStatus] Validation failed: ${validationError.message}`);
+                        return {
+                            success: false,
+                            error: validationError.message,
+                            authorization: authResult
+                        };
+                    }
+
                     const todayEcuador = this.billingService.getCurrentDateEcuador();
                     const todayISO = todayEcuador.split('/').reverse().join('-'); // YYYY-MM-DD
                     const lastRetryDate = fullBill.lastRetryDate || '';
@@ -110,7 +124,9 @@ export class CheckInvoiceStatus {
                             secuencial: secuencial,
                             dirMatriz: info.address,
                             dirEstablecimiento: info.address,
-                            fechaEmision: this.billingService.getCurrentDateEcuador(),
+                            // CRITICAL: Use original invoice date, NOT current date
+                            // SRI requires emission date to match the original transaction date
+                            fechaEmision: fullBill.date ? this.billingService.formatDateToSRI(fullBill.date) : this.billingService.getCurrentDateEcuador(),
                             obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
                             tipoIdentificacionComprador: this.billingService.getIdentificacionType(fullBill.customerIdentification),
                             razonSocialComprador: fullBill.customerIdentification === '9999999999999' ? 'CONSUMIDOR FINAL' : fullBill.customerName,
@@ -162,6 +178,16 @@ export class CheckInvoiceStatus {
                         if (newAuthResult && newAuthResult.estado === 'AUTORIZADO') {
                             return await this.handleSuccess(fullBill, newAuthResult, isProd);
                         }
+                        // FIX I-03: Log failed authorization after resend
+                        if (newAuthResult && newAuthResult.estado !== 'AUTORIZADO') {
+                            const errorMsg = newAuthResult.mensajes?.join(' ') || 'No autorizado tras reenvío';
+                            await (this.billRepository as any).pushErrorLog(fullBill.id, {
+                                timestamp: new Date().toISOString(),
+                                sriStatus: newAuthResult.estado || 'DESCONOCIDO',
+                                message: errorMsg,
+                                attempt: newRetryCount
+                            });
+                        }
                     } else if (receptionResult.estado === 'DEVUELTA' && responseStr.includes('ERROR SECUENCIAL REGISTRADO')) {
                         logger.warn('⚠️ Sequence Registered Error detected. Auto-healing...');
                         const nextSequential = await this.configRepository.getNextSequential();
@@ -186,7 +212,32 @@ export class CheckInvoiceStatus {
                             if (retryAuth?.estado === 'AUTORIZADO') {
                                 return await this.handleSuccess({ ...fullBill, accessKey: finalXmlKey }, retryAuth, isProd);
                             }
+                            // FIX I-03: Log failed auto-heal authorization
+                            if (retryAuth && retryAuth.estado !== 'AUTORIZADO') {
+                                await (this.billRepository as any).pushErrorLog(fullBill.id, {
+                                    timestamp: new Date().toISOString(),
+                                    sriStatus: retryAuth.estado || 'DESCONOCIDO',
+                                    message: retryAuth.mensajes?.join(' ') || 'Auto-heal: No autorizado tras reenvío',
+                                    attempt: 1 // Fresh sequence = attempt 1
+                                });
+                            }
+                        } else {
+                            // FIX I-03: Log auto-heal reception failure
+                            await (this.billRepository as any).pushErrorLog(fullBill.id, {
+                                timestamp: new Date().toISOString(),
+                                sriStatus: retryResult.estado || 'DEVUELTA',
+                                message: `Auto-heal fallido: ${retryResult.mensajes?.join(' ') || 'Error en recepción'}`,
+                                attempt: newRetryCount
+                            });
                         }
+                    } else {
+                        // FIX I-03: Log reception failure (not auto-heal case)
+                        await (this.billRepository as any).pushErrorLog(fullBill.id, {
+                            timestamp: new Date().toISOString(),
+                            sriStatus: receptionResult.estado || 'DEVUELTA',
+                            message: receptionResult.mensajes?.join(' ') || 'Error en recepción SRI',
+                            attempt: newRetryCount
+                        });
                     }
 
                 } catch (resendError) {
@@ -294,18 +345,24 @@ export class CheckInvoiceStatus {
                 const pdfBuffer = await this.pdfService.generateInvoicePDF(invoiceObj);
 
                 // Send
-                await this.emailService.sendInvoiceEmail(clientEmail, invoiceObj, pdfBuffer, signedXml);
-                logger.info(`[CheckInvoiceStatus] Email sent successfully to ${clientEmail}`);
+                const emailResult = await this.emailService.sendInvoiceEmail(clientEmail, invoiceObj, pdfBuffer, signedXml);
+                if (emailResult.success) {
+                    logger.info(`[CheckInvoiceStatus] Email sent successfully to ${clientEmail}. MessageId: ${emailResult.messageId}`);
+                    return { success: true, authorization: authResult, invoiceNumber: bill.documentNumber, emailStatus: { sent: true, skipped: false } };
+                } else {
+                    logger.warn(`[CheckInvoiceStatus] Email failed: ${emailResult.error}`);
+                    return { success: true, authorization: authResult, invoiceNumber: bill.documentNumber, emailStatus: { sent: false, skipped: false, error: emailResult.error } };
+                }
 
-            } catch (emailError) {
+            } catch (emailError: any) {
                 logger.error('[CheckInvoiceStatus] Failed to send email during recovery:', emailError);
-                // Non-blocking error
+                return { success: true, authorization: authResult, invoiceNumber: bill.documentNumber, emailStatus: { sent: false, skipped: false, error: emailError.message } };
             }
         } else {
             logger.debug('[CheckInvoiceStatus] Skipping email (Consumidor Final or Invalid Email).');
         }
 
-        return { success: true, authorization: authResult, invoiceNumber: bill.documentNumber };
+        return { success: true, authorization: authResult, invoiceNumber: bill.documentNumber, emailStatus: { sent: false, skipped: true, skipReason: 'Consumidor Final o email inválido' } };
 
     }
 }

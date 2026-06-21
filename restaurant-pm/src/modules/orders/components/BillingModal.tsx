@@ -34,6 +34,49 @@ interface BillingModalProps {
 const inputClass = "w-full rounded-2xl border border-gray-200 bg-gray-50/50 p-4 text-gray-900 text-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 focus:outline-none transition-all dark:border-dark-700 dark:bg-dark-800/50 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-500";
 const labelClass = "flex items-center gap-2 text-[11px] font-black text-gray-400 dark:text-dark-500 uppercase tracking-widest mb-2 ml-1";
 
+// Simple email regex for basic validation
+const isValidEmail = (email: string): boolean => {
+    if (!email) return true; // Empty is valid (optional field)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+};
+
+// Ecuador identification validation (RUC, Cédula, Pasaporte, Consumidor Final)
+const isValidIdentification = (id: string): { valid: boolean; type: string } => {
+    if (!id) return { valid: false, type: '' };
+
+    // Consumidor Final
+    if (id === '9999999999999') return { valid: true, type: 'Consumidor Final' };
+
+    // Cédula: 10 digits
+    if (/^\d{10}$/.test(id)) return { valid: true, type: 'Cédula' };
+
+    // RUC: 13 digits ending in 001
+    if (/^\d{13}$/.test(id)) {
+        if (id.endsWith('001')) return { valid: true, type: 'RUC' };
+        return { valid: false, type: 'RUC inválido (debe terminar en 001)' };
+    }
+
+    // Pasaporte: alphanumeric, 6-20 chars
+    if (/^[A-Za-z0-9]{6,20}$/.test(id)) return { valid: true, type: 'Pasaporte' };
+
+    return { valid: false, type: 'Formato no reconocido' };
+};
+
+// Phone validation (Ecuador mobile: 09XXXXXXXX or landline: 0X-XXXXXXX)
+const isValidPhone = (phone: string): boolean => {
+    if (!phone) return true; // Optional field
+    // Remove spaces and dashes for validation
+    const cleaned = phone.replace(/[\s-]/g, '');
+    // Mobile: 10 digits starting with 09
+    if (/^09\d{8}$/.test(cleaned)) return true;
+    // Landline: 9 digits starting with 0
+    if (/^0[2-7]\d{7}$/.test(cleaned)) return true;
+    // Allow short numbers or any digits for flexibility
+    if (/^\d{7,10}$/.test(cleaned)) return true;
+    return false;
+};
+
 export const BillingModal: React.FC<BillingModalProps> = ({
     isOpen,
     onClose,
@@ -47,6 +90,11 @@ export const BillingModal: React.FC<BillingModalProps> = ({
     manualCompleteLabel = "Cerrar sin Facturar"
 }) => {
     if (!billingOrder) return null;
+
+    const emailValid = isValidEmail(billingData.email);
+    const idValidation = isValidIdentification(billingData.identification);
+    const phoneValid = isValidPhone(billingData.phone);
+    const isConsumidorFinal = billingData.identification === '9999999999999';
 
     const total = billingOrder.items.reduce((s, i) => s + (i.price || 0) * i.quantity, 0);
     
@@ -146,10 +194,15 @@ export const BillingModal: React.FC<BillingModalProps> = ({
                                         type="text"
                                         value={billingData.identification}
                                         onChange={e => setBillingData({ ...billingData, identification: e.target.value })}
-                                        className={inputClass}
+                                        className={`${inputClass} ${billingData.identification && !idValidation.valid ? 'border-red-400 dark:border-red-500 focus:border-red-500 focus:ring-red-500/10' : ''}`}
                                         placeholder="Ingrese Identificación"
                                     />
                                     {searchingIdentity && <p className="text-[10px] text-blue-500 mt-2 font-black animate-pulse px-1">Consultando SRI...</p>}
+                                    {billingData.identification && !searchingIdentity && (
+                                        <p className={`text-[10px] mt-2 font-black px-1 ${idValidation.valid ? 'text-green-500' : 'text-red-500'}`}>
+                                            {idValidation.type || 'Ingrese identificación válida'}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="sm:col-span-2">
@@ -171,9 +224,12 @@ export const BillingModal: React.FC<BillingModalProps> = ({
                                         type="email"
                                         value={billingData.email}
                                         onChange={e => setBillingData({ ...billingData, email: e.target.value })}
-                                        className={inputClass}
+                                        className={`${inputClass} ${!emailValid ? 'border-red-400 dark:border-red-500 focus:border-red-500 focus:ring-red-500/10' : ''}`}
                                         placeholder="email@ejemplo.com"
                                     />
+                                    {!emailValid && (
+                                        <p className="text-[10px] text-red-500 mt-2 font-black px-1">Email inválido</p>
+                                    )}
                                 </div>
 
                                 <div className="sm:col-span-1">
@@ -183,9 +239,12 @@ export const BillingModal: React.FC<BillingModalProps> = ({
                                         type="text"
                                         value={billingData.phone}
                                         onChange={e => setBillingData({ ...billingData, phone: e.target.value })}
-                                        className={inputClass}
+                                        className={`${inputClass} ${billingData.phone && !phoneValid ? 'border-red-400 dark:border-red-500 focus:border-red-500 focus:ring-red-500/10' : ''}`}
                                         placeholder="09XXXXXXXX"
                                     />
+                                    {billingData.phone && !phoneValid && (
+                                        <p className="text-[10px] text-red-500 mt-2 font-black px-1">Teléfono inválido</p>
+                                    )}
                                 </div>
 
                                 <div className="sm:col-span-2">
@@ -275,7 +334,7 @@ export const BillingModal: React.FC<BillingModalProps> = ({
                     <div className="max-w-2xl mx-auto flex flex-col sm:flex-row gap-4">
                         <button
                             onClick={onProcess}
-                            disabled={!billingData.identification || !billingData.name}
+                            disabled={!billingData.identification || !billingData.name || !emailValid || !idValidation.valid}
                             className="flex-[2] py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-3xl font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-3 group"
                         >
                             <CheckCircleIcon className="w-6 h-6" />

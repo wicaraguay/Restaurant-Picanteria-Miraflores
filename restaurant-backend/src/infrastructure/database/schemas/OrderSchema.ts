@@ -63,4 +63,8 @@ OrderSchema.index({ status: 1, createdAt: -1 }); // Filter by status + sort by d
 OrderSchema.index({ customerName: 1, createdAt: -1 }); // Customer orders sorted by date
 OrderSchema.index({ billed: 1, createdAt: -1 }); // Unbilled orders sorted by date
 
+// CRITICAL compound index: type + status (frequent filter combination)
+// Used by kitchen views, delivery tracking, and order management
+OrderSchema.index({ type: 1, status: 1 });
+
 export const OrderModel = mongoose.model<OrderDocument>('Order', OrderSchema);

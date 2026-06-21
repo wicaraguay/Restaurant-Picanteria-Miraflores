@@ -1,5 +1,8 @@
-import React from 'react';
-import { CheckCircleIcon, AlertCircleIcon, RefreshCcwIcon, FileTextIcon } from '../../../components/ui/Icons';
+import React, { useEffect, useState, useRef } from 'react';
+import { CheckCircleIcon, AlertCircleIcon, RefreshCcwIcon, FileTextIcon, DownloadIcon, PrinterIcon } from '../../../components/ui/Icons';
+
+// FIX M-05: Timeout configurable para el modal de procesamiento
+const PROCESSING_TIMEOUT_MS = 120000; // 2 minutos
 
 export enum InvoiceProcessState {
     IDLE = 'idle',
@@ -22,7 +25,10 @@ interface InvoiceProcessingModalProps {
     documentLabel?: string;
     onClose: () => void;
     onPrint?: () => void;
+    onDownloadPdf?: () => void;
     onGoToHistory?: () => void;
+    onTimeout?: () => void; // FIX M-05: Callback cuando se alcanza el timeout
+    timeoutMs?: number; // FIX M-05: Timeout personalizable (default: 2 min)
 }
 
 const InvoiceProcessingModal: React.FC<InvoiceProcessingModalProps> = ({
@@ -34,8 +40,63 @@ const InvoiceProcessingModal: React.FC<InvoiceProcessingModalProps> = ({
     documentLabel = 'Número de Factura',
     onClose,
     onPrint,
-    onGoToHistory
+    onDownloadPdf,
+    onGoToHistory,
+    onTimeout,
+    timeoutMs = PROCESSING_TIMEOUT_MS
 }) => {
+    // FIX M-05: Track timeout state
+    const [hasTimedOut, setHasTimedOut] = useState(false);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    const isProcessing = [
+        InvoiceProcessState.VALIDATING,
+        InvoiceProcessState.GENERATING,
+        InvoiceProcessState.SIGNING,
+        InvoiceProcessState.SENDING,
+        InvoiceProcessState.WAITING_AUTHORIZATION
+    ].includes(currentState);
+
+    // FIX M-05: Timeout timer for processing states
+    useEffect(() => {
+        if (isOpen && isProcessing && !hasTimedOut) {
+            // Start elapsed time counter
+            setElapsedSeconds(0);
+            intervalRef.current = setInterval(() => {
+                setElapsedSeconds(prev => prev + 1);
+            }, 1000);
+
+            // Set timeout
+            timerRef.current = setTimeout(() => {
+                setHasTimedOut(true);
+                if (onTimeout) {
+                    onTimeout();
+                }
+            }, timeoutMs);
+
+            return () => {
+                if (timerRef.current) clearTimeout(timerRef.current);
+                if (intervalRef.current) clearInterval(intervalRef.current);
+            };
+        } else if (!isProcessing) {
+            // Reset when not processing
+            setHasTimedOut(false);
+            setElapsedSeconds(0);
+            if (timerRef.current) clearTimeout(timerRef.current);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        }
+    }, [isOpen, isProcessing, hasTimedOut, timeoutMs, onTimeout]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, []);
+
     if (!isOpen) return null;
 
     const getStateIcon = () => {
@@ -73,15 +134,15 @@ const InvoiceProcessingModal: React.FC<InvoiceProcessingModalProps> = ({
         }
     };
 
-    const isProcessing = [
-        InvoiceProcessState.VALIDATING,
-        InvoiceProcessState.GENERATING,
-        InvoiceProcessState.SIGNING,
-        InvoiceProcessState.SENDING,
-        InvoiceProcessState.WAITING_AUTHORIZATION
-    ].includes(currentState);
+    // FIX M-05: Allow closing when timed out
+    const canClose = !isProcessing || hasTimedOut;
 
-    const canClose = !isProcessing;
+    // FIX M-05: Format elapsed time as mm:ss
+    const formatElapsedTime = (seconds: number): string => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
 
     return (
         <div
@@ -131,24 +192,61 @@ const InvoiceProcessingModal: React.FC<InvoiceProcessingModalProps> = ({
 
                 {/* Footer con acciones */}
                 <div className="p-6 bg-gray-50 dark:bg-dark-900 rounded-b-2xl border-t dark:border-dark-700 space-y-3">
-                    {currentState === InvoiceProcessState.AUTHORIZED && onPrint && (
-                        <button
-                            onClick={onPrint}
-                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
-                        >
-                            <span>🖨️</span>
-                            Imprimir Comprobante (RIDE)
-                        </button>
+                    {currentState === InvoiceProcessState.AUTHORIZED && (
+                        <div className="flex gap-2">
+                            {onPrint && (
+                                <button
+                                    onClick={onPrint}
+                                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                                >
+                                    <PrinterIcon className="w-5 h-5" />
+                                    Imprimir
+                                </button>
+                            )}
+                            {onDownloadPdf && (
+                                <button
+                                    onClick={onDownloadPdf}
+                                    className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                                >
+                                    <DownloadIcon className="w-5 h-5" />
+                                    Descargar PDF
+                                </button>
+                            )}
+                        </div>
                     )}
 
-                    {currentState === InvoiceProcessState.PENDING && onGoToHistory && (
-                        <button
-                            onClick={onGoToHistory}
-                            className="w-full py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
-                        >
-                            <FileTextIcon className="w-5 h-5" />
-                            Ir al Historial de Facturas
-                        </button>
+                    {currentState === InvoiceProcessState.PENDING && (
+                        <div className="space-y-2">
+                            <div className="flex gap-2">
+                                {onPrint && (
+                                    <button
+                                        onClick={onPrint}
+                                        className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <PrinterIcon className="w-5 h-5" />
+                                        Imprimir
+                                    </button>
+                                )}
+                                {onDownloadPdf && (
+                                    <button
+                                        onClick={onDownloadPdf}
+                                        className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <DownloadIcon className="w-5 h-5" />
+                                        Descargar PDF
+                                    </button>
+                                )}
+                            </div>
+                            {onGoToHistory && (
+                                <button
+                                    onClick={onGoToHistory}
+                                    className="w-full py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                                >
+                                    <FileTextIcon className="w-5 h-5" />
+                                    Ir al Historial de Facturas
+                                </button>
+                            )}
+                        </div>
                     )}
 
                     {canClose && (
@@ -161,9 +259,35 @@ const InvoiceProcessingModal: React.FC<InvoiceProcessingModalProps> = ({
                     )}
 
                     {!canClose && (
-                        <p className="text-center text-xs text-gray-500 dark:text-gray-400 italic">
-                            Por favor espere, procesando...
-                        </p>
+                        <div className="text-center">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                Por favor espere, procesando...
+                            </p>
+                            {/* FIX M-05: Show elapsed time */}
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 font-mono">
+                                Tiempo: {formatElapsedTime(elapsedSeconds)}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* FIX M-05: Show timeout warning and cancel button */}
+                    {hasTimedOut && isProcessing && (
+                        <div className="space-y-3">
+                            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                                <p className="text-sm text-amber-700 dark:text-amber-400 font-medium text-center">
+                                    El proceso está tardando más de lo esperado.
+                                </p>
+                                <p className="text-xs text-amber-600 dark:text-amber-500 text-center mt-1">
+                                    Puede cancelar y verificar el estado en el historial.
+                                </p>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg transition-all"
+                            >
+                                Cancelar y Verificar Después
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>

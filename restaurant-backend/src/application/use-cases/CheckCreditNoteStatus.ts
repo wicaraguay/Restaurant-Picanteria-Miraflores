@@ -6,7 +6,7 @@ import { PDFService } from '../../infrastructure/services/PDFService';
 import { IEmailService } from '../interfaces/IEmailService';
 import { CreditNote as BillingCreditNote } from '../../domain/billing/creditNote';
 import { BillingService } from '../services/BillingService';
-import { logger } from '../../infrastructure/utils/Logger';
+import { logger, maskAccessKey } from '../../infrastructure/utils/Logger';
 
 export class CheckCreditNoteStatus {
     constructor(
@@ -20,7 +20,8 @@ export class CheckCreditNoteStatus {
     ) { }
 
     async execute(accessKey: string): Promise<any> {
-        logger.debug(`[CheckCreditNoteStatus] Checking status for access key: ${accessKey}`);
+        // FIX S-02: Mask access key in logs
+        logger.debug(`[CheckCreditNoteStatus] Checking status for access key: ${maskAccessKey(accessKey)}`);
 
         try {
             // 1. Find credit note in database
@@ -81,7 +82,8 @@ export class CheckCreditNoteStatus {
                 const newAccessKey = billingNC.info.claveAcceso!;
                 const signedXml = await this.sriService.signXML(xml, config || undefined);
 
-                logger.info(`[CheckCreditNoteStatus] New Access Key generated: ${newAccessKey}`);
+                // FIX S-02: Mask access key in logs
+                logger.info(`[CheckCreditNoteStatus] New Access Key generated: ${maskAccessKey(newAccessKey)}`);
 
                 // Send to SRI
                 const sendResult = await this.sriService.sendCreditNoteToSRI(signedXml, isProd);
@@ -191,6 +193,9 @@ export class CheckCreditNoteStatus {
 
     private mapToBillingCreditNote(entity: any, config: any, originalBill: any, authDate?: string): BillingCreditNote {
         const [estab, ptoEmi, secuencial] = entity.documentNumber.split('-');
+        // FIX M-01: Use dynamic tax rate from config instead of hardcoded 15%
+        const taxRate = config.billing?.taxRate || 15;
+        const taxCode = this.billingService.getTaxCode(taxRate);
 
         return {
             info: {
@@ -217,8 +222,8 @@ export class CheckCreditNoteStatus {
                 totalDescuento: 0,
                 totalImpuestos: [{
                     codigo: '2',
-                    codigoPorcentaje: '4', // 15%
-                    tarifa: 15,
+                    codigoPorcentaje: taxCode, // FIX M-01: Use dynamic tax code
+                    tarifa: taxRate,
                     baseImponible: entity.subtotal,
                     valor: entity.tax
                 }],
@@ -238,8 +243,8 @@ export class CheckCreditNoteStatus {
                 precioTotalSinImpuesto: item.quantity * item.price,
                 impuestos: [{
                     codigo: '2',
-                    codigoPorcentaje: '4',
-                    tarifa: 15,
+                    codigoPorcentaje: taxCode, // FIX M-01: Use dynamic tax code
+                    tarifa: taxRate,
                     baseImponible: item.quantity * item.price,
                     valor: (item.total - (item.quantity * item.price))
                 }]

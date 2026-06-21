@@ -42,6 +42,20 @@ import {
 
 type TabType = 'invoices' | 'creditNotes' | 'noInvoiceSales';
 
+// FIX M-06: Generate valid year options dynamically with range validation
+const BILLING_START_YEAR = 2024; // First year the system was in use
+const generateYearOptions = (): string[] => {
+    const currentYear = new Date().getFullYear();
+    // Validate range: from start year to current year + 1 (allow next year for planning)
+    const endYear = Math.min(currentYear + 1, 2099); // Cap at reasonable future
+    const startYear = Math.max(BILLING_START_YEAR, 2000); // Cap at reasonable past
+    const years: string[] = [];
+    for (let year = endYear; year >= startYear; year--) {
+        years.push(year.toString());
+    }
+    return years;
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════
@@ -96,6 +110,8 @@ const BillingHistory: React.FC = () => {
     const [processingMessage, setProcessingMessage] = useState('');
     const [processingDetails, setProcessingDetails] = useState('');
     const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
+    // FIX I-05: Track which document is being checked to prevent duplicate requests
+    const [checkingStatusId, setCheckingStatusId] = useState<string | null>(null);
 
     // Estados para modales
     const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
@@ -291,7 +307,7 @@ const BillingHistory: React.FC = () => {
         if (activeTab === 'invoices') {
             fetchBills();
         }
-    }, [billsPage, selectedYear, activeTab]);
+    }, [billsPage, activeTab]);
 
     useEffect(() => {
         if (activeTab === 'creditNotes') {
@@ -304,6 +320,16 @@ const BillingHistory: React.FC = () => {
             fetchManualSales();
         }
     }, [manualSalesPage, activeTab]);
+
+    // FIX M-08: Reset page to 1 when filter criteria changes (year)
+    // This prevents showing an empty page when filters reduce total results
+    useEffect(() => {
+        if (activeTab === 'invoices' && billsPage !== 1) {
+            setBillsPage(1);
+        } else if (activeTab === 'invoices') {
+            fetchBills();
+        }
+    }, [selectedYear]);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // HANDLERS
@@ -335,7 +361,10 @@ const BillingHistory: React.FC = () => {
 
     const handleCheckStatus = async (bill: Bill) => {
         if (!bill.accessKey) return;
+        // FIX I-05: Prevent duplicate requests
+        if (checkingStatusId === bill.id) return;
 
+        setCheckingStatusId(bill.id);
         setIsProcessingModalOpen(true);
         setGeneratedInvoiceNumber(bill.documentNumber || '');
 
@@ -375,12 +404,18 @@ const BillingHistory: React.FC = () => {
             setProcessingMessage('Error al consultar SRI');
             const errorMessage = error instanceof Error ? error.message : 'No se pudo verificar el estado.';
             setProcessingDetails(errorMessage);
+        } finally {
+            // FIX I-05: Clear checking state when done
+            setCheckingStatusId(null);
         }
     };
 
     const handleCheckCreditNoteStatus = async (creditNote: CreditNote) => {
         if (!creditNote.accessKey) return;
+        // FIX I-05: Prevent duplicate requests
+        if (checkingStatusId === creditNote.id) return;
 
+        setCheckingStatusId(creditNote.id);
         setIsProcessingModalOpen(true);
         setGeneratedInvoiceNumber(creditNote.documentNumber || '');
 
@@ -415,6 +450,9 @@ const BillingHistory: React.FC = () => {
             setProcessingState(InvoiceProcessState.ERROR);
             setProcessingMessage('Error al consultar SRI');
             setProcessingDetails(error instanceof Error ? error.message : 'Error desconocido');
+        } finally {
+            // FIX I-05: Clear checking state when done
+            setCheckingStatusId(null);
         }
     };
 
@@ -646,14 +684,15 @@ const BillingHistory: React.FC = () => {
                                 </div>
                                 <div className="relative">
                                     <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                    {/* FIX M-06: Dynamic year options with validation */}
                                     <select
                                         value={selectedYear}
                                         onChange={(e) => setSelectedYear(e.target.value)}
                                         className="appearance-none w-full md:w-32 rounded-2xl border border-gray-200 bg-gray-50 dark:bg-dark-800 dark:border-dark-700 pl-11 pr-8 py-3 text-sm font-bold focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:text-white"
                                     >
-                                        <option value="2024">2024</option>
-                                        <option value="2025">2025</option>
-                                        <option value="2026">2026</option>
+                                        {generateYearOptions().map(year => (
+                                            <option key={year} value={year}>{year}</option>
+                                        ))}
                                         <option value="all">TODOS</option>
                                     </select>
                                     <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
@@ -903,6 +942,7 @@ const BillingHistory: React.FC = () => {
 
                                                             {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
                                                                 <button
+                                                                    disabled={checkingStatusId === bill.id}
                                                                     onClick={async (e) => {
                                                                         e.stopPropagation();
                                                                         if (!bill.accessKey || bill.sriStatus === 'BORRADOR' || bill.sriStatus === 'ERROR') {
@@ -911,12 +951,12 @@ const BillingHistory: React.FC = () => {
                                                                             await handleCheckStatus(bill);
                                                                         }
                                                                     }}
-                                                                    className={`p-1.5 rounded-xl transition-all ${(!bill.accessKey || bill.sriStatus === 'BORRADOR')
+                                                                    className={`p-1.5 rounded-xl transition-all ${checkingStatusId === bill.id ? 'opacity-50 cursor-not-allowed' : ''} ${(!bill.accessKey || bill.sriStatus === 'BORRADOR')
                                                                         ? 'text-orange-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600'
                                                                         : 'text-blue-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600'}`}
-                                                                    title={(!bill.accessKey || bill.sriStatus === 'BORRADOR') ? 'Re-intentar envío SRI' : 'Verificar estado SRI'}
+                                                                    title={checkingStatusId === bill.id ? 'Verificando...' : ((!bill.accessKey || bill.sriStatus === 'BORRADOR') ? 'Re-intentar envío SRI' : 'Verificar estado SRI')}
                                                                 >
-                                                                    <RefreshCcwIcon className="w-3.5 h-3.5" />
+                                                                    <RefreshCcwIcon className={`w-3.5 h-3.5 ${checkingStatusId === bill.id ? 'animate-spin' : ''}`} />
                                                                 </button>
                                                             )}
 
@@ -1137,11 +1177,12 @@ const BillingHistory: React.FC = () => {
                                                             {/* Verificar Estado */}
                                                             {cn.sriStatus !== 'AUTORIZADO' && (
                                                                 <button
+                                                                    disabled={checkingStatusId === cn.id}
                                                                     onClick={() => handleCheckCreditNoteStatus(cn)}
-                                                                    className="p-1.5 rounded-xl text-blue-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 transition-all"
-                                                                    title="Verificar estado SRI"
+                                                                    className={`p-1.5 rounded-xl text-blue-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 transition-all ${checkingStatusId === cn.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                                    title={checkingStatusId === cn.id ? 'Verificando...' : 'Verificar estado SRI'}
                                                                 >
-                                                                    <RefreshCcwIcon className="w-3.5 h-3.5" />
+                                                                    <RefreshCcwIcon className={`w-3.5 h-3.5 ${checkingStatusId === cn.id ? 'animate-spin' : ''}`} />
                                                                 </button>
                                                             )}
 

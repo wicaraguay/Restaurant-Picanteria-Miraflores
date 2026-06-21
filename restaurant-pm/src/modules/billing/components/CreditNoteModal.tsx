@@ -33,6 +33,7 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string>('');
     const [existingNC, setExistingNC] = useState<CreditNote | null>(null);
+    const [authorizedNC, setAuthorizedNC] = useState<CreditNote | null>(null);
     const [loadingExisting, setLoadingExisting] = useState(false);
     const { config } = useRestaurantConfig();
 
@@ -49,6 +50,16 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
                 setLoadingExisting(true);
                 try {
                     const response = await billingService.getCreditNotes({ billId: bill.id });
+
+                    // Verificar si ya existe una NC autorizada (bloquea creación de nueva)
+                    const authorized = response.data.find(nc => nc.sriStatus === 'AUTORIZADO');
+                    if (authorized) {
+                        setAuthorizedNC(authorized);
+                        setExistingNC(null);
+                        return; // No buscar pendientes si ya hay una autorizada
+                    }
+                    setAuthorizedNC(null);
+
                     // Encontrar la nota de crédito más reciente que no esté autorizada ni cancelada
                     const pending = response.data
                         .filter(nc => nc.sriStatus !== 'AUTORIZADO' && nc.sriStatus !== 'CANCELLED')
@@ -78,6 +89,7 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
         } else if (!isOpen) {
             // Reset al cerrar
             setExistingNC(null);
+            setAuthorizedNC(null);
             setReason('03');
             setCustomDescription('');
         }
@@ -212,8 +224,25 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Existing NC Info */}
-                    {existingNC && (
+                    {/* Authorized NC Warning - Blocks creation */}
+                    {authorizedNC && (
+                        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                            <AlertCircleIcon className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                            <div className="text-sm text-red-800 dark:text-red-300">
+                                <p className="font-bold text-base mb-2">No se puede crear otra Nota de Crédito</p>
+                                <p className="mb-2">Ya existe una nota de crédito <b>AUTORIZADA</b> para esta factura:</p>
+                                <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg font-mono text-xs">
+                                    <p><b>NC:</b> {authorizedNC.documentNumber}</p>
+                                    <p><b>Fecha:</b> {authorizedNC.authorizationDate || authorizedNC.date}</p>
+                                    <p><b>Total:</b> ${authorizedNC.total.toFixed(2)}</p>
+                                </div>
+                                <p className="mt-2 text-xs">Una factura solo puede tener una nota de crédito autorizada según las normas del SRI.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Existing NC Info (pending retry) */}
+                    {existingNC && !authorizedNC && (
                         <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl animate-in fade-in slide-in-from-top-2">
                             <RefreshCcwIcon className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                             <div className="text-sm text-blue-800 dark:text-blue-300">
@@ -223,46 +252,51 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
                         </div>
                     )}
 
-                    {/* Reason Selection */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                            Motivo de la Nota de Crédito *
-                        </label>
-                        <select
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all"
-                        >
-                            {Object.entries(CREDIT_NOTE_REASONS).map(([code, description]) => (
-                                <option key={code} value={code}>
-                                    {code} - {description}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    {/* Only show form if no authorized NC exists */}
+                    {!authorizedNC && (
+                        <>
+                            {/* Reason Selection */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    Motivo de la Nota de Crédito *
+                                </label>
+                                <select
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                    className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all"
+                                >
+                                    {Object.entries(CREDIT_NOTE_REASONS).map(([code, description]) => (
+                                        <option key={code} value={code}>
+                                            {code} - {description}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
 
-                    {/* Custom Description */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                            Descripción Personalizada (opcional)
-                        </label>
-                        <textarea
-                            value={customDescription}
-                            onChange={(e) => setCustomDescription(e.target.value)}
-                            placeholder="Agregue detalles adicionales si es necesario..."
-                            className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all resize-none"
-                            rows={3}
-                        />
-                    </div>
+                            {/* Custom Description */}
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    Descripción Personalizada (opcional)
+                                </label>
+                                <textarea
+                                    value={customDescription}
+                                    onChange={(e) => setCustomDescription(e.target.value)}
+                                    placeholder="Agregue detalles adicionales si es necesario..."
+                                    className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-all resize-none"
+                                    rows={3}
+                                />
+                            </div>
 
-                    {/* Warning */}
-                    <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
-                        <AlertCircleIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-                        <div className="text-sm text-yellow-800 dark:text-yellow-300">
-                            <p className="font-semibold mb-1">⚠️ Importante:</p>
-                            <p>Esta acción generará una Nota de Crédito que anulará la factura original. El documento será firmado y enviado al SRI automáticamente.</p>
-                        </div>
-                    </div>
+                            {/* Warning */}
+                            <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
+                                <AlertCircleIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                                <div className="text-sm text-yellow-800 dark:text-yellow-300">
+                                    <p className="font-semibold mb-1">⚠️ Importante:</p>
+                                    <p>Esta acción generará una Nota de Crédito que anulará la factura original. El documento será firmado y enviado al SRI automáticamente.</p>
+                                </div>
+                            </div>
+                        </>
+                    )}
 
                     {/* Error Message */}
                     {error && (
@@ -273,43 +307,56 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
 
                     {/* Actions */}
                     <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-dark-700">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            disabled={isLoading}
-                            className="flex-1 px-6 py-3 bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors disabled:opacity-50"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isLoading || loadingExisting}
-                            className={`flex-[2] px-6 py-3 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${existingNC
-                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-500/30'
-                                : 'bg-gradient-to-r from-orange-600 to-red-600 shadow-orange-500/30'
-                                }`}
-                        >
-                            {isLoading ? (
-                                <>
-                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    {existingNC ? 'Reintentando...' : 'Generando...'}
-                                </>
-                            ) : (
-                                <>
-                                    {existingNC ? (
+                        {authorizedNC ? (
+                            // Solo botón cerrar si ya existe NC autorizada
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="w-full px-6 py-3 bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors"
+                            >
+                                Cerrar
+                            </button>
+                        ) : (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    disabled={isLoading}
+                                    className="flex-1 px-6 py-3 bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors disabled:opacity-50"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isLoading || loadingExisting}
+                                    className={`flex-[2] px-6 py-3 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${existingNC
+                                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-500/30'
+                                        : 'bg-gradient-to-r from-orange-600 to-red-600 shadow-orange-500/30'
+                                        }`}
+                                >
+                                    {isLoading ? (
                                         <>
-                                            <RefreshCcwIcon className="w-5 h-5" />
-                                            Reintentar Reenvío
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            {existingNC ? 'Reintentando...' : 'Generando...'}
                                         </>
                                     ) : (
                                         <>
-                                            <FileTextIcon className="w-5 h-5" />
-                                            Generar Nota de Crédito
+                                            {existingNC ? (
+                                                <>
+                                                    <RefreshCcwIcon className="w-5 h-5" />
+                                                    Reintentar Reenvío
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <FileTextIcon className="w-5 h-5" />
+                                                    Generar Nota de Crédito
+                                                </>
+                                            )}
                                         </>
                                     )}
-                                </>
-                            )}
-                        </button>
+                                </button>
+                            </>
+                        )}
                     </div>
                 </form>
             </div>

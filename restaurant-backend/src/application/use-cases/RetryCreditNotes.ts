@@ -1,7 +1,7 @@
 
 import { ICreditNoteRepository } from '../../domain/repositories/ICreditNoteRepository';
 import { CheckCreditNoteStatus } from './CheckCreditNoteStatus';
-import { logger } from '../../infrastructure/utils/Logger';
+import { logger, maskAccessKey } from '../../infrastructure/utils/Logger';
 
 /**
  * @class RetryCreditNotes
@@ -59,7 +59,8 @@ export class RetryCreditNotes {
                 }
 
                 try {
-                    logger.info(`[RetryCreditNotes] Retrying NC ${nc.documentNumber} (Key: ${nc.accessKey})...`);
+                    // FIX S-02: Mask access key in logs
+                    logger.info(`[RetryCreditNotes] Retrying NC ${nc.documentNumber} (Key: ${maskAccessKey(nc.accessKey)})...`);
                     
                     const result = await this.checkCreditNoteStatus.execute(nc.accessKey);
                     

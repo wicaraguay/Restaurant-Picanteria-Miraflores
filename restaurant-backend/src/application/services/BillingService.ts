@@ -191,12 +191,13 @@ export class BillingService {
 
     /**
      * Validates email format and common typos
+     * FIX M-04: Also reject test/fake email domains
      */
     public validateEmail(email: string): void {
         if (!email) return;
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const cleanEmail = email.trim();
+        const cleanEmail = email.trim().toLowerCase();
 
         if (!emailRegex.test(cleanEmail)) {
             throw new ValidationError(`⚠️ Error de Formato: El correo "${email}" no es válido.`);
@@ -204,6 +205,34 @@ export class BillingService {
 
         if (email.includes(',')) {
             throw new ValidationError(`⚠️ Error de Formato: El correo no puede tener comas (,).`);
+        }
+
+        // FIX M-04: Reject common test/fake email patterns
+        const fakeEmailPatterns = [
+            /^test@test\./i,
+            /^prueba@prueba\./i,
+            /^example@example\./i,
+            /^fake@/i,
+            /^noreply@noreply\./i,
+            /@test\.com$/i,
+            /@prueba\.com$/i,
+            /@example\.com$/i,
+            /@mailinator\./i,
+            /@tempmail\./i,
+            /@guerrillamail\./i,
+            /@yopmail\./i,
+        ];
+
+        for (const pattern of fakeEmailPatterns) {
+            if (pattern.test(cleanEmail)) {
+                throw new ValidationError(`⚠️ Error: El correo "${email}" parece ser de prueba o temporal. Por favor use un email real.`);
+            }
+        }
+
+        // Validate TLD has at least 2 characters
+        const tldMatch = cleanEmail.match(/\.([a-z]+)$/i);
+        if (tldMatch && tldMatch[1].length < 2) {
+            throw new ValidationError(`⚠️ Error de Formato: El dominio del correo no es válido.`);
         }
     }
 
@@ -362,14 +391,28 @@ export class BillingService {
                     lastVisit: now
                 };
 
-                if (client.email && client.email.trim() !== '' && !client.email.includes('consumidor@final')) {
-                    updates.email = client.email;
+                // FIX M-10: Only update email if customer doesn't already have one,
+                // or if new email is substantially different (not just whitespace change)
+                // This prevents losing good emails due to duplicate entries
+                const incomingEmail = client.email?.trim() || '';
+                const existingEmail = existingCustomer.email?.trim() || '';
+                const isValidNewEmail = incomingEmail !== '' && !incomingEmail.includes('consumidor@final');
+                const existingHasEmail = existingEmail !== '' && !existingEmail.includes('consumidor@final');
+
+                if (isValidNewEmail && !existingHasEmail) {
+                    // Customer had no email, now has one
+                    updates.email = incomingEmail;
+                    logger.debug(`[BillingService] Adding email to customer: ${incomingEmail}`);
+                } else if (isValidNewEmail && existingHasEmail && incomingEmail.toLowerCase() !== existingEmail.toLowerCase()) {
+                    // Both have emails but they differ - DON'T overwrite, log for review
+                    logger.info(`[BillingService] Email conflict for ${identification}: existing="${existingEmail}", new="${incomingEmail}". Keeping existing.`);
                 }
-                
+                // If emails match or no new email provided, do nothing (preserve existing)
+
                 if (client.address && client.address.trim() !== '' && client.address !== 'S/N') {
                     updates.address = client.address.toUpperCase();
                 }
-                
+
                 if (client.phone && client.phone.trim() !== '' && client.phone !== '9999999999') {
                     updates.phone = client.phone;
                 }

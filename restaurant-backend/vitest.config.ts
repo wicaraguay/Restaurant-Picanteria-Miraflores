@@ -5,5 +5,25 @@ export default defineConfig({
     test: {
         globals: true,
         environment: 'node',
+        coverage: {
+            provider: 'v8',
+            reporter: ['text', 'json', 'html', 'lcov'],
+            thresholds: {
+                statements: 80,
+                branches: 75,
+                functions: 70,
+                lines: 80
+            },
+            exclude: [
+                'node_modules/',
+                'dist/',
+                'coverage/',
+                'vitest.config.ts',
+                'src/seed.ts',
+                'src/seedHR.ts',
+                '**/*.spec.ts',
+                '**/*.test.ts'
+            ]
+        }
     },
 });
