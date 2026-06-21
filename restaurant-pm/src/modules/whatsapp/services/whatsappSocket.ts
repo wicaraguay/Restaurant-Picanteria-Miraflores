@@ -42,9 +42,20 @@ class WhatsAppSocketService {
         this.isConnecting = true;
 
         // URL del WebSocket (mismo origen que la API)
-        const wsUrl = import.meta.env.VITE_API_URL?.replace('/api', '') ||
-            import.meta.env.VITE_WS_URL ||
-            window.location.origin;
+        // VITE_API_URL puede ser: https://domain.com/api o http://localhost:3000/api
+        let wsUrl = window.location.origin;
+
+        const apiUrl = import.meta.env.VITE_API_URL;
+        if (apiUrl) {
+            try {
+                // Extraer solo el origen (protocol + host)
+                const url = new URL(apiUrl);
+                wsUrl = url.origin;
+            } catch {
+                // Si no es URL válida, intentar limpiar manualmente
+                wsUrl = apiUrl.replace(/\/api\/?$/, '');
+            }
+        }
 
         console.log('[WhatsAppSocket] Connecting to:', wsUrl);
 
