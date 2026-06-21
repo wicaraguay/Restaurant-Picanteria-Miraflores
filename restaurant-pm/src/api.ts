@@ -621,6 +621,42 @@ export class ApiService {
             return this.get(`/audit/stats${query}`);
         }
     };
+
+    /**
+     * Categorías de productos
+     */
+    public categories = {
+        getAll: async (params?: {
+            productType?: 'menu' | 'retail';
+            visibleOnWebsite?: boolean;
+            includeProductCount?: boolean;
+        }): Promise<any> => {
+            const queryParams = new URLSearchParams();
+            if (params?.productType) queryParams.append('productType', params.productType);
+            if (params?.visibleOnWebsite !== undefined) queryParams.append('visibleOnWebsite', params.visibleOnWebsite.toString());
+            if (params?.includeProductCount) queryParams.append('includeProductCount', 'true');
+
+            const url = queryParams.toString()
+                ? `${API_ENDPOINTS.CATEGORIES.BASE}?${queryParams}`
+                : API_ENDPOINTS.CATEGORIES.BASE;
+            return this.get(url);
+        },
+        getById: async (id: string): Promise<any> => {
+            return this.get(API_ENDPOINTS.CATEGORIES.BY_ID(id));
+        },
+        create: async (data: any): Promise<any> => {
+            return this.post(API_ENDPOINTS.CATEGORIES.BASE, data);
+        },
+        update: async (id: string, data: any): Promise<any> => {
+            return this.put(API_ENDPOINTS.CATEGORIES.BY_ID(id), data);
+        },
+        delete: async (id: string): Promise<any> => {
+            return this.delete(API_ENDPOINTS.CATEGORIES.BY_ID(id));
+        },
+        reorder: async (items: { id: string; sortOrder: number }[]): Promise<any> => {
+            return this.patch(API_ENDPOINTS.CATEGORIES.REORDER, { items });
+        },
+    };
 }
 
 // Exportar instancia singleton
@@ -637,6 +673,7 @@ export const api = {
     billing: apiService.billing,
     employees: apiService.employees,
     roles: apiService.roles,
+    categories: apiService.categories,
     export: apiService.export,
     maintenance: apiService.maintenance,
     audit: apiService.audit,

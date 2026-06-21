@@ -9,6 +9,7 @@ import { RepositoryModule } from './modules/RepositoryModule';
 import { UserModule } from './modules/UserModule';
 import { OrderModule } from './modules/OrderModule';
 import { BillingModule } from './modules/BillingModule';
+import { CategoryModule } from './modules/CategoryModule';
 
 import { logger } from '../utils/Logger';
 
@@ -21,6 +22,7 @@ import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaura
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IRoleRepository } from '../../domain/repositories/IRoleRepository';
 import { ICreditNoteRepository } from '../../domain/repositories/ICreditNoteRepository';
+import { ICategoryRepository } from '../../domain/repositories/ICategoryRepository';
 
 // Infrastructure Services
 import { SRIService } from '../services/SRIService';
@@ -78,6 +80,15 @@ import { DeleteEmployee } from '../../application/use-cases/DeleteEmployee';
 import { ResetBillingSystem } from '../../application/use-cases/ResetBillingSystem';
 import { ResetFullSystem } from '../../application/use-cases/ResetFullSystem';
 
+// Category Use Cases
+import {
+    CreateCategory,
+    UpdateCategory,
+    DeleteCategory,
+    GetCategories,
+    ReorderCategories,
+} from '../../application/use-cases/categories';
+
 export class DIContainer {
     private static instance: DIContainer;
 
@@ -85,12 +96,14 @@ export class DIContainer {
     private userModule: UserModule;
     private orderModule: OrderModule;
     private billingModule: BillingModule;
+    private categoryModule: CategoryModule;
 
     private constructor() {
         this.repoModule = new RepositoryModule();
         this.userModule = new UserModule(this.repoModule);
         this.orderModule = new OrderModule(this.repoModule);
         this.billingModule = new BillingModule(this.repoModule);
+        this.categoryModule = new CategoryModule(this.repoModule);
         logger.info('DIContainer initialized (Modularized)');
     }
 
@@ -110,6 +123,7 @@ export class DIContainer {
     public getBillRepository(): IBillRepository { return this.repoModule.getBillRepository(); }
     public getRoleRepository(): IRoleRepository { return this.repoModule.getRoleRepository(); }
     public getCreditNoteRepository(): ICreditNoteRepository { return this.repoModule.getCreditNoteRepository(); }
+    public getCategoryRepository(): ICategoryRepository { return this.repoModule.getCategoryRepository(); }
 
     // --- Services ---
     public getSRIService(): SRIService { return this.billingModule.getSRIService(); }
@@ -167,6 +181,12 @@ export class DIContainer {
     public getRetryCreditNotesUseCase(): RetryCreditNotes { return this.billingModule.getRetryCreditNotesUseCase(); }
     public getCronService(): CronService { return this.billingModule.getCronService(); }
 
+    // Categories
+    public getCreateCategoryUseCase(): CreateCategory { return this.categoryModule.getCreateCategoryUseCase(); }
+    public getUpdateCategoryUseCase(): UpdateCategory { return this.categoryModule.getUpdateCategoryUseCase(); }
+    public getDeleteCategoryUseCase(): DeleteCategory { return this.categoryModule.getDeleteCategoryUseCase(); }
+    public getGetCategoriesUseCase(): GetCategories { return this.categoryModule.getGetCategoriesUseCase(); }
+    public getReorderCategoriesUseCase(): ReorderCategories { return this.categoryModule.getReorderCategoriesUseCase(); }
 
     // --- Controllers ---
     public getOrderController(): OrderController { return this.orderModule.getOrderController(); }
@@ -181,6 +201,7 @@ export class DIContainer {
         this.userModule.reset();
         this.orderModule.reset();
         this.billingModule.reset();
+        this.categoryModule.reset();
         logger.info('DIContainer reset');
     }
 }

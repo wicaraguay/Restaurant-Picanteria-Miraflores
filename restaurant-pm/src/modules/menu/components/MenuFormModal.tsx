@@ -4,13 +4,15 @@
  * Incluye soporte para subida de imágenes a Cloudinary y feedback visual mejorado.
  * Este archivo pertenece al módulo de menú (menu).
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MenuItem } from '../types/menu.types';
 import Modal from '../../../components/ui/Modal';
 import { uploadToCloudinary } from '../../../utils/cloudinary';
 import { logger } from '../../../utils/logger';
 import { Validators } from '../../../utils/validators';
 import { toast } from '../../../components/ui/AlertProvider';
+import { api } from '../../../api';
+import { Category } from '../../categories/types/category.types';
 
 const inputClass = "w-full rounded-2xl border border-gray-200 bg-gray-50 p-4 text-gray-900 text-sm font-medium focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none transition-all dark:border-gray-700 dark:bg-dark-900/50 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-500 dark:focus:bg-dark-900 dark:focus:ring-blue-500/10";
 
@@ -26,11 +28,33 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [loadingCategories, setLoadingCategories] = useState(false);
     const isEditing = item !== null;
 
-    React.useEffect(() => {
+    // Load categories when modal opens
+    useEffect(() => {
         if (isOpen) {
-            setFormData(isEditing ? { ...item } : { name: '', category: '', price: 0, description: '', available: true, imageUrl: '', taxRate: 15 });
+            loadCategories();
+        }
+    }, [isOpen]);
+
+    const loadCategories = async () => {
+        setLoadingCategories(true);
+        try {
+            const data = await api.categories.getAll();
+            setCategories(data);
+        } catch (error) {
+            logger.error('Error loading categories', error);
+            // Fallback: allow text input if categories fail to load
+        } finally {
+            setLoadingCategories(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            setFormData(isEditing ? { ...item } : { name: '', category: '', categoryId: '', price: 0, description: '', available: true, imageUrl: '', taxRate: 15 });
             setImageFile(null);
             setIsUploading(false);
             setErrors({});
@@ -39,8 +63,19 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
-        if (type === 'checkbox') setFormData(prev => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
-        else setFormData(prev => ({ ...prev, [name]: type === 'number' ? parseFloat(value) : value }));
+        if (type === 'checkbox') {
+            setFormData(prev => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
+        } else if (name === 'categoryId') {
+            // When category is selected, update both categoryId and category (name)
+            const selectedCategory = categories.find(c => c.id === value);
+            setFormData(prev => ({
+                ...prev,
+                categoryId: value,
+                category: selectedCategory?.name || prev.category || ''
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: type === 'number' ? parseFloat(value) : value }));
+        }
     };
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,6 +131,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                 id: item?.id || Date.now().toString(),
                 name: formData.name,
                 category: formData.category,
+                categoryId: formData.categoryId,
                 price: formData.price,
                 description: formData.description || '',
                 available: formData.available || false,
@@ -125,7 +161,34 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 block ml-1">Categoría</label>
-                        <input type="text" name="category" value={formData.category || ''} onChange={handleChange} required placeholder="Ej: Entradas" className={`${inputClass} ${errors.category ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
+                        {categories.length > 0 ? (
+                            <select
+                                name="categoryId"
+                                value={formData.categoryId || ''}
+                                onChange={handleChange}
+                                required
+                                className={`${inputClass} ${errors.category ? 'border-red-500 ring-4 ring-red-500/10' : ''}`}
+                                disabled={loadingCategories}
+                            >
+                                <option value="">Seleccionar categoría...</option>
+                                {categories.map(cat => (
+                                    <option key={cat.id} value={cat.id}>
+                                        {cat.name} {cat.productType === 'retail' ? '(Retail)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <input
+                                type="text"
+                                name="category"
+                                value={formData.category || ''}
+                                onChange={handleChange}
+                                required
+                                placeholder={loadingCategories ? 'Cargando...' : 'Ej: Entradas'}
+                                className={`${inputClass} ${errors.category ? 'border-red-500 ring-4 ring-red-500/10' : ''}`}
+                                disabled={loadingCategories}
+                            />
+                        )}
                         {errors.category && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1 uppercase">{errors.category}</p>}
                     </div>
                     <div>

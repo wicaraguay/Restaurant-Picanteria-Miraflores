@@ -34,6 +34,7 @@ import roleRoutes from './infrastructure/web/routes/roleRoutes';
 import creditNoteRoutes from './infrastructure/web/routes/creditNoteRoutes';
 import dashboardRoutes from './infrastructure/web/routes/dashboard.routes';
 import metricsRoutes from './infrastructure/web/routes/metricsRoutes';
+import categoryRoutes from './infrastructure/web/routes/categoryRoutes';
 
 import { cacheService } from './infrastructure/utils/CacheService';
 import { container } from './infrastructure/di/DIContainer';
@@ -151,6 +152,7 @@ app.use('/api/bills', billRoutes); // CRUD de facturas internas
 app.use('/api/billing', billingRoutes); // Generación de XML SRI
 app.use('/api/employees', employeeRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api/categories', categoryRoutes); // Categorías de productos
 app.use('/api/credit-notes', creditNoteRoutes); // Notas de crédito SRI
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/whatsapp', whatsappApiRoutes); // WhatsApp API para frontend
