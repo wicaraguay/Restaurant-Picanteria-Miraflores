@@ -38,18 +38,33 @@ export const generateInvoiceHtml = (
     let subtotal0 = 0;
     let iva15 = 0;
 
+    // Calcular subtotales por item (redondeados)
+    let totalInclusive15 = 0;
     order.items.forEach(item => {
         const itemTaxRate = item.taxRate !== undefined ? item.taxRate : 15;
         const itemTotal = (item.price || 0) * item.quantity;
-        
+
         if (itemTaxRate > 0) {
-            const itemSubtotal = itemTotal / (1 + (itemTaxRate / 100));
+            // Redondear cada item a 2 decimales (igual que el backend)
+            const itemSubtotal = parseFloat((itemTotal / (1 + (itemTaxRate / 100))).toFixed(2));
+            const itemIva = parseFloat((itemTotal - itemSubtotal).toFixed(2));
             subtotal15 += itemSubtotal;
-            iva15 += (itemTotal - itemSubtotal);
+            iva15 += itemIva;
+            totalInclusive15 += itemTotal;
         } else {
             subtotal0 += itemTotal;
         }
     });
+
+    // Penny adjustment para IVA 15% (igual que el backend)
+    if (totalInclusive15 > 0) {
+        const targetSubtotal15 = parseFloat((totalInclusive15 / 1.15).toFixed(2));
+        const difference = parseFloat((targetSubtotal15 - subtotal15).toFixed(2));
+        if (Math.abs(difference) > 0 && Math.abs(difference) < 0.10) {
+            subtotal15 = targetSubtotal15;
+            iva15 = parseFloat((totalInclusive15 - subtotal15).toFixed(2));
+        }
+    }
 
     const totalSubtotal = subtotal15 + subtotal0;
     const total = totalConIva; // alias semántico: VALOR TOTAL = precio ya con IVA
@@ -503,14 +518,21 @@ export const generateInvoiceHtml = (
                     </tr>
                 </thead>
                 <tbody>
-                    ${order.items.map(item => `
-                    <tr>
-                        <td class="col-qty">${item.quantity}</td>
-                        <td class="col-desc item-name">${item.name}</td>
-                        <td class="col-price">$${(item.price || 0).toFixed(2)}</td>
-                        <td class="col-total">$${((item.price || 0) * item.quantity).toFixed(2)}</td>
-                    </tr>
-                    `).join('')}
+                    ${order.items.map(item => {
+                        // Mostrar precios ORIGINALES (con IVA incluido) en la tabla de items
+                        // El desglose del IVA se hace SOLO en los totales (SUBTOTAL 15%, IVA 15%, etc.)
+                        const unitPrice = item.price || 0;
+                        const itemTotal = unitPrice * item.quantity;
+
+                        return `
+                        <tr>
+                            <td class="col-qty">${item.quantity}</td>
+                            <td class="col-desc item-name">${item.name}</td>
+                            <td class="col-price">$${unitPrice.toFixed(2)}</td>
+                            <td class="col-total">$${itemTotal.toFixed(2)}</td>
+                        </tr>
+                        `;
+                    }).join('')}
                 </tbody>
             </table>
 
@@ -529,16 +551,8 @@ export const generateInvoiceHtml = (
                         <td>$${totalSubtotal.toFixed(2)}</td>
                     </tr>
                     <tr>
-                        <td>DESCUENTO</td>
-                        <td>$0.00</td>
-                    </tr>
-                    <tr>
                         <td>IVA 15%</td>
                         <td>$${iva15.toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                        <td>PROPINA</td>
-                        <td>$0.00</td>
                     </tr>
                     <tr class="totals-row-final">
                         <td>VALOR TOTAL</td>

@@ -212,12 +212,12 @@ export class PDFService {
     private generateCreditNoteTable(doc: PDFKit.PDFDocument, creditNote: CreditNote): void {
         let currentY = doc.y + 20;
         const leftMargin = 30;
+        // Sin columna de código - solo lo esencial para el cliente
         const colWidths = {
-            code: 70,
-            desc: 265,
+            desc: 295,
             qty: 50,
-            unit: 75,
-            total: 75
+            unit: 95,
+            total: 95
         };
 
         // Header
@@ -225,26 +225,29 @@ export class PDFService {
             .font('Helvetica-Bold')
             .fontSize(8.5);
 
-        doc.text('Código', leftMargin, currentY, { width: colWidths.code });
-        doc.text('Descripción', leftMargin + colWidths.code, currentY, { width: colWidths.desc });
-        doc.text('Cant.', leftMargin + colWidths.code + colWidths.desc, currentY, { width: colWidths.qty, align: 'center' });
-        doc.text('P. Unitario', leftMargin + colWidths.code + colWidths.desc + colWidths.qty, currentY, { width: colWidths.unit, align: 'right' });
-        doc.text('Subtotal', leftMargin + colWidths.code + colWidths.desc + colWidths.qty + colWidths.unit, currentY, { width: colWidths.total, align: 'right' });
+        doc.text('Descripción', leftMargin, currentY, { width: colWidths.desc });
+        doc.text('Cant.', leftMargin + colWidths.desc, currentY, { width: colWidths.qty, align: 'center' });
+        doc.text('P. Unitario', leftMargin + colWidths.desc + colWidths.qty, currentY, { width: colWidths.unit, align: 'right' });
+        doc.text('Total', leftMargin + colWidths.desc + colWidths.qty + colWidths.unit, currentY, { width: colWidths.total, align: 'right' });
 
         currentY += 15;
         this.generateHr(doc, currentY);
         currentY += 10;
 
-        // Rows
+        // Rows - Mostrar precios ORIGINALES con IVA incluido (igual que facturas)
         doc.font('Helvetica').fontSize(8.5).fillColor('#4b5563');
 
         creditNote.detalles.forEach(item => {
             const startX = leftMargin;
-            doc.text(item.codigoPrincipal || '', startX, currentY, { width: colWidths.code });
-            doc.text(item.descripcion, startX + colWidths.code, currentY, { width: colWidths.desc });
-            doc.text(item.cantidad.toString(), startX + colWidths.code + colWidths.desc, currentY, { width: colWidths.qty, align: 'center' });
-            doc.text(`$${item.precioUnitario.toFixed(2)}`, startX + colWidths.code + colWidths.desc + colWidths.qty, currentY, { width: colWidths.unit, align: 'right' });
-            doc.text(`$${item.precioTotalSinImpuesto.toFixed(2)}`, startX + colWidths.code + colWidths.desc + colWidths.qty + colWidths.unit, currentY, { width: colWidths.total, align: 'right' });
+            // Calcular precio con IVA incluido: subtotal + impuesto
+            const taxValue = item.impuestos?.[0]?.valor || 0;
+            const totalConIva = item.precioTotalSinImpuesto + taxValue;
+            const priceConIva = totalConIva / item.cantidad;
+
+            doc.text(item.descripcion, startX, currentY, { width: colWidths.desc });
+            doc.text(item.cantidad.toString(), startX + colWidths.desc, currentY, { width: colWidths.qty, align: 'center' });
+            doc.text(`$${priceConIva.toFixed(2)}`, startX + colWidths.desc + colWidths.qty, currentY, { width: colWidths.unit, align: 'right' });
+            doc.text(`$${totalConIva.toFixed(2)}`, startX + colWidths.desc + colWidths.qty + colWidths.unit, currentY, { width: colWidths.total, align: 'right' });
 
             currentY = doc.y + 8;
             if (currentY > 700) {
@@ -277,18 +280,32 @@ export class PDFService {
             currentY += 18;
         };
 
-        const subtotalBase = creditNote.info.totalSinImpuestos.toFixed(2);
-        const ivaValue = (creditNote.info.importeTotal - creditNote.info.totalSinImpuestos).toFixed(2);
+        // Calcular subtotales por grupo de IVA (igual que facturas)
+        let subtotal15 = 0;
+        let subtotal0 = 0;
+        let iva15 = 0;
+
+        creditNote.detalles.forEach(item => {
+            const taxRate = item.impuestos?.[0]?.tarifa ?? 15;
+            const taxVal = item.impuestos?.[0]?.valor || 0;
+
+            if (taxRate > 0) {
+                subtotal15 += item.precioTotalSinImpuesto;
+                iva15 += taxVal;
+            } else {
+                subtotal0 += item.precioTotalSinImpuesto;
+            }
+        });
+
+        const totalSubtotal = subtotal15 + subtotal0;
         const totalValue = creditNote.info.importeTotal.toFixed(2);
 
-        drawTotalRow('Subtotal 0%', '0.00');
-        drawTotalRow(`Subtotal 15%`, subtotalBase);
-        drawTotalRow('Subtotal No Objeto IVA', '0.00');
-        drawTotalRow('Subtotal Exento IVA', '0.00');
-        drawTotalRow('Subtotal Sin Impuestos', subtotalBase);
-        drawTotalRow('Descuento', '0.00');
-        drawTotalRow(`IVA 15%`, ivaValue);
-        
+        // Formato SRI simplificado para restaurante (sin campos que no aplican)
+        drawTotalRow('SUBTOTAL 15%', subtotal15.toFixed(2));
+        drawTotalRow('SUBTOTAL 0%', subtotal0.toFixed(2));
+        drawTotalRow('SUBTOTAL SIN IMPUESTOS', totalSubtotal.toFixed(2));
+        drawTotalRow('IVA 15%', iva15.toFixed(2));
+
         currentY += 5;
         this.generateHr(doc, currentY, 1.5, '#e5e7eb', totalsX, rightMargin);
         currentY += 8;
@@ -298,7 +315,7 @@ export class PDFService {
         // Additional info (Motivo)
         doc.font('Helvetica-Bold').fontSize(9).fillColor('#1f2937')
             .text('Información Adicional', leftMargin, startY);
-        
+
         doc.font('Helvetica').fontSize(8.5).fillColor('#4b5563')
             .text(`Motivo: ${creditNote.info.motivo}`, leftMargin, startY + 15, { width: 300 });
 
@@ -472,11 +489,13 @@ export class PDFService {
                 doc.moveTo(leftMargin, y).lineTo(rightMargin, y).lineWidth(0.5).stroke();
                 y += 5;
 
-                // --- Items List ---
+                // --- Items List (Precios ORIGINALES con IVA incluido) ---
                 doc.font('Helvetica').fontSize(8);
                 invoice.detalles.forEach(item => {
-                    const taxValue = (item.impuestos && item.impuestos.length > 0) ? item.impuestos[0].valor : 0;
-                    const totalItem = (item.precioTotalSinImpuesto + taxValue).toFixed(2);
+                    // Mostrar precio ORIGINAL (con IVA incluido)
+                    // El desglose del IVA se hace SOLO en los totales
+                    // item.total viene del billData original (ya incluye IVA)
+                    const totalItem = ((item as any).total ?? item.precioTotalSinImpuesto).toFixed(2);
 
                     doc.text(item.cantidad.toString(), leftMargin, y, { width: 25, align: 'center' });
                     doc.text(item.descripcion, leftMargin + 30, y, { width: 125, align: 'left' });
@@ -520,12 +539,11 @@ export class PDFService {
                     y += 10;
                 };
 
+                // Formato SRI simplificado para restaurante (ticket 80mm)
                 drawRow('SUBTOTAL 15%', subtotal15.toFixed(2));
                 drawRow('SUBTOTAL 0%', subtotal0.toFixed(2));
                 drawRow('SUBTOTAL', totalSubtotal.toFixed(2));
-                drawRow('DESCUENTO', '0.00');
                 drawRow('IVA 15%', iva15.toFixed(2));
-                drawRow('PROPINA', '0.00');
 
                 y += 3;
                 doc.fontSize(10);
@@ -804,10 +822,11 @@ export class PDFService {
                 position = 50;
             }
 
-            const itemTaxRate = (item.impuestos && item.impuestos.length > 0) ? (item.impuestos[0].tarifa / 100) : 0.15;
-            const taxValue = item.impuestos && item.impuestos.length > 0 ? item.impuestos[0].valor : 0;
-            const displayUnitPrice = item.precioUnitario * (1 + itemTaxRate);
-            const displayTotal = item.precioTotalSinImpuesto + taxValue;
+            // Mostrar precios ORIGINALES (con IVA incluido) en la tabla de items
+            // El desglose del IVA se hace SOLO en los totales (SUBTOTAL 15%, IVA 15%, etc.)
+            // item.price y item.total vienen del billData original (ya incluyen IVA)
+            const displayUnitPrice = (item as any).price ?? item.precioUnitario;
+            const displayTotal = (item as any).total ?? item.precioTotalSinImpuesto;
 
             doc.text(item.cantidad.toString(), colQty, position, { width: 50, align: 'center' });
             doc.text(item.descripcion, colDesc, position, { width: 260 });
@@ -835,9 +854,10 @@ export class PDFService {
             y += step;
         };
 
-        let subtotal15 = 0;
-        let subtotal0 = 0;
-        let iva15 = 0;
+        // Calcular subtotales por tipo de IVA (formato SRI oficial)
+        let subtotal15 = 0;     // Productos gravados al 15%
+        let subtotal0 = 0;      // Productos gravados al 0%
+        let iva15 = 0;          // IVA calculado del 15%
 
         invoice.detalles.forEach(item => {
             const rate = item.impuestos && item.impuestos.length > 0 ? item.impuestos[0].tarifa : 15;
@@ -852,12 +872,11 @@ export class PDFService {
 
         const totalSubtotal = subtotal15 + subtotal0;
 
+        // Formato SRI simplificado para restaurante (sin campos que no aplican)
         drawTotalRow('SUBTOTAL 15%', subtotal15.toFixed(2));
         drawTotalRow('SUBTOTAL 0%', subtotal0.toFixed(2));
-        drawTotalRow('SUBTOTAL', totalSubtotal.toFixed(2));
-        drawTotalRow('DESCUENTO', '0.00');
+        drawTotalRow('SUBTOTAL SIN IMPUESTOS', totalSubtotal.toFixed(2));
         drawTotalRow('IVA 15%', iva15.toFixed(2));
-        drawTotalRow('PROPINA', '0.00');
 
         y += 8;
         doc.fontSize(11); // 14px -> 11pt

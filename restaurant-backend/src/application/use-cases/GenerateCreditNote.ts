@@ -190,7 +190,8 @@ export class GenerateCreditNote {
                 name: d.descripcion,
                 quantity: d.cantidad,
                 price: d.precioUnitario,
-                total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)
+                total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0),
+                taxRate: d.impuestos[0]?.tarifa ?? 15  // Guardar tasa de IVA por ítem (0%, 15%, etc.)
             })),
             subtotal: creditNote.info.totalSinImpuestos,
             tax: totalImpuestos,

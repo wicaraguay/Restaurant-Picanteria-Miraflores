@@ -33,7 +33,8 @@ const BillSchema = new Schema({
         name: { type: String, required: true },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
-        total: { type: Number, required: true }
+        total: { type: Number, required: true },
+        taxRate: { type: Number, default: 15 }  // Tasa de IVA por item (0, 5, 12, 15)
     }],
     subtotal: { type: Number, required: true },
     tax: { type: Number, required: true },

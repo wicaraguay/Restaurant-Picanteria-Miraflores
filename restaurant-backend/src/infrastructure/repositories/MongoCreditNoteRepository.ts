@@ -61,20 +61,43 @@ export class MongoCreditNoteRepository extends BaseRepository<CreditNote> implem
 
     async upsert(creditNote: Partial<CreditNote>): Promise<CreditNote> {
         let doc;
-        if (creditNote.accessKey) {
-            doc = await this.model.findOneAndUpdate(
-                { accessKey: creditNote.accessKey },
-                { $set: creditNote },
-                { new: true, upsert: true }
-            );
-        } else if (creditNote.id) {
-            doc = await this.model.findByIdAndUpdate(
-                creditNote.id,
-                { $set: creditNote },
-                { new: true, upsert: true }
-            );
-        } else {
-            throw new Error('CreditNote upsert requires id or accessKey');
+        try {
+            if (creditNote.accessKey && creditNote.accessKey.length > 0) {
+                // Actualizar por accessKey si existe
+                doc = await this.model.findOneAndUpdate(
+                    { accessKey: creditNote.accessKey },
+                    { $set: creditNote },
+                    { new: true, upsert: true }
+                );
+            } else if (creditNote.id) {
+                // Actualizar por id si existe
+                doc = await this.model.findByIdAndUpdate(
+                    creditNote.id,
+                    { $set: creditNote },
+                    { new: true, upsert: true }
+                );
+            } else if (creditNote.documentNumber) {
+                // Buscar por documentNumber (puede existir de un intento previo fallido)
+                doc = await this.model.findOneAndUpdate(
+                    { documentNumber: creditNote.documentNumber },
+                    { $set: creditNote },
+                    { new: true, upsert: true }
+                );
+            } else {
+                // Crear nuevo documento como último recurso
+                doc = await this.model.create(creditNote);
+            }
+        } catch (error: any) {
+            // E11000 = duplicate key error - el documento ya existe, actualizar en vez de insertar
+            if (error.code === 11000 && creditNote.documentNumber) {
+                doc = await this.model.findOneAndUpdate(
+                    { documentNumber: creditNote.documentNumber },
+                    { $set: creditNote },
+                    { new: true }  // Sin upsert, solo update
+                );
+            } else {
+                throw error;
+            }
         }
 
         if (!doc) throw new Error('Failed to upsert credit note');
