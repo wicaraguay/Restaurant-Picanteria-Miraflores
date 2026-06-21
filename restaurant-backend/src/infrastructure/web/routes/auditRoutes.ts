@@ -9,21 +9,42 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { auditService } from '../../services/AuditService';
 import { jwtAuthMiddleware } from '../middleware/JWTAuthMiddleware';
 import { logger } from '../../utils/Logger';
+import { RoleModel } from '../../database/schemas/RoleSchema';
 
 const router = Router();
 
 // Middleware para verificar que el usuario es administrador
 const adminOnly = async (req: Request, res: Response, next: NextFunction) => {
-    const user = (req as any).user;
-    const roleName = user?.roleName?.toLowerCase() || user?.role?.toLowerCase();
+    try {
+        const user = (req as any).user;
+        const roleId = user?.roleId;
 
-    if (roleName !== 'administrador' && roleName !== 'admin') {
-        return res.status(403).json({
+        if (!roleId) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Solo administradores pueden acceder a los logs de auditoría'
+            });
+        }
+
+        // Buscar el rol por ID para obtener el nombre
+        const role = await RoleModel.findById(roleId).lean();
+        const roleName = role?.name?.toLowerCase();
+
+        if (roleName !== 'administrador' && roleName !== 'admin') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Solo administradores pueden acceder a los logs de auditoría'
+            });
+        }
+
+        next();
+    } catch (error) {
+        logger.error('[AuditRoutes] Error checking admin role', error);
+        return res.status(500).json({
             status: 'error',
-            message: 'Solo administradores pueden acceder a los logs de auditoría'
+            message: 'Error al verificar permisos'
         });
     }
-    next();
 };
 
 /**
