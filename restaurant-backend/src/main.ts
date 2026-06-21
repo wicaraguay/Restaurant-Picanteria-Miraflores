@@ -9,6 +9,7 @@
 
 import 'dotenv/config';
 import express from 'express';
+import http from 'http';
 
 import cors from 'cors';
 import helmet from 'helmet';
@@ -39,6 +40,7 @@ import categoryRoutes from './infrastructure/web/routes/categoryRoutes';
 import { cacheService } from './infrastructure/utils/CacheService';
 import { container } from './infrastructure/di/DIContainer';
 import { getWhatsAppChatbot, getWhatsAppClient, initWhatsAppClient, isWhatsAppEnabled } from './infrastructure/services/whatsapp';
+import { whatsAppSocketManager } from './infrastructure/websocket/WhatsAppSocketManager';
 import { OrderStatus } from './domain/entities/Order';
 
 
@@ -265,11 +267,30 @@ const startServer = async () => {
             logger.info('📱 WhatsApp is DISABLED (set WHATSAPP_ENABLED=true to enable)');
         }
 
+        // Crear servidor HTTP (necesario para WebSocket)
+        const server = http.createServer(app);
+
+        // Inicializar WebSocket para WhatsApp
+        if (isWhatsAppEnabled()) {
+            whatsAppSocketManager.initialize(server);
+            logger.info('🔌 WhatsApp WebSocket initialized on /ws/whatsapp');
+
+            // Pre-inicializar Chromium en background (warmup)
+            const whatsappClient = getWhatsAppClient();
+            if (whatsappClient) {
+                whatsappClient.warmup();
+                logger.info('🔥 WhatsApp warmup started in background');
+            }
+        }
+
         // Start listening
-        app.listen(PORT, () => {
+        server.listen(PORT, () => {
             logger.info(`✅ Server running on port ${PORT}`);
             logger.info(`🌐 Backend ready at http://localhost:${PORT}`);
             logger.info(`💚 Health check: http://localhost:${PORT}/health`);
+            if (isWhatsAppEnabled()) {
+                logger.info(`📱 WhatsApp WebSocket: ws://localhost:${PORT}/ws/whatsapp`);
+            }
         });
     } catch (err) {
         logger.error('Failed to start server', err);
