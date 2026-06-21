@@ -1,3 +1,10 @@
+/**
+ * GenerateInvoice.ts
+ * FIX D-03: Refactored from 346 lines to smaller, focused methods
+ *
+ * Use case for generating electronic invoices (facturas electrónicas) for SRI Ecuador.
+ * Orchestrates: validation → XML generation → signing → SRI submission → authorization → email
+ */
 
 import { SRIService } from '../../infrastructure/services/SRIService';
 import { PDFService } from '../../infrastructure/services/PDFService';
@@ -5,13 +12,44 @@ import { IEmailService } from '../interfaces/IEmailService';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
-import { ICustomerRepository } from '../../domain/repositories/ICustomerRepository';
 import { Invoice, InvoiceDetail } from '../../domain/billing/invoice';
 import { ValidationError } from '../../domain/errors/CustomErrors';
-
 import { BillingService } from '../services/BillingService';
 import { OrderStatus } from '../../domain/entities/Order';
 import { logger } from '../../infrastructure/utils/Logger';
+import { SRI_MAX_DAILY_RETRIES, CONSUMIDOR_FINAL_RUC } from '../../config/billing.constants';
+import { RestaurantConfig } from '../../domain/entities/RestaurantConfig';
+import { dbConnection } from '../../infrastructure/database/DatabaseConnection';
+
+/** Input parameters for invoice generation */
+interface GenerateInvoiceParams {
+    order: any;
+    client: any;
+    taxRate?: number;
+    logoUrl?: string;
+    id?: string; // Existing bill ID for retries
+}
+
+/** Result of invoice generation */
+interface GenerateInvoiceResult {
+    success: boolean;
+    invoiceId: string;
+    invoiceNumber: string;
+    accessKey: string | undefined;
+    customerLearning: any;
+    xml: string;
+    sriResponse: any;
+    authorization: any;
+    emailStatus: EmailStatus;
+}
+
+/** Email sending status */
+interface EmailStatus {
+    sent: boolean;
+    skipped: boolean;
+    error?: string;
+    skipReason?: string;
+}
 
 export class GenerateInvoice {
     constructor(
@@ -24,70 +62,163 @@ export class GenerateInvoice {
         private billingService: BillingService
     ) { }
 
-    async execute(params: {
-        order: any,
-        client: any,
-        taxRate?: number,
-        logoUrl?: string,
-        id?: string
-    }): Promise<any> {
+    /**
+     * Main execution method - orchestrates the entire invoice generation flow
+     */
+    async execute(params: GenerateInvoiceParams): Promise<GenerateInvoiceResult> {
         const { order, client, taxRate = 15, logoUrl } = params;
 
-        // Validate Email Format (User Request)
-        // Ensure email has correct format to avoid sending typos (commas, extra letters)
-        if (client.email) {
-            this.billingService.validateEmail(client.email);
+        // Step 1: Validate input and calculate totals
+        this.validateClientEmail(client.email);
+        const { details, subtotal, totalImpuestos, total } = this.calculateTotals(order.items, taxRate);
+        this.billingService.validateConsumidorFinal(client.identification, total);
+
+        // Step 2: Get configuration and sequential
+        const config = await this.configRepository.get();
+        const secuencial = await this.resolveSequential(params.id);
+
+        // Step 3: Build invoice object
+        const invoice = this.buildInvoice(order, client, details, subtotal, total, config, secuencial, logoUrl, taxRate);
+
+        // Step 4: Validate real-time transmission (SRI 2026 compliance)
+        this.billingService.validateRealTimeTransmission(invoice.info.fechaEmision);
+
+        // Step 5: Auto-learn customer data (non-blocking)
+        const autoLearnResult = await this.tryAutoLearnCustomer(client);
+
+        // Step 6: Create draft bill in database
+        const draftBill = await this.createDraftBill(params.id, invoice, details, totalImpuestos);
+
+        // Step 7: Generate, sign, and send XML to SRI
+        const { xml, signedXml, result, authResult, updatedInvoice } = await this.processWithSRI(
+            invoice, config, draftBill.id
+        );
+
+        // Determine if consumidor final (needed for order status and email)
+        const isConsumidorFinal = String(client.identification) === CONSUMIDOR_FINAL_RUC;
+
+        // Step 8 & 9: Persist final result and update order status atomically
+        // CRITICAL: These operations must succeed together or fail together (data consistency)
+        await dbConnection.withTransaction(async (_session) => {
+            // Step 8: Persist final result
+            await this.persistFinalResult(draftBill.id, result, authResult);
+
+            // Step 9: Update order status
+            await this.updateOrderStatus(invoice.orderId, isConsumidorFinal);
+
+            // NOTE: Currently repositories don't accept session parameter.
+            // When implementing session support, add { session } option:
+            // await this.billRepository.upsert({ ... }, { session });
+            // await this.orderRepository.update(id, data, { session });
+        });
+
+        // Step 10: Send email notification
+        const emailStatus = await this.handleEmailNotification(
+            authResult, client, updatedInvoice || invoice, signedXml, isConsumidorFinal
+        );
+
+        // Step 11: Return result
+        const finalDocumentNumber = `${invoice.info.estab}-${invoice.info.ptoEmi}-${(updatedInvoice || invoice).info.secuencial}`;
+        return {
+            success: true,
+            invoiceId: draftBill.id,
+            invoiceNumber: finalDocumentNumber,
+            accessKey: (updatedInvoice || invoice).info.claveAcceso,
+            customerLearning: autoLearnResult,
+            xml: xml,
+            sriResponse: result,
+            authorization: authResult,
+            emailStatus
+        };
+    }
+
+    // ========== Private Helper Methods ==========
+
+    /**
+     * Validates client email format if provided
+     */
+    private validateClientEmail(email: string | undefined): void {
+        if (email) {
+            this.billingService.validateEmail(email);
         }
+    }
 
-
-        // 1. Calculate Details
-        const details = this.billingService.calculateDetails(order.items, taxRate);
-
+    /**
+     * Calculates invoice details and totals from order items
+     */
+    private calculateTotals(items: any[], taxRate: number): {
+        details: InvoiceDetail[];
+        subtotal: number;
+        totalImpuestos: number;
+        total: number;
+    } {
+        const details = this.billingService.calculateDetails(items, taxRate);
         const subtotal = details.reduce((sum, d) => sum + d.precioTotalSinImpuesto, 0);
         const totalImpuestos = details.reduce((sum, d) => sum + d.impuestos[0].valor, 0);
         const total = subtotal + totalImpuestos;
 
-        // 1.1. Validate Consumidor Final (SRI 2026 Compliance)
-        this.billingService.validateConsumidorFinal(client.identification, total);
+        return { details, subtotal, totalImpuestos, total };
+    }
 
-        // 2. Get Config
-        const config = await this.configRepository.get();
-        const info = config || {} as any; // Fallback handled in logic or entity
+    /**
+     * Resolves the sequential number - reuses existing for retries or generates new
+     */
+    private async resolveSequential(existingBillId?: string): Promise<string> {
+        if (existingBillId) {
+            const existingBill = await this.billRepository.findById(existingBillId);
 
-        logger.info(`[GenerateInvoice] Config from DB: ${!!config}, Logo field: ${info.logo ? 'EXISTS' : 'MISSING'}, Fiscal Logo field: ${info.fiscalLogo ? 'EXISTS' : 'MISSING'}`);
-        if (info.logo) logger.info(`[GenerateInvoice] Logo starts with: ${info.logo.substring(0, 30)}`);
+            if (existingBill && existingBill.documentNumber) {
+                // Check retry limit
+                this.checkRetryLimit(existingBill);
 
-        // 3. Get Next Sequential (Atomic Operation) or Reuse existing one
-        let secuencial: string;
-        let existingBill = null;
-
-        if (params.id) {
-            existingBill = await this.billRepository.findById(params.id);
-        }
-
-        if (existingBill && existingBill.documentNumber) {
-            // --- RETRY LIMIT CHECK ---
-            const todayISO = this.billingService.getCurrentDateEcuador().split('/').reverse().join('-');
-            if (existingBill.lastRetryDate === todayISO && (existingBill.retryCount || 0) >= 3) {
-                throw new Error('SRI_LIMIT_REACHED: Límite de 3 intentos diarios alcanzado para este comprobante (1 emisión + 2 reintentos). Por favor intente mañana con una nueva clave automática.');
+                // Reuse existing sequential
+                const parts = existingBill.documentNumber.split('-');
+                const secuencial = parts[parts.length - 1];
+                logger.info(`[GenerateInvoice] Reusing existing sequential: ${secuencial} for bill ${existingBillId}`);
+                return secuencial;
             }
-            // -------------------------
-
-            // Reuse existing sequential to avoid gaps (User Request)
-            const parts = existingBill.documentNumber.split('-');
-            secuencial = parts[parts.length - 1];
-            logger.info(`[GenerateInvoice] Reusing existing sequential: ${secuencial} for bill ${params.id}`);
-        } else {
-            // CRITICAL: This ensures each invoice has a unique sequential number
-            // preventing duplicate access key errors from SRI
-            const nextSequential = await this.configRepository.getNextSequential();
-            secuencial = nextSequential.toString().padStart(9, '0');
-            logger.info(`[GenerateInvoice] New sequential generated: ${secuencial}`);
         }
 
-        // 4. Build Invoice Object
+        // Generate new sequential (atomic operation)
+        const nextSequential = await this.configRepository.getNextSequential();
+        const secuencial = nextSequential.toString().padStart(9, '0');
+        logger.info(`[GenerateInvoice] New sequential generated: ${secuencial}`);
+        return secuencial;
+    }
+
+    /**
+     * Checks if retry limit has been reached for the day
+     */
+    private checkRetryLimit(bill: any): void {
+        const todayISO = this.billingService.getCurrentDateEcuador().split('/').reverse().join('-');
+        if (bill.lastRetryDate === todayISO && (bill.retryCount || 0) >= SRI_MAX_DAILY_RETRIES) {
+            throw new Error(
+                `SRI_LIMIT_REACHED: Límite de ${SRI_MAX_DAILY_RETRIES} intentos diarios alcanzado ` +
+                `para este comprobante. Por favor intente mañana con una nueva clave automática.`
+            );
+        }
+    }
+
+    /**
+     * Builds the invoice object from all collected data
+     */
+    private buildInvoice(
+        order: any,
+        client: any,
+        details: InvoiceDetail[],
+        subtotal: number,
+        total: number,
+        config: RestaurantConfig | null,
+        secuencial: string,
+        logoUrl: string | undefined,
+        taxRate: number
+    ): Invoice {
+        const info = config || {} as any;
         const now = new Date();
-        const invoice: Invoice = {
+
+        logger.info(`[GenerateInvoice] Config from DB: ${!!config}, Logo: ${info.logo ? 'EXISTS' : 'MISSING'}`);
+
+        return {
             orderId: order.id,
             status: 'PENDING',
             creationDate: now,
@@ -103,11 +234,11 @@ export class GenerateInvoice {
                 codDoc: '01',
                 estab: info.billing?.establishment || process.env.ESTAB || '001',
                 ptoEmi: info.billing?.emissionPoint || process.env.PTO_EMI || '001',
-                secuencial: secuencial, // Using atomic sequential from database
+                secuencial,
                 fechaEmision: this.billingService.getCurrentDateEcuador(),
                 obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
                 tipoIdentificacionComprador: this.billingService.getIdentificacionType(client.identification),
-                razonSocialComprador: String(client.identification) === '9999999999999' ? 'CONSUMIDOR FINAL' : client.name,
+                razonSocialComprador: String(client.identification) === CONSUMIDOR_FINAL_RUC ? 'CONSUMIDOR FINAL' : client.name,
                 identificacionComprador: client.identification,
                 direccionComprador: client.address,
                 totalSinImpuestos: subtotal,
@@ -125,183 +256,287 @@ export class GenerateInvoice {
                 agenteRetencion: info.billing?.agenteRetencion
             }
         };
+    }
 
-        // SRI 2026 Compliance: Real-Time Transmission Validation
-        // Resolution NAC-DGERCGC25-00000017: Invoices must be transmitted immediately upon emission
-        // The emission date must correspond to the current date
-        this.billingService.validateRealTimeTransmission(invoice.info.fechaEmision);
+    /**
+     * Attempts to auto-learn customer data (non-blocking)
+     */
+    private async tryAutoLearnCustomer(client: any): Promise<any> {
+        try {
+            return await this.billingService.autoLearnCustomer(client, new Date());
+        } catch (error) {
+            logger.warn('[GenerateInvoice] autoLearnCustomer failed (non-blocking):', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
 
-        // 5. ETAPA 0: Auto-learn Customer Data (Real-time Learning)
-        // CRITICAL: We do this BEFORE any risky SRI/DB operations to ensure 
-        // customer data is captured even if the electronic billing fails.
-        const autoLearnResult = await this.billingService.autoLearnCustomer(client, now);
-
-        // Pre-calculate user flags for learning and email logic
-        const isConsumidorFinal = String(client.identification) === '9999999999999';
-        const isValidEmail = client.email &&
-            !client.email.includes('consumidor@final') &&
-            !client.email.includes('noemail') &&
-            client.email.includes('@') &&
-            client.email.includes('.');
-
-        // 5. ETAPA 1: Crear Borrador en DB
+    /**
+     * Creates or updates the draft bill in the database
+     */
+    private async createDraftBill(
+        existingId: string | undefined,
+        invoice: Invoice,
+        details: InvoiceDetail[],
+        totalImpuestos: number
+    ): Promise<any> {
         const billData: any = {
-            id: params.id, // Reutilizar ID si viene de un re-intento
+            id: existingId,
             accessKey: undefined,
             documentNumber: `${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}`,
             orderId: invoice.orderId,
-            date: now.toISOString(),
+            date: new Date().toISOString(),
             documentType: 'Factura',
             customerName: invoice.info.razonSocialComprador,
             customerIdentification: String(invoice.info.identificacionComprador),
             customerAddress: invoice.info.direccionComprador,
             customerEmail: invoice.info.emailComprador,
-            items: details.map(d => {
-                const itemTotal = d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0);
-                return {
-                    name: d.descripcion,
-                    quantity: d.cantidad,
-                    price: parseFloat((itemTotal / d.cantidad).toFixed(6)),
-                    total: itemTotal
-                };
-            }),
+            items: details.map(d => ({
+                name: d.descripcion,
+                quantity: d.cantidad,
+                price: parseFloat(((d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)) / d.cantidad).toFixed(6)),
+                total: d.precioTotalSinImpuesto + (d.impuestos[0]?.valor || 0)
+            })),
             subtotal: invoice.info.totalSinImpuestos,
             tax: totalImpuestos,
             total: invoice.info.importeTotal,
-            retryCount: 1, // First attempt
+            retryCount: 1,
             lastRetryDate: this.billingService.getCurrentDateEcuador().split('/').reverse().join('-')
         };
 
-        const draftBill = await this.billRepository.upsert(billData);
+        return await this.billRepository.upsert(billData);
+    }
 
-        // 6. ETAPA 2: Generar y Firmar XML (VALIDADO)
-        const xml = this.sriService.generateInvoiceXML(invoice);
-        const signedXml = await this.sriService.signXML(xml, config || undefined);
+    /**
+     * Processes the invoice with SRI: generate XML, sign, send, authorize
+     */
+    private async processWithSRI(
+        invoice: Invoice,
+        config: RestaurantConfig | null,
+        billId: string
+    ): Promise<{
+        xml: string;
+        signedXml: string;
+        result: any;
+        authResult: any;
+        updatedInvoice: Invoice | null;
+    }> {
         const isProd = process.env.SRI_ENV === '2';
 
+        // Generate and sign XML
+        const xml = this.sriService.generateInvoiceXML(invoice);
+        const signedXml = await this.sriService.signXML(xml, config || undefined);
+
+        // Update bill with access key and signed XML
         await this.billRepository.upsert({
-            id: draftBill.id,
+            id: billId,
             accessKey: invoice.info.claveAcceso,
             xmlContent: signedXml,
             sriStatus: 'VALIDADO'
         });
 
-        // 7. ETAPA 3: Envío al SRI (AUTORIZADO)
+        // Send to SRI
         const result = await this.sriService.sendToSRI(signedXml, isProd);
 
-        // 7. Handle Response & Authorization
+        // Handle authorization
+        const { authResult, updatedInvoice } = await this.handleSRIResponse(
+            result, invoice, config, billId, isProd
+        );
+
+        return { xml, signedXml, result, authResult, updatedInvoice };
+    }
+
+    /**
+     * Handles SRI response and authorization flow
+     */
+    private async handleSRIResponse(
+        result: any,
+        invoice: Invoice,
+        config: RestaurantConfig | null,
+        billId: string,
+        isProd: boolean
+    ): Promise<{ authResult: any; updatedInvoice: Invoice | null }> {
         const responseString = JSON.stringify(result);
         const isAlreadyRegistered = result.estado === 'DEVUELTA' &&
             (responseString.includes('CLAVE ACCESO REGISTRADA') || responseString.includes('EN PROCESAMIENTO'));
 
-        let authResult = null;
+        // Normal authorization flow
         if (result.estado === 'RECIBIDA' || isAlreadyRegistered) {
-            authResult = await this.sriService.waitForAuthorization(invoice.info.claveAcceso!, isProd);
-        } else if (result.estado === 'DEVUELTA') {
-            // Check for SEQUENCE REGISTERED Error explicitly
-            const responseStr = JSON.stringify(result);
-            if (responseStr.includes('ERROR SECUENCIAL REGISTRADO')) {
-                logger.info('⚠️ Sequence Registered Error detected in GenerateInvoice. Auto-healing...');
-
-                // AUTO-HEAL: Increment Sequence and Retry locally
-                const nextSequential = await this.configRepository.getNextSequential(); // Get NEW next (since previous one failed)
-                const newSecuencial = nextSequential.toString().padStart(9, '0');
-                logger.info(`[GenerateInvoice] Retrying with NEW Sequence: ${invoice.info.secuencial} -> ${newSecuencial}`);
-
-                // Update Invoice Object
-                invoice.info.secuencial = newSecuencial;
-                // Regenerate XML
-                const newXml = this.sriService.generateInvoiceXML(invoice);
-                const newSignedXml = await this.sriService.signXML(newXml, config || undefined);
-
-                // Resend
-                const retryResult = await this.sriService.sendToSRI(newSignedXml, isProd);
-
-                if (retryResult.estado === 'RECIBIDA') {
-                    logger.info('✅ Auto-heal successful. Invoice Received. Authorizing...');
-                    // Authorize NEW Access Key
-                    const retryAuth = await this.sriService.authorizeInvoice(invoice.info.claveAcceso!, isProd);
-                    if (retryAuth && retryAuth.estado === 'AUTORIZADO') {
-                        authResult = retryAuth;
-                        result.estado = 'RECIBIDA'; // Override original failure
-                    } else {
-                        // Check if retryAuth is valid before using it
-                        if (retryAuth) {
-                            authResult = retryAuth;
-                        } else {
-                            logger.error('[GenerateInvoice] Auto-heal authorization returned NULL');
-                            // Keep authResult null or set error
-                            authResult = { estado: 'ERROR_AUTH_NULL', mensajes: ['Error interno al autorizar (Respuesta nula)'] };
-                        }
-                    }
-                } else {
-                    // If still fails, bad luck.
-                    logger.info('❌ Auto-heal failed.', retryResult);
-                    authResult = { ...result, mensajes: [...(result.mensajes || []), ...retryResult.mensajes] };
-                }
-
-            }
+            const authResult = await this.sriService.waitForAuthorization(invoice.info.claveAcceso!, isProd);
+            return { authResult, updatedInvoice: null };
         }
 
-        // 8. Persistir Resultado Final
+        // Handle DEVUELTA with sequence error
+        if (result.estado === 'DEVUELTA' && responseString.includes('ERROR SECUENCIAL REGISTRADO')) {
+            return await this.handleSequenceError(invoice, config, billId, result, isProd);
+        }
+
+        return { authResult: null, updatedInvoice: null };
+    }
+
+    /**
+     * Handles sequence error by auto-healing with new sequential
+     */
+    private async handleSequenceError(
+        invoice: Invoice,
+        config: RestaurantConfig | null,
+        billId: string,
+        originalResult: any,
+        isProd: boolean
+    ): Promise<{ authResult: any; updatedInvoice: Invoice }> {
+        logger.info('⚠️ Sequence Registered Error detected. Auto-healing...');
+
+        // Get new sequential
+        const nextSequential = await this.configRepository.getNextSequential();
+        const newSecuencial = nextSequential.toString().padStart(9, '0');
+        logger.info(`[GenerateInvoice] Retrying with NEW Sequence: ${invoice.info.secuencial} -> ${newSecuencial}`);
+
+        // Update invoice
+        invoice.info.secuencial = newSecuencial;
+
+        // Regenerate and sign XML
+        const newXml = this.sriService.generateInvoiceXML(invoice);
+        const newSignedXml = await this.sriService.signXML(newXml, config || undefined);
+
+        // Resend to SRI
+        const retryResult = await this.sriService.sendToSRI(newSignedXml, isProd);
+
+        if (retryResult.estado === 'RECIBIDA') {
+            logger.info('✅ Auto-heal successful. Invoice Received. Authorizing...');
+
+            // Update DB with new document number
+            const newDocumentNumber = `${invoice.info.estab}-${invoice.info.ptoEmi}-${newSecuencial}`;
+            await this.billRepository.upsert({
+                id: billId,
+                documentNumber: newDocumentNumber,
+                accessKey: invoice.info.claveAcceso
+            });
+            logger.info(`[GenerateInvoice] Auto-heal: Updated DB with new documentNumber=${newDocumentNumber}`);
+
+            // Authorize
+            const retryAuth = await this.sriService.authorizeInvoice(invoice.info.claveAcceso!, isProd);
+
+            if (retryAuth?.estado === 'AUTORIZADO') {
+                return { authResult: retryAuth, updatedInvoice: invoice };
+            }
+
+            return {
+                authResult: retryAuth || { estado: 'ERROR_AUTH_NULL', mensajes: ['Error interno al autorizar'] },
+                updatedInvoice: invoice
+            };
+        }
+
+        logger.info('❌ Auto-heal failed.', retryResult);
+        return {
+            authResult: {
+                ...originalResult,
+                mensajes: [...(originalResult.mensajes || []), ...(retryResult.mensajes || [])]
+            },
+            updatedInvoice: invoice
+        };
+    }
+
+    /**
+     * Persists the final SRI result to the database
+     */
+    private async persistFinalResult(billId: string, result: any, authResult: any): Promise<void> {
         const finalStatus = authResult?.estado || result.estado;
         const finalMessage = (authResult?.mensajes || result.mensajes || []).join(' ');
 
         await this.billRepository.upsert({
-            id: draftBill.id,
+            id: billId,
             sriStatus: finalStatus,
             authorizationDate: authResult?.fechaAutorizacion,
             sriMessage: finalMessage
         });
 
-        // 8.1 Si el SRI NO autorizó → guardar entrada en errorLog acumulativo
-        const notAuthorized = finalStatus !== 'AUTORIZADO';
-        if (notAuthorized && finalMessage) {
-            const retryCount = (draftBill.retryCount || 0) + 1;
-            await (this.billRepository as any).pushErrorLog(draftBill.id, {
+        // Log errors if not authorized
+        if (finalStatus !== 'AUTORIZADO' && finalMessage) {
+            await (this.billRepository as any).pushErrorLog(billId, {
                 timestamp: new Date().toISOString(),
                 sriStatus: finalStatus || 'DESCONOCIDO',
                 message: finalMessage,
-                attempt: retryCount
+                attempt: 1
             });
         }
+    }
 
-
-        // 9. Update Order to COMPLETED and set billed flag to move to history
-        await this.orderRepository.update(invoice.orderId, {
+    /**
+     * Updates the order status after billing
+     */
+    private async updateOrderStatus(orderId: string, isConsumidorFinal: boolean): Promise<void> {
+        await this.orderRepository.update(orderId, {
             billed: true,
             status: OrderStatus.Completed,
             billingType: isConsumidorFinal ? 'Consumidor Final' : 'Factura'
         });
+    }
 
+    /**
+     * Handles email notification for authorized invoices
+     */
+    private async handleEmailNotification(
+        authResult: any,
+        client: any,
+        invoice: Invoice,
+        signedXml: string,
+        isConsumidorFinal: boolean
+    ): Promise<EmailStatus> {
+        const emailStatus: EmailStatus = { sent: false, skipped: false };
 
-        // 11. Send Email
-        // Skip email for Consumidor Final or invalid email addresses
-        if (authResult?.estado === 'AUTORIZADO' && !isConsumidorFinal && isValidEmail) {
-            logger.info(`[GenerateInvoice] Sending email to ${client.email}`);
-            if (authResult.fechaAutorizacion) invoice.authorizationDate = authResult.fechaAutorizacion;
-            const pdfBuffer = await this.pdfService.generateInvoicePDF(invoice);
-            await this.emailService.sendInvoiceEmail(client.email, invoice, pdfBuffer, signedXml);
-        } else {
-            if (isConsumidorFinal) {
-                logger.info('[GenerateInvoice] Skipping email - Consumidor Final detected');
-            } else if (!isValidEmail) {
-                logger.info('[GenerateInvoice] Skipping email - Invalid or generic email address');
-            } else {
-                logger.info('[GenerateInvoice] Skipping email - Invoice not authorized or no email provided');
-            }
+        const isValidEmail = this.isValidClientEmail(client.email);
+
+        // Skip if not authorized, consumidor final, or invalid email
+        if (authResult?.estado !== 'AUTORIZADO' || isConsumidorFinal || !isValidEmail) {
+            emailStatus.skipped = true;
+            emailStatus.skipReason = this.getEmailSkipReason(authResult?.estado, isConsumidorFinal, isValidEmail);
+            logger.info(`[GenerateInvoice] Skipping email - ${emailStatus.skipReason}`);
+            return emailStatus;
         }
 
-        // 10. Retornar resultado
-        return {
-            success: true,
-            invoiceId: draftBill.id,
-            invoiceNumber: draftBill.documentNumber,
-            accessKey: invoice.info.claveAcceso,
-            customerLearning: autoLearnResult,
-            xml: xml,
-            sriResponse: result,
-            authorization: authResult
-        };
+        // Send email
+        logger.info(`[GenerateInvoice] Sending email to ${client.email}`);
+
+        if (authResult.fechaAutorizacion) {
+            invoice.authorizationDate = authResult.fechaAutorizacion;
+        }
+
+        const pdfBuffer = await this.pdfService.generateInvoicePDF(invoice);
+        const emailResult = await this.emailService.sendInvoiceEmail(client.email, invoice, pdfBuffer, signedXml);
+
+        emailStatus.sent = emailResult.success;
+        if (!emailResult.success) {
+            emailStatus.error = emailResult.error;
+            logger.warn(`[GenerateInvoice] Email failed: ${emailResult.error}`);
+        } else {
+            logger.info(`[GenerateInvoice] Email sent successfully. MessageId: ${emailResult.messageId}`);
+        }
+
+        return emailStatus;
+    }
+
+    /**
+     * Validates if client email is valid for sending
+     */
+    private isValidClientEmail(email: string | undefined): boolean {
+        return !!(
+            email &&
+            !email.includes('consumidor@final') &&
+            !email.includes('noemail') &&
+            email.includes('@') &&
+            email.includes('.')
+        );
+    }
+
+    /**
+     * Gets the reason for skipping email
+     */
+    private getEmailSkipReason(estado: string | undefined, isConsumidorFinal: boolean, isValidEmail: boolean): string {
+        if (isConsumidorFinal) return 'Consumidor Final';
+        if (!isValidEmail) return 'Email inválido o genérico';
+        if (estado !== 'AUTORIZADO') return 'Factura no autorizada';
+        return 'Razón desconocida';
     }
 }

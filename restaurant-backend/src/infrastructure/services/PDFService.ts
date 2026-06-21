@@ -2,9 +2,26 @@ import PDFDocument from 'pdfkit';
 import { Invoice } from '../../domain/billing/invoice';
 import { CreditNote } from '../../domain/billing/creditNote';
 import axios from 'axios';
+import QRCode from 'qrcode';
 import { logger } from '../utils/Logger';
 
 export class PDFService {
+    /**
+     * FIX I-04: Validate that a buffer contains valid image data (PNG or JPEG)
+     * by checking magic bytes. This prevents pdfkit from crashing on corrupt logos.
+     */
+    private isValidImageBuffer(buffer: Buffer): boolean {
+        if (!buffer || buffer.length < 8) return false;
+
+        // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
+        const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+
+        // JPEG magic bytes: FF D8 FF
+        const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+
+        return isPNG || isJPEG;
+    }
+
     public async generateInvoicePDF(invoice: Invoice, format: 'A4' | 'ticket' = 'A4'): Promise<Buffer> {
         if (format === 'ticket') {
             return this.generateTicketPDF(invoice);
@@ -56,9 +73,12 @@ export class PDFService {
                     logo = Buffer.from(response.data);
                 }
 
-                if (logo && logo.length > 0) {
+                // FIX I-04: Validate buffer is a real image before passing to pdfkit
+                if (logo && logo.length > 0 && this.isValidImageBuffer(logo)) {
                     doc.image(logo, leftMargin, currentLeftY, { fit: [250, 120] });
                     currentLeftY += 130;
+                } else if (logo && logo.length > 0) {
+                    logger.warn('[PDFService CreditNote] Logo buffer is not a valid PNG/JPEG image, skipping.');
                 }
             } catch (error) {
                 logger.error('[PDFService CreditNote] Failed to load logo:', error);
@@ -346,9 +366,12 @@ export class PDFService {
                             logo = Buffer.from(response.data);
                         }
 
-                        if (logo && logo.length > 0) {
+                        // FIX I-04: Validate buffer is a real image before passing to pdfkit
+                        if (logo && logo.length > 0 && this.isValidImageBuffer(logo)) {
                             doc.image(logo, (226 - 160) / 2, y, { fit: [160, 100], align: 'center' });
                             y += 105;
+                        } else if (logo && logo.length > 0) {
+                            logger.warn('[PDFService Ticket] Logo buffer is not a valid PNG/JPEG image, skipping.');
                         }
                     } catch (e) {
                         logger.error('[PDFService Ticket] Logo Error:', e);
@@ -380,7 +403,26 @@ export class PDFService {
 
                 const authDate = this.formatDateTime(invoice.authorizationDate || invoice.info.fechaEmision);
                 doc.font('Helvetica').fontSize(6).text(`Fecha y Hora de Autorización:\n${authDate}`, { align: 'center' });
-                y = doc.y + 5;
+                y = doc.y + 8;
+
+                // --- QR Code (SRI Requirement) ---
+                if (invoice.info.claveAcceso) {
+                    try {
+                        const qrDataUrl = await QRCode.toDataURL(invoice.info.claveAcceso, {
+                            width: 100,
+                            margin: 1,
+                            errorCorrectionLevel: 'M'
+                        });
+                        const qrBuffer = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+                        // Center the QR code (ticket width ~226, QR width 70)
+                        const qrX = (226 - 70) / 2;
+                        doc.image(qrBuffer, qrX, y, { width: 70, height: 70 });
+                        y += 75;
+                    } catch (qrError) {
+                        logger.error('[PDFService Ticket] Failed to generate QR code:', qrError);
+                    }
+                }
+
                 doc.moveTo(leftMargin, y).lineTo(rightMargin, y).lineWidth(0.5).dash(2, { space: 2 }).stroke();
                 doc.undash();
                 y += 5;
@@ -528,9 +570,12 @@ export class PDFService {
                     logo = Buffer.from(response.data);
                 }
 
-                if (logo && logo.length > 0) {
+                // FIX I-04: Validate buffer is a real image before passing to pdfkit
+                if (logo && logo.length > 0 && this.isValidImageBuffer(logo)) {
                     doc.image(logo, leftMargin, currentLeftY, { fit: [250, 120] });
                     currentLeftY += 130;
+                } else if (logo && logo.length > 0) {
+                    logger.warn('[PDFService A4] Logo buffer is not a valid PNG/JPEG image, skipping.');
                 }
             } catch (error) {
                 logger.error('[PDFService A4] Failed to load logo for PDF:', error);
@@ -633,9 +678,28 @@ export class PDFService {
         doc.font('Helvetica')
             .text(authDateText, rightColX, currentRightY, { align: 'right', width: rightColWidth });
 
+        currentRightY += 15;
+
+        // 8. QR Code with Access Key (SRI Requirement)
+        if (invoice.info.claveAcceso) {
+            try {
+                const qrDataUrl = await QRCode.toDataURL(invoice.info.claveAcceso, {
+                    width: 80,
+                    margin: 1,
+                    errorCorrectionLevel: 'M'
+                });
+                const qrBuffer = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+                // Position QR code at the right side, below authorization date
+                doc.image(qrBuffer, rightMargin - 85, currentRightY, { width: 80, height: 80 });
+                currentRightY += 85;
+            } catch (qrError) {
+                logger.error('[PDFService A4] Failed to generate QR code:', qrError);
+            }
+        }
+
         // Determine max Y for divider
         // We take the maximum of where the Left logic ended vs where the Right logic ended (doc.y)
-        const headerBottomY = Math.max(currentLeftY, doc.y) + 10;
+        const headerBottomY = Math.max(currentLeftY, currentRightY) + 10;
         this.generateHr(doc, headerBottomY);
 
         // CRITICAL: Move the cursor to below the HR line so the next section respects it

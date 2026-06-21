@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { IEmailService } from '../../application/interfaces/IEmailService';
+import { IEmailService, EmailSendResult } from '../../application/interfaces/IEmailService';
 import { Invoice } from '../../domain/billing/invoice';
 import { CreditNote } from '../../domain/billing/creditNote';
 import { logger } from '../utils/Logger';
@@ -19,10 +19,10 @@ export class NodemailerEmailService implements IEmailService {
         });
     }
 
-    public async sendInvoiceEmail(to: string, invoice: Invoice, pdfBuffer: Buffer, xmlContent?: string): Promise<void> {
+    public async sendInvoiceEmail(to: string, invoice: Invoice, pdfBuffer: Buffer, xmlContent?: string): Promise<EmailSendResult> {
         if (!to) {
             logger.warn('[EmailService] No email provided for customer. Skipping email.');
-            return;
+            return { success: false, error: 'No email provided' };
         }
 
         try {
@@ -58,16 +58,18 @@ export class NodemailerEmailService implements IEmailService {
 
             const info = await this.transporter.sendMail(mailOptions);
             logger.info(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
+            return { success: true, messageId: info.messageId };
 
-        } catch (error) {
+        } catch (error: any) {
             logger.error('[EmailService] Error sending email:', error);
+            return { success: false, error: error.message || 'Unknown email error' };
         }
     }
 
-    public async sendCreditNoteEmail(to: string, creditNote: CreditNote, pdfBuffer: Buffer, xmlContent?: string): Promise<void> {
+    public async sendCreditNoteEmail(to: string, creditNote: CreditNote, pdfBuffer: Buffer, xmlContent?: string): Promise<EmailSendResult> {
         if (!to) {
             logger.warn('[EmailService] No email provided for customer. Skipping email.');
-            return;
+            return { success: false, error: 'No email provided' };
         }
 
         try {
@@ -100,9 +102,11 @@ export class NodemailerEmailService implements IEmailService {
 
             const info = await this.transporter.sendMail(mailOptions);
             logger.info(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
+            return { success: true, messageId: info.messageId };
 
-        } catch (error) {
+        } catch (error: any) {
             logger.error('[EmailService] Error sending credit note email:', error);
+            return { success: false, error: error.message || 'Unknown email error' };
         }
     }
 

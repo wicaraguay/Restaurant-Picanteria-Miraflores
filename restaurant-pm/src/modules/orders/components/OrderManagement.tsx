@@ -16,6 +16,7 @@ import { useAuth } from '../../auth/contexts/AuthContext';
 import { toast } from '../../../components/ui/AlertProvider';
 import { notificationService } from '../../../services/NotificationService';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
+import { API_BASE_URL } from '../../../config/api.config';
 
 interface OrderManagementProps {
     orders: Order[];
@@ -132,6 +133,8 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
     const [tempAccessKey, setTempAccessKey] = useState<string | undefined>();
     const [tempAuthDate, setTempAuthDate] = useState<string | undefined>();
+    const [tempBillId, setTempBillId] = useState<string | undefined>();
+    const [tempEmailStatus, setTempEmailStatus] = useState<{ sent: boolean; skipped: boolean; error?: string; skipReason?: string } | undefined>();
 
     // Estados para Paginación y Filtros de Historial
     const [historySearch, setHistorySearch] = useState('');
@@ -323,17 +326,31 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
                 setTempAccessKey(realAccessKey);
                 setTempAuthDate(authDate);
+                setTempBillId(result.invoiceId);
+                setTempEmailStatus(result.emailStatus);
                 setGeneratedInvoiceNumber(result.invoiceNumber || result.invoiceId);
+
+                // Build email status message
+                let emailStatusMsg = '';
+                if (result.emailStatus) {
+                    if (result.emailStatus.sent) {
+                        emailStatusMsg = '\n\n📧 Email enviado correctamente.';
+                    } else if (result.emailStatus.skipped) {
+                        emailStatusMsg = `\n\n📧 Email no enviado: ${result.emailStatus.skipReason || 'Omitido'}`;
+                    } else if (result.emailStatus.error) {
+                        emailStatusMsg = `\n\n⚠️ Error al enviar email: ${result.emailStatus.error}`;
+                    }
+                }
 
                 if (sriStatus === 'AUTORIZADO') {
                     setProcessingState(InvoiceProcessState.AUTHORIZED);
                     setProcessingMessage('¡Factura autorizada con éxito!');
-                    setProcessingDetails('La factura fue generada, recibida y autorizada por el SRI.');
+                    setProcessingDetails('La factura fue generada, recibida y autorizada por el SRI.' + emailStatusMsg);
                 } else {
                     setProcessingState(InvoiceProcessState.PENDING);
                     setProcessingMessage('Factura generada correctamente');
                     setProcessingDetails(
-                        'La factura fue creada y enviada al SRI, pero aún está EN PROCESO de autorización.'
+                        'La factura fue creada y enviada al SRI, pero aún está EN PROCESO de autorización.' + emailStatusMsg
                     );
                 }
 
@@ -397,11 +414,21 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         setGeneratedInvoiceNumber('');
         setTempAccessKey(undefined);
         setTempAuthDate(undefined);
+        setTempBillId(undefined);
+        setTempEmailStatus(undefined);
     };
 
     const handlePrintFromProcessingModal = () => {
         handlePrintInvoice(tempAccessKey, tempAuthDate);
         handleCloseProcessingModal();
+    };
+
+    const handleDownloadPdfFromProcessingModal = () => {
+        if (!tempBillId) {
+            toast.error('No se pudo obtener el ID de la factura para descargar el PDF.', 'Error');
+            return;
+        }
+        window.open(`${API_BASE_URL}/bills/${tempBillId}/pdf`, '_blank');
     };
 
     const handleGoToHistory = () => {
@@ -589,6 +616,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                         invoiceNumber={generatedInvoiceNumber}
                         onClose={handleCloseProcessingModal}
                         onPrint={handlePrintFromProcessingModal}
+                        onDownloadPdf={handleDownloadPdfFromProcessingModal}
                         onGoToHistory={handleGoToHistory}
                     />
 

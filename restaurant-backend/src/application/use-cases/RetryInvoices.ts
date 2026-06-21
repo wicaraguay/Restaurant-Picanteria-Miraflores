@@ -1,7 +1,7 @@
 
 import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { CheckInvoiceStatus } from './CheckInvoiceStatus';
-import { logger } from '../../infrastructure/utils/Logger';
+import { logger, maskAccessKey } from '../../infrastructure/utils/Logger';
 
 /**
  * @class RetryInvoices
@@ -73,7 +73,8 @@ export class RetryInvoices {
                 }
 
                 try {
-                    logger.info(`[RetryInvoices] Retrying Bill ${bill.documentNumber} (Key: ${bill.accessKey})...`);
+                    // FIX S-02: Mask access key in logs
+                    logger.info(`[RetryInvoices] Retrying Bill ${bill.documentNumber} (Key: ${maskAccessKey(bill.accessKey)})...`);
                     
                     const result = await this.checkInvoiceStatus.execute(bill.accessKey, isProd);
                     

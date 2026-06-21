@@ -1,15 +1,17 @@
 /**
  * @file creditNoteRoutes.ts
  * @description Rutas de Notas de Crédito
- * 
+ *
  * @purpose
  * Define los endpoints para gestión de Notas de Crédito (crear, listar, verificar estado).
  * Utiliza el CreditNoteController para manejar la lógica.
+ * FIX D-02: Rate limiting aplicado a operaciones SRI
  */
 
 import { Router } from 'express';
 import { container } from '../../di/DIContainer';
 import { CreditNoteController } from '../../controllers/CreditNoteController';
+import { creditNoteLimiter, statusCheckLimiter } from '../middleware/RateLimitMiddleware';
 
 const router = Router();
 
@@ -25,8 +27,9 @@ const creditNoteController = new CreditNoteController(
 /**
  * POST /api/credit-notes
  * Crear una nueva nota de crédito
+ * FIX D-02: Rate limited to 10 per minute
  */
-router.post('/', creditNoteController.create);
+router.post('/', creditNoteLimiter, creditNoteController.create);
 
 /**
  * GET /api/credit-notes
@@ -43,8 +46,9 @@ router.get('/:id', creditNoteController.getById);
 /**
  * POST /api/credit-notes/check-status
  * Verificar estado de autorización en el SRI
+ * FIX D-02: Rate limited to 30 per minute
  */
-router.post('/check-status', creditNoteController.checkStatus);
+router.post('/check-status', statusCheckLimiter, creditNoteController.checkStatus);
 
 /**
  * DELETE /api/credit-notes/:id

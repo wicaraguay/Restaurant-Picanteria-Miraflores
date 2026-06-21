@@ -1,4 +1,4 @@
-import { IEmailService } from '../../application/interfaces/IEmailService';
+import { IEmailService, EmailSendResult } from '../../application/interfaces/IEmailService';
 import { Invoice } from '../../domain/billing/invoice';
 import { CreditNote } from '../../domain/billing/creditNote';
 import { logger } from '../utils/Logger';
@@ -13,17 +13,19 @@ export class NoOpEmailService implements IEmailService {
         logger.warn('[NoOpEmailService] Email service disabled - RESEND_API_KEY not configured');
     }
 
-    public async sendInvoiceEmail(to: string, invoice: Invoice, _pdfBuffer: Buffer, _xmlContent?: string): Promise<void> {
+    public async sendInvoiceEmail(to: string, invoice: Invoice, _pdfBuffer: Buffer, _xmlContent?: string): Promise<EmailSendResult> {
         logger.info('[NoOpEmailService] Would send invoice email (disabled)', {
             to,
             invoice: `${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}`
         });
+        return { success: true, messageId: 'noop' };
     }
 
-    public async sendCreditNoteEmail(to: string, creditNote: CreditNote, _pdfBuffer: Buffer, _xmlContent?: string): Promise<void> {
+    public async sendCreditNoteEmail(to: string, creditNote: CreditNote, _pdfBuffer: Buffer, _xmlContent?: string): Promise<EmailSendResult> {
         logger.info('[NoOpEmailService] Would send credit note email (disabled)', {
             to,
             creditNote: `${creditNote.info.estab}-${creditNote.info.ptoEmi}-${creditNote.info.secuencial}`
         });
+        return { success: true, messageId: 'noop' };
     }
 }

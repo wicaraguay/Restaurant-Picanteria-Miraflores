@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { IEmailService } from '../../application/interfaces/IEmailService';
+import { IEmailService, EmailSendResult } from '../../application/interfaces/IEmailService';
 import { Invoice } from '../../domain/billing/invoice';
 import { CreditNote } from '../../domain/billing/creditNote';
 import { logger } from '../utils/Logger';
@@ -24,10 +24,10 @@ export class ResendEmailService implements IEmailService {
         return !!process.env.RESEND_API_KEY;
     }
 
-    public async sendInvoiceEmail(to: string, invoice: Invoice, pdfBuffer: Buffer, xmlContent?: string): Promise<void> {
+    public async sendInvoiceEmail(to: string, invoice: Invoice, pdfBuffer: Buffer, xmlContent?: string): Promise<EmailSendResult> {
         if (!to) {
             logger.warn('[ResendEmailService] No email provided for customer. Skipping email.');
-            return;
+            return { success: false, error: 'No email provided' };
         }
 
         try {
@@ -60,20 +60,22 @@ export class ResendEmailService implements IEmailService {
 
             if (error) {
                 logger.error('[ResendEmailService] Error sending email via Resend:', error);
-                return;
+                return { success: false, error: error.message || 'Resend API error' };
             }
 
             logger.info(`[ResendEmailService] Email sent successfully via Resend. ID: ${data?.id}`);
+            return { success: true, messageId: data?.id };
 
-        } catch (error) {
+        } catch (error: any) {
             logger.error('[ResendEmailService] Unexpected error sending email via Resend:', error);
+            return { success: false, error: error.message || 'Unknown email error' };
         }
     }
 
-    public async sendCreditNoteEmail(to: string, creditNote: CreditNote, pdfBuffer: Buffer, xmlContent?: string): Promise<void> {
+    public async sendCreditNoteEmail(to: string, creditNote: CreditNote, pdfBuffer: Buffer, xmlContent?: string): Promise<EmailSendResult> {
         if (!to) {
             logger.warn('[ResendEmailService] No email provided for customer. Skipping email.');
-            return;
+            return { success: false, error: 'No email provided' };
         }
 
         try {
@@ -105,13 +107,15 @@ export class ResendEmailService implements IEmailService {
 
             if (error) {
                 logger.error('[ResendEmailService] Error sending email via Resend:', error);
-                return;
+                return { success: false, error: error.message || 'Resend API error' };
             }
 
             logger.info(`[ResendEmailService] Email sent successfully via Resend. ID: ${data?.id}`);
+            return { success: true, messageId: data?.id };
 
-        } catch (error) {
+        } catch (error: any) {
             logger.error('[ResendEmailService] Unexpected error sending email via Resend:', error);
+            return { success: false, error: error.message || 'Unknown email error' };
         }
     }
 

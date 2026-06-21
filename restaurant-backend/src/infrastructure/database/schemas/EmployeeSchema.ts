@@ -35,7 +35,9 @@ const EmployeeSchema: Schema = new Schema({
     name: { type: String, required: true },
     identification: { type: String },
     username: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
+    // SECURITY: password excluded from queries by default with select: false
+    // Use .select('+password') explicitly when needed (e.g., authentication)
+    password: { type: String, required: true, select: false },
     roleId: { type: String, required: true },
     phone: { type: String },
     salary: { type: Number },

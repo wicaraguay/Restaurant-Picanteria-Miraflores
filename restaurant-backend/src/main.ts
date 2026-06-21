@@ -17,6 +17,10 @@ import rateLimit from 'express-rate-limit';
 import { dbConnection } from './infrastructure/database/DatabaseConnection';
 import { logger } from './infrastructure/utils/Logger';
 import { ErrorHandler } from './infrastructure/utils/ErrorHandler';
+import { sentryService } from './infrastructure/monitoring/SentryService';
+import { metricsService } from './infrastructure/monitoring/MetricsService';
+import { SentryMiddleware } from './infrastructure/web/middleware/SentryMiddleware';
+import { requestIdMiddleware } from './infrastructure/web/middleware/requestId';
 
 import customerRoutes from './infrastructure/web/routes/customerRoutes';
 import orderRoutes from './infrastructure/web/routes/orderRoutes';
@@ -28,6 +32,7 @@ import employeeRoutes from './infrastructure/web/routes/employeeRoutes';
 import roleRoutes from './infrastructure/web/routes/roleRoutes';
 import creditNoteRoutes from './infrastructure/web/routes/creditNoteRoutes';
 import dashboardRoutes from './infrastructure/web/routes/dashboard.routes';
+import metricsRoutes from './infrastructure/web/routes/metricsRoutes';
 
 import { cacheService } from './infrastructure/utils/CacheService';
 import { container } from './infrastructure/di/DIContainer';
@@ -37,10 +42,17 @@ import { OrderStatus } from './domain/entities/Order';
 
 // dotenv configured at top level
 
+// Initialize monitoring services
+sentryService.init();
+metricsService.init();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+// Request ID (must be first to ensure all subsequent middleware has access to requestId)
+app.use(requestIdMiddleware);
+
 // CORS: En producción solo permite orígenes específicos
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || ['http://localhost:3001'];
 logger.info('CORS allowed origins', { allowedOrigins });
@@ -100,6 +112,12 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// Sentry request handler (must be before routes)
+app.use(SentryMiddleware.requestHandler);
+
+// Prometheus metrics middleware (must be before routes)
+app.use(metricsService.middleware());
+
 // Request logging middleware
 app.use((req, res, next) => {
     logger.info(`${req.method} ${req.path}`, {
@@ -113,6 +131,10 @@ import billingRoutes from './infrastructure/web/routes/billingRoutes';
 import whatsappApiRoutes from './infrastructure/web/routes/whatsappApiRoutes';
 import exportRoutes from './interfaces/http/routes/exportRoutes';
 import maintenanceRoutes from './interfaces/http/routes/maintenanceRoutes';
+import { setupSwagger } from './infrastructure/http/swagger';
+
+// Setup Swagger/OpenAPI Documentation
+setupSwagger(app);
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -130,12 +152,16 @@ app.use('/api/whatsapp', whatsappApiRoutes); // WhatsApp API para frontend
 app.use('/api/export', exportRoutes); // Exportación de datos (Excel/CSV)
 app.use('/api/maintenance', maintenanceRoutes); // Operaciones de mantenimiento y limpieza
 
-app.get('/health', (req, res) => {
+// Metrics endpoint (Prometheus)
+app.use('/metrics', metricsRoutes);
+
+app.get('/health', async (req, res) => {
     const cacheStats = cacheService.getStats();
+    const dbHealthy = await dbConnection.isHealthy();
     res.json({
         status: 'ok',
         timestamp: new Date(),
-        database: dbConnection.isHealthy() ? 'connected' : 'disconnected',
+        database: dbHealthy ? 'connected' : 'disconnected',
         cache: {
             enabled: true,
             entries: cacheStats.size,
@@ -149,6 +175,9 @@ app.get('/health', (req, res) => {
         }
     });
 });
+
+// Sentry error handler (must be before general error handler)
+app.use(SentryMiddleware.errorHandler);
 
 // Global error handler (must be last)
 app.use(ErrorHandler.middleware());
@@ -257,6 +286,10 @@ process.on('SIGTERM', async () => {
         }
     }
 
+    // Flush Sentry events
+    logger.info('Flushing Sentry events...');
+    await sentryService.flush(2000);
+
     await dbConnection.disconnect();
     process.exit(0);
 });
@@ -276,6 +309,10 @@ process.on('SIGINT', async () => {
             }
         }
     }
+
+    // Flush Sentry events
+    logger.info('Flushing Sentry events...');
+    await sentryService.flush(2000);
 
     await dbConnection.disconnect();
     process.exit(0);

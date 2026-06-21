@@ -5,8 +5,9 @@ import { CheckCreditNoteStatus } from '../../application/use-cases/CheckCreditNo
 import { DeleteCreditNote } from '../../application/use-cases/DeleteCreditNote';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
-import { logger } from '../utils/Logger';
+import { logger, maskAccessKey } from '../utils/Logger';
 import { ValidationError, NotFoundError } from '../../domain/errors/CustomErrors';
+import { sanitizeSort } from '../utils/QuerySanitizer'; // FIX S-01
 
 export class CreditNoteController {
     constructor(
@@ -61,7 +62,8 @@ export class CreditNoteController {
             if (req.query.customerIdentification) filter.customerIdentification = req.query.customerIdentification;
             if (req.query.reason) filter.reason = req.query.reason;
 
-            const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { createdAt: -1 };
+            // FIX S-01: Sanitize sort params to prevent NoSQL injection
+            const sort = sanitizeSort(req.query.sort as string, 'creditNotes');
 
             logger.info('Fetching credit notes with pagination', { page, limit, filter });
 
@@ -104,7 +106,8 @@ export class CreditNoteController {
                 throw new ValidationError('accessKey es requerido');
             }
 
-            logger.info('Checking credit note status', { accessKey });
+            // FIX S-02: Mask access key in logs
+            logger.info('Checking credit note status', { accessKey: maskAccessKey(accessKey) });
 
             const result = await this.checkCreditNoteStatus.execute(accessKey);
 

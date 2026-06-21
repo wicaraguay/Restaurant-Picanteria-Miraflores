@@ -66,4 +66,9 @@ CustomerSchema.index({ name: 1 });           // Search by name
 CustomerSchema.index({ lastVisit: -1 });     // Sort by last visit
 CustomerSchema.index({ loyaltyPoints: -1 }); // Sort by loyalty
 
+// ── TEXT INDEX for fuzzy search ──
+// Enables text search across multiple fields: name, email, phone
+// Usage: Customer.find({ $text: { $search: "john doe" } })
+CustomerSchema.index({ name: 'text', email: 'text', phone: 'text' });
+
 export const CustomerModel = mongoose.model<CustomerDocument>('Customer', CustomerSchema);

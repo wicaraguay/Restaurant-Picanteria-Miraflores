@@ -22,7 +22,9 @@ export class MongoEmployeeRepository extends BaseRepository<Employee> implements
     async findByUsername(username: string): Promise<Employee | null> {
         try {
             logger.debug('Finding employee by username', { username });
-            const found = await EmployeeModel.findOne({ username });
+            // Include password explicitly for authentication purposes
+            // This is the ONLY method that should return password
+            const found = await EmployeeModel.findOne({ username }).select('+password');
 
             if (!found) return null;
 
@@ -87,6 +89,8 @@ export class MongoEmployeeRepository extends BaseRepository<Employee> implements
             name: doc.name,
             identification: doc.identification,
             username: doc.username,
+            // SECURITY: Only include password if it was explicitly selected
+            // password is excluded by default (select: false in schema)
             password: doc.password,
             roleId: doc.roleId,
             phone: doc.phone,

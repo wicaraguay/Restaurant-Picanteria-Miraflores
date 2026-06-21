@@ -10,6 +10,7 @@ import { NotFoundError } from '../../domain/errors/CustomErrors';
 import { PDFService } from '../services/PDFService';
 import { SRIService } from '../services/SRIService';
 import { RestaurantConfigModel } from '../database/schemas/RestaurantConfigSchema';
+import { sanitizeSort } from '../utils/QuerySanitizer'; // FIX S-01
 
 import { BillingService } from '../../application/services/BillingService';
 
@@ -41,7 +42,8 @@ export class BillController {
                 if (req.query.endDate) filter.date.$lte = req.query.endDate;
             }
 
-            const sort: any = req.query.sort ? JSON.parse(req.query.sort as string) : { createdAt: -1 };
+            // FIX S-01: Sanitize sort params to prevent NoSQL injection
+            const sort = sanitizeSort(req.query.sort as string, 'bills');
 
             logger.info('Fetching bills with pagination', { page, limit, filter });
 

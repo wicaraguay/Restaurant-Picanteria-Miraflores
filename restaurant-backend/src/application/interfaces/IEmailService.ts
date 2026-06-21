@@ -1,7 +1,13 @@
 import { Invoice } from '../../domain/billing/invoice';
 import { CreditNote } from '../../domain/billing/creditNote';
 
+export interface EmailSendResult {
+    success: boolean;
+    error?: string;
+    messageId?: string;
+}
+
 export interface IEmailService {
-    sendInvoiceEmail(to: string, invoice: Invoice, pdfBuffer: Buffer, xmlContent?: string): Promise<void>;
-    sendCreditNoteEmail(to: string, creditNote: CreditNote, pdfBuffer: Buffer, xmlContent?: string): Promise<void>;
+    sendInvoiceEmail(to: string, invoice: Invoice, pdfBuffer: Buffer, xmlContent?: string): Promise<EmailSendResult>;
+    sendCreditNoteEmail(to: string, creditNote: CreditNote, pdfBuffer: Buffer, xmlContent?: string): Promise<EmailSendResult>;
 }

@@ -10,6 +10,7 @@
  */
 
 import { Model, Document } from 'mongoose';
+import mongoose from 'mongoose';
 import { logger } from '../utils/Logger';
 import { DatabaseError, NotFoundError } from '../../domain/errors/CustomErrors';
 
@@ -48,6 +49,15 @@ export abstract class BaseRepository<T> {
     protected abstract mapToEntity(doc: any): T;
 
     /**
+     * Validates if a string is a valid MongoDB ObjectId
+     * @param id - String to validate
+     * @returns true if valid ObjectId format
+     */
+    protected isValidObjectId(id: string): boolean {
+        return mongoose.Types.ObjectId.isValid(id);
+    }
+
+    /**
      * Create a new entity
      */
     async create(entity: T): Promise<T> {
@@ -68,6 +78,12 @@ export abstract class BaseRepository<T> {
      */
     async findById(id: string): Promise<T | null> {
         try {
+            // Validate ObjectId format before querying
+            if (!this.isValidObjectId(id)) {
+                logger.warn(`Invalid ObjectId format: ${id}`);
+                return null;
+            }
+
             logger.debug(`Finding ${this.entityName} by ID`, { id });
             const found = await this.model.findById(id);
 
@@ -90,7 +106,9 @@ export abstract class BaseRepository<T> {
     async findAll(): Promise<T[]> {
         try {
             logger.debug(`Finding all ${this.entityName}s`);
-            const all = await this.model.find();
+            // PERFORMANCE: .lean() returns plain JS objects (not Mongoose documents)
+            // 2-3x faster for read-only operations, less memory overhead
+            const all = await this.model.find().lean();
             logger.info(`Found ${all.length} ${this.entityName}s`);
             return all.map(doc => this.mapToEntity(doc));
         } catch (error) {
@@ -105,25 +123,37 @@ export abstract class BaseRepository<T> {
      * @param limit - Number of items per page (default: 50, max: 100)
      * @param filter - Optional MongoDB filter object
      * @param sort - Optional sort object (e.g., { createdAt: -1 })
+     * @param select - Optional projection (fields to include/exclude, e.g., 'name email -password')
      */
     async findPaginated(
         page: number = 1,
         limit: number = 50,
         filter: any = {},
-        sort: any = { createdAt: -1 }
+        sort: any = { createdAt: -1 },
+        select?: string
     ): Promise<PaginatedResult<T>> {
         try {
             // Validate and sanitize inputs
             page = Math.max(1, Math.floor(page));
-            limit = Math.min(5000, Math.max(1, Math.floor(limit)));
+            // SECURITY: Limit max page size to 100 to prevent memory exhaustion
+            // For larger datasets, use cursor-based pagination (findPaginatedCursor)
+            limit = Math.min(100, Math.max(1, Math.floor(limit)));
 
             const skip = (page - 1) * limit;
 
             logger.debug(`Finding paginated ${this.entityName}s`, { page, limit, filter });
 
             // Execute count and find in parallel for better performance
+            // PERFORMANCE: .lean() converts to plain JS objects (2-3x faster for read-only queries)
+            let query = this.model.find(filter).sort(sort).skip(skip).limit(limit);
+
+            // Apply projection if provided
+            if (select) {
+                query = query.select(select);
+            }
+
             const [data, total] = await Promise.all([
-                this.model.find(filter).sort(sort).skip(skip).limit(limit).exec(),
+                query.lean().exec(),
                 this.model.countDocuments(filter)
             ]);
 
@@ -153,9 +183,16 @@ export abstract class BaseRepository<T> {
      */
     async update(id: string, entity: Partial<T>): Promise<T | null> {
         try {
+            // Validate ObjectId format before querying
+            if (!this.isValidObjectId(id)) {
+                logger.warn(`Invalid ObjectId format for update: ${id}`);
+                return null;
+            }
+
             logger.info(`Updating ${this.entityName} starting...`, { id, payload: JSON.stringify(entity) });
             // Usamos $set explícitamente para asegurar que objetos anidados (como Map/shifts) se actualicen correctamente
-            const updated = await this.model.findByIdAndUpdate(id, { $set: entity }, { new: true });
+            // runValidators: true ensures schema validators run on updates (not just on create)
+            const updated = await this.model.findByIdAndUpdate(id, { $set: entity }, { new: true, runValidators: true });
 
             if (!updated) {
                 logger.debug(`${this.entityName} not found for update`, { id });
@@ -175,6 +212,12 @@ export abstract class BaseRepository<T> {
      */
     async delete(id: string): Promise<boolean> {
         try {
+            // Validate ObjectId format before querying
+            if (!this.isValidObjectId(id)) {
+                logger.warn(`Invalid ObjectId format for delete: ${id}`);
+                return false;
+            }
+
             logger.debug(`Deleting ${this.entityName}`, { id });
             const result = await this.model.findByIdAndDelete(id);
 
@@ -188,6 +231,131 @@ export abstract class BaseRepository<T> {
         } catch (error) {
             logger.error(`Failed to delete ${this.entityName}`, error);
             throw new DatabaseError(`Failed to delete ${this.entityName}`, error as Error);
+        }
+    }
+
+    /**
+     * Find entities with cursor-based pagination (recommended for large datasets)
+     * More efficient than offset-based pagination for deep pages
+     *
+     * @param cursor - Last document ID from previous page (undefined for first page)
+     * @param limit - Number of items per page (default: 50, max: 100)
+     * @param filter - Optional MongoDB filter object
+     * @param sort - Sort field (default: _id for cursor navigation)
+     * @returns Object with data, nextCursor, and hasMore
+     */
+    async findPaginatedCursor(
+        cursor: string | undefined,
+        limit: number = 50,
+        filter: any = {},
+        sortField: string = '_id'
+    ): Promise<{ data: T[]; nextCursor: string | null; hasMore: boolean }> {
+        try {
+            // Validate and sanitize inputs
+            limit = Math.min(100, Math.max(1, Math.floor(limit)));
+
+            logger.debug(`Finding cursor-paginated ${this.entityName}s`, { cursor, limit, filter });
+
+            // Build cursor filter
+            const cursorFilter = cursor
+                ? { ...filter, [sortField]: { $gt: cursor } }
+                : filter;
+
+            // Fetch limit + 1 to check if there are more results
+            const data = await this.model
+                .find(cursorFilter)
+                .sort({ [sortField]: 1 })
+                .limit(limit + 1)
+                .lean()
+                .exec();
+
+            // Check if there are more results
+            const hasMore = data.length > limit;
+            const results = hasMore ? data.slice(0, limit) : data;
+
+            // Get next cursor (last item's ID)
+            const nextCursor = hasMore && results.length > 0
+                ? results[results.length - 1][sortField]?.toString() || null
+                : null;
+
+            logger.info(`Found ${results.length} ${this.entityName}s (cursor pagination, hasMore: ${hasMore})`);
+
+            return {
+                data: results.map(doc => this.mapToEntity(doc)),
+                nextCursor,
+                hasMore
+            };
+        } catch (error) {
+            logger.error(`Failed to find cursor-paginated ${this.entityName}s`, error);
+            throw new DatabaseError(`Failed to find ${this.entityName}s`, error as Error);
+        }
+    }
+
+    /**
+     * Soft delete entity by ID (marks as deleted without removing from DB)
+     * @param id - Entity ID to soft delete
+     * @returns true if entity was soft deleted, false if not found
+     */
+    async softDelete(id: string): Promise<boolean> {
+        try {
+            // Validate ObjectId format before querying
+            if (!this.isValidObjectId(id)) {
+                logger.warn(`Invalid ObjectId format for soft delete: ${id}`);
+                return false;
+            }
+
+            logger.debug(`Soft deleting ${this.entityName}`, { id });
+
+            const updated = await this.model.findByIdAndUpdate(
+                id,
+                { $set: { deletedAt: new Date() } },
+                { new: true }
+            );
+
+            if (!updated) {
+                logger.debug(`${this.entityName} not found for soft deletion`, { id });
+                return false;
+            }
+
+            logger.info(`${this.entityName} soft deleted successfully`, { id });
+            return true;
+        } catch (error) {
+            logger.error(`Failed to soft delete ${this.entityName}`, error);
+            throw new DatabaseError(`Failed to soft delete ${this.entityName}`, error as Error);
+        }
+    }
+
+    /**
+     * Restore soft deleted entity by ID
+     * @param id - Entity ID to restore
+     * @returns true if entity was restored, false if not found
+     */
+    async restore(id: string): Promise<boolean> {
+        try {
+            // Validate ObjectId format before querying
+            if (!this.isValidObjectId(id)) {
+                logger.warn(`Invalid ObjectId format for restore: ${id}`);
+                return false;
+            }
+
+            logger.debug(`Restoring ${this.entityName}`, { id });
+
+            const updated = await this.model.findByIdAndUpdate(
+                id,
+                { $unset: { deletedAt: '' } },
+                { new: true }
+            );
+
+            if (!updated) {
+                logger.debug(`${this.entityName} not found for restoration`, { id });
+                return false;
+            }
+
+            logger.info(`${this.entityName} restored successfully`, { id });
+            return true;
+        } catch (error) {
+            logger.error(`Failed to restore ${this.entityName}`, error);
+            throw new DatabaseError(`Failed to restore ${this.entityName}`, error as Error);
         }
     }
 

@@ -19,6 +19,9 @@ export class DatabaseConnection {
     private static instance: DatabaseConnection;
     private mongoServer?: MongoMemoryServer;
     private isConnected: boolean = false;
+    private reconnectAttempts: number = 0;
+    private readonly MAX_RECONNECT_ATTEMPTS = 5;
+    private readonly RECONNECT_BASE_DELAY = 1000; // 1 second
 
     private constructor() { }
 
@@ -56,6 +59,9 @@ export class DatabaseConnection {
         mongoose.connection.on('disconnected', () => {
             this.isConnected = false;
             logger.warn('⚠️  Mongoose disconnected from MongoDB');
+
+            // Auto-reconnect with exponential backoff
+            this.handleReconnection();
         });
 
         // Enable mongoose debug mode in development
@@ -69,12 +75,18 @@ export class DatabaseConnection {
             const sanitizedUri = uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@');
             logger.info(`📍 URI: ${sanitizedUri}`);
 
+            // Connection pool configuration (configurable via environment variables)
+            const maxPoolSize = parseInt(process.env.MONGO_MAX_POOL_SIZE || '50', 10);
+            const minPoolSize = parseInt(process.env.MONGO_MIN_POOL_SIZE || '10', 10);
+
             await mongoose.connect(uri, {
                 serverSelectionTimeoutMS: 5000,
                 socketTimeoutMS: 45000,
-                maxPoolSize: 50,        // Maximum number of connections in the pool
-                minPoolSize: 10,        // Minimum number of connections to maintain
+                maxPoolSize,        // Maximum number of connections in the pool (default: 50)
+                minPoolSize,        // Minimum number of connections to maintain (default: 10)
             });
+
+            logger.info(`📊 Connection pool configured: min=${minPoolSize}, max=${maxPoolSize}`);
 
             logger.info('✅ MongoDB connected successfully!');
             if (mongoose.connection.db) {
@@ -117,6 +129,43 @@ export class DatabaseConnection {
      * 1. identification_1: Was unique+non-sparse -> must be unique+sparse (allows multiple without ID)
      * 2. email_1: Was unique -> must be non-unique (email is optional, not a unique key for customers)
      */
+    /**
+     * Handles automatic reconnection with exponential backoff
+     * Attempts to reconnect up to MAX_RECONNECT_ATTEMPTS times
+     */
+    private async handleReconnection(): Promise<void> {
+        // Don't reconnect if explicitly disconnected by user
+        if (mongoose.connection.readyState === 0 && this.reconnectAttempts === 0) {
+            return;
+        }
+
+        if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+            logger.error(`❌ Maximum reconnection attempts (${this.MAX_RECONNECT_ATTEMPTS}) reached. Giving up.`);
+            this.reconnectAttempts = 0;
+            return;
+        }
+
+        this.reconnectAttempts++;
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        const delay = this.RECONNECT_BASE_DELAY * Math.pow(2, this.reconnectAttempts - 1);
+
+        logger.info(`🔄 Attempting to reconnect (${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS}) in ${delay}ms...`);
+
+        setTimeout(async () => {
+            try {
+                const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/restaurant-pm';
+                await mongoose.connect(uri);
+                logger.info('✅ Reconnection successful!');
+                this.reconnectAttempts = 0; // Reset counter on success
+                this.isConnected = true;
+            } catch (error) {
+                logger.error(`❌ Reconnection attempt ${this.reconnectAttempts} failed`, error);
+                // handleReconnection will be called again by 'disconnected' event
+            }
+        }, delay);
+    }
+
     private async runIndexMigrations(): Promise<void> {
         try {
             const db = mongoose.connection.db;
@@ -205,12 +254,87 @@ export class DatabaseConnection {
         logger.info('Database disconnected');
     }
 
-    public isHealthy(): boolean {
+    /**
+     * Comprehensive health check with real database ping and write test
+     * @returns Promise<boolean> - true if database is healthy and writable
+     */
+    public async isHealthy(): Promise<boolean> {
+        try {
+            // Check 1: Connection state
+            if (!this.isConnected || mongoose.connection.readyState !== 1) {
+                logger.warn('[Health Check] Connection not ready', {
+                    isConnected: this.isConnected,
+                    readyState: mongoose.connection.readyState
+                });
+                return false;
+            }
+
+            // Check 2: Database ping (fast check)
+            const db = mongoose.connection.db;
+            if (!db) {
+                logger.warn('[Health Check] No database instance available');
+                return false;
+            }
+
+            await db.admin().ping();
+
+            // Check 3: Write test (ensures write permissions)
+            const testCollection = db.collection('_health_check');
+            const testDoc = { timestamp: new Date() };
+            await testCollection.replaceOne({ _id: 'health' } as any, { _id: 'health', ...testDoc }, { upsert: true });
+
+            logger.debug('[Health Check] Passed (connected + ping + write test)');
+            return true;
+
+        } catch (error) {
+            logger.error('[Health Check] Failed', error);
+            return false;
+        }
+    }
+
+    /**
+     * Synchronous version of health check (legacy compatibility)
+     * Only checks connection state, not database responsiveness
+     * @deprecated Use async isHealthy() for comprehensive check
+     */
+    public isHealthySync(): boolean {
         return this.isConnected && mongoose.connection.readyState === 1;
     }
 
     public getConnection() {
         return mongoose.connection;
+    }
+
+    /**
+     * Executes a function within a MongoDB transaction
+     * Provides automatic rollback on error and commit on success
+     *
+     * @param fn - Async function to execute within transaction
+     * @returns Result of the function
+     * @throws Error if transaction fails
+     *
+     * @example
+     * await withTransaction(async (session) => {
+     *   await Model1.create([data], { session });
+     *   await Model2.updateOne(filter, update, { session });
+     * });
+     */
+    public async withTransaction<T>(fn: (session: mongoose.ClientSession) => Promise<T>): Promise<T> {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const result = await fn(session);
+            await session.commitTransaction();
+            logger.info('Transaction committed successfully');
+            return result;
+        } catch (error) {
+            await session.abortTransaction();
+            logger.error('Transaction aborted due to error', error);
+            throw error;
+        } finally {
+            session.endSession();
+        }
     }
 }
 
