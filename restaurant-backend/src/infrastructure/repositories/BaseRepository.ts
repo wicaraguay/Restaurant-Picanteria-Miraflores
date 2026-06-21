@@ -13,6 +13,7 @@ import { Model, Document } from 'mongoose';
 import mongoose from 'mongoose';
 import { logger } from '../utils/Logger';
 import { DatabaseError, NotFoundError } from '../../domain/errors/CustomErrors';
+import { auditService } from '../services/AuditService';
 
 /**
  * Interfaz para resultados paginados
@@ -66,6 +67,15 @@ export abstract class BaseRepository<T> {
             const newDoc = new this.model(entity);
             const saved = await newDoc.save();
             logger.info(`${this.entityName} created successfully`, { id: saved._id });
+
+            // Audit log
+            auditService.log({
+                action: 'CREATE',
+                collection: this.entityName,
+                documentId: saved._id.toString(),
+                after: saved
+            });
+
             return this.mapToEntity(saved);
         } catch (error) {
             logger.error(`Failed to create ${this.entityName}`, error);
@@ -190,6 +200,10 @@ export abstract class BaseRepository<T> {
             }
 
             logger.info(`Updating ${this.entityName} starting...`, { id, payload: JSON.stringify(entity) });
+
+            // Obtener estado anterior para auditoría
+            const before = await this.model.findById(id).lean();
+
             // Usamos $set explícitamente para asegurar que objetos anidados (como Map/shifts) se actualicen correctamente
             // runValidators: true ensures schema validators run on updates (not just on create)
             const updated = await this.model.findByIdAndUpdate(id, { $set: entity }, { new: true, runValidators: true });
@@ -198,6 +212,15 @@ export abstract class BaseRepository<T> {
                 logger.debug(`${this.entityName} not found for update`, { id });
                 return null;
             }
+
+            // Audit log
+            auditService.log({
+                action: 'UPDATE',
+                collection: this.entityName,
+                documentId: id,
+                before,
+                after: updated
+            });
 
             logger.info(`${this.entityName} updated successfully`, { id });
             return this.mapToEntity(updated);
@@ -219,12 +242,24 @@ export abstract class BaseRepository<T> {
             }
 
             logger.debug(`Deleting ${this.entityName}`, { id });
+
+            // Obtener estado anterior para auditoría ANTES de eliminar
+            const before = await this.model.findById(id).lean();
+
             const result = await this.model.findByIdAndDelete(id);
 
             if (!result) {
                 logger.debug(`${this.entityName} not found for deletion`, { id });
                 return false;
             }
+
+            // Audit log - guardar el documento eliminado
+            auditService.log({
+                action: 'DELETE',
+                collection: this.entityName,
+                documentId: id,
+                before
+            });
 
             logger.info(`${this.entityName} deleted successfully`, { id });
             return true;
@@ -306,6 +341,9 @@ export abstract class BaseRepository<T> {
 
             logger.debug(`Soft deleting ${this.entityName}`, { id });
 
+            // Obtener estado anterior para auditoría
+            const before = await this.model.findById(id).lean();
+
             const updated = await this.model.findByIdAndUpdate(
                 id,
                 { $set: { deletedAt: new Date() } },
@@ -316,6 +354,15 @@ export abstract class BaseRepository<T> {
                 logger.debug(`${this.entityName} not found for soft deletion`, { id });
                 return false;
             }
+
+            // Audit log
+            auditService.log({
+                action: 'SOFT_DELETE',
+                collection: this.entityName,
+                documentId: id,
+                before,
+                after: updated
+            });
 
             logger.info(`${this.entityName} soft deleted successfully`, { id });
             return true;
@@ -340,6 +387,9 @@ export abstract class BaseRepository<T> {
 
             logger.debug(`Restoring ${this.entityName}`, { id });
 
+            // Obtener estado anterior para auditoría
+            const before = await this.model.findById(id).lean();
+
             const updated = await this.model.findByIdAndUpdate(
                 id,
                 { $unset: { deletedAt: '' } },
@@ -350,6 +400,15 @@ export abstract class BaseRepository<T> {
                 logger.debug(`${this.entityName} not found for restoration`, { id });
                 return false;
             }
+
+            // Audit log
+            auditService.log({
+                action: 'RESTORE',
+                collection: this.entityName,
+                documentId: id,
+                before,
+                after: updated
+            });
 
             logger.info(`${this.entityName} restored successfully`, { id });
             return true;

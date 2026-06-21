@@ -21,6 +21,7 @@ import { sentryService } from './infrastructure/monitoring/SentryService';
 import { metricsService } from './infrastructure/monitoring/MetricsService';
 import { SentryMiddleware } from './infrastructure/web/middleware/SentryMiddleware';
 import { requestIdMiddleware } from './infrastructure/web/middleware/requestId';
+import { auditContextMiddleware } from './infrastructure/http/middleware/AuditContextMiddleware';
 
 import customerRoutes from './infrastructure/web/routes/customerRoutes';
 import orderRoutes from './infrastructure/web/routes/orderRoutes';
@@ -127,10 +128,14 @@ app.use((req, res, next) => {
     next();
 });
 
+// Audit context middleware (captures user info for audit logs)
+app.use(auditContextMiddleware);
+
 import billingRoutes from './infrastructure/web/routes/billingRoutes';
 import whatsappApiRoutes from './infrastructure/web/routes/whatsappApiRoutes';
 import exportRoutes from './interfaces/http/routes/exportRoutes';
 import maintenanceRoutes from './interfaces/http/routes/maintenanceRoutes';
+import auditRoutes from './infrastructure/web/routes/auditRoutes';
 import { setupSwagger } from './infrastructure/http/swagger';
 
 // Setup Swagger/OpenAPI Documentation
@@ -151,6 +156,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/whatsapp', whatsappApiRoutes); // WhatsApp API para frontend
 app.use('/api/export', exportRoutes); // Exportación de datos (Excel/CSV)
 app.use('/api/maintenance', maintenanceRoutes); // Operaciones de mantenimiento y limpieza
+app.use('/api/audit', auditRoutes); // Logs de auditoría (solo admin)
 
 // Metrics endpoint (Prometheus)
 app.use('/metrics', metricsRoutes);
