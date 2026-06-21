@@ -36,9 +36,14 @@ const DEFAULT_CONFIG: Omit<RestaurantConfig, 'id' | 'createdAt' | 'updatedAt'> =
         emissionPoint: '001',
         regime: 'General',
         taxRate: 15,                     // IVA por defecto (Ecuador: 15%)
+        // Secuenciales de PRODUCCIÓN
         currentSequenceFactura: 1,
         currentSequenceNotaCredito: 1,
-        currentSequenceNotaVenta: 1
+        currentSequenceNotaVenta: 1,
+        // Secuenciales de PRUEBAS
+        testSequenceFactura: 1,
+        testSequenceNotaCredito: 1,
+        testSequenceNotaVenta: 1
     }
 };
 
@@ -76,9 +81,14 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
                 regime: doc.billing.regime,
                 agenteRetencion: doc.billing.agenteRetencion,
                 taxRate: doc.billing.taxRate ?? 15, // Fallback 15% para registros anteriores
+                // Secuenciales de PRODUCCIÓN
                 currentSequenceFactura: doc.billing.currentSequenceFactura,
                 currentSequenceNotaCredito: doc.billing.currentSequenceNotaCredito,
-                currentSequenceNotaVenta: doc.billing.currentSequenceNotaVenta
+                currentSequenceNotaVenta: doc.billing.currentSequenceNotaVenta,
+                // Secuenciales de PRUEBAS
+                testSequenceFactura: doc.billing.testSequenceFactura ?? 1,
+                testSequenceNotaCredito: doc.billing.testSequenceNotaCredito ?? 1,
+                testSequenceNotaVenta: doc.billing.testSequenceNotaVenta ?? 1
             },
             // Certificado Digital SRI
             // Only include if certificate has VALID data (uploadedAt is required for a valid certificate)
@@ -201,12 +211,30 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
 
 
     /**
+     * Obtiene el ambiente actual del certificado SRI.
+     * Prioridad: sriCertificate.environment > process.env.SRI_ENV > '1' (Pruebas)
+     */
+    private async getCurrentEnvironment(): Promise<'1' | '2'> {
+        const config = await this.get();
+        return (config?.sriCertificate?.environment as '1' | '2') || (process.env.SRI_ENV as '1' | '2') || '1';
+    }
+
+    /**
      * Atomically retrieves and increments the sequential number for invoices.
      * Uses MongoDB's $inc operator with findOneAndUpdate to ensure atomicity.
-     * If config doesn't exist, creates it with default values.
+     *
+     * IMPORTANTE: Usa secuenciales SEPARADOS por ambiente:
+     * - Producción ('2'): billing.currentSequenceFactura
+     * - Pruebas ('1'): billing.testSequenceFactura
+     *
+     * Esto permite alternar entre ambientes sin afectar los secuenciales de producción.
      */
     async getNextSequential(): Promise<number> {
-        logger.debug('Getting next sequential number for invoice');
+        const environment = await this.getCurrentEnvironment();
+        const isProduction = environment === '2';
+        const fieldName = isProduction ? 'billing.currentSequenceFactura' : 'billing.testSequenceFactura';
+
+        logger.debug('Getting next sequential number for invoice', { environment, field: fieldName });
 
         // Ensure config exists first
         await this.getOrCreate();
@@ -214,7 +242,7 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
         // Atomically increment and return the new value
         const doc = await RestaurantConfigModel.findByIdAndUpdate(
             FIXED_CONFIG_ID,
-            { $inc: { 'billing.currentSequenceFactura': 1 } },
+            { $inc: { [fieldName]: 1 } },
             {
                 new: true, // Return the updated document
                 upsert: true, // Create if doesn't exist
@@ -222,20 +250,22 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
             }
         );
 
-        if (!doc || !doc.billing || typeof doc.billing.currentSequenceFactura !== 'number') {
-            logger.error('Failed to get next sequential number');
+        const nextSequential = isProduction
+            ? doc?.billing?.currentSequenceFactura
+            : doc?.billing?.testSequenceFactura;
+
+        if (!doc || !doc.billing || typeof nextSequential !== 'number') {
+            logger.error('Failed to get next sequential number', { environment });
             throw new Error('Failed to increment sequential counter');
         }
 
-        const nextSequential = doc.billing.currentSequenceFactura;
-        logger.info('Generated new sequential number', { sequential: nextSequential });
+        logger.info('Generated new sequential number', {
+            sequential: nextSequential,
+            environment: isProduction ? 'Producción' : 'Pruebas'
+        });
 
         // Invalidate cache so UI reflects the new sequence immediately
-        // Note: Using dynamic import or direct import if cyclic dependency allows, 
-        // but robustly we should clear the cache key used in ConfigController.
         try {
-            // We need to import cacheService at top of file, or use if available. 
-            // Since this is infrastructure repo, it can import cacheService.
             const { cacheService } = await import('../utils/CacheService');
             await cacheService.invalidate('config:restaurant');
         } catch (e) {
@@ -247,9 +277,17 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
 
     /**
      * Atomically retrieves and increments the sequential number for credit notes.
+     *
+     * IMPORTANTE: Usa secuenciales SEPARADOS por ambiente:
+     * - Producción ('2'): billing.currentSequenceNotaCredito
+     * - Pruebas ('1'): billing.testSequenceNotaCredito
      */
     async getNextCreditNoteSequential(): Promise<number> {
-        logger.debug('Getting next sequential number for credit note');
+        const environment = await this.getCurrentEnvironment();
+        const isProduction = environment === '2';
+        const fieldName = isProduction ? 'billing.currentSequenceNotaCredito' : 'billing.testSequenceNotaCredito';
+
+        logger.debug('Getting next sequential number for credit note', { environment, field: fieldName });
 
         // Ensure config exists first
         await this.getOrCreate();
@@ -257,7 +295,7 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
         // Atomically increment and return the new value
         const doc = await RestaurantConfigModel.findByIdAndUpdate(
             FIXED_CONFIG_ID,
-            { $inc: { 'billing.currentSequenceNotaCredito': 1 } },
+            { $inc: { [fieldName]: 1 } },
             {
                 new: true, // Return the updated document
                 upsert: true, // Create if doesn't exist
@@ -265,13 +303,19 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
             }
         );
 
-        if (!doc || !doc.billing || typeof doc.billing.currentSequenceNotaCredito !== 'number') {
-            logger.error('Failed to get next sequential number for credit note');
+        const nextSequential = isProduction
+            ? doc?.billing?.currentSequenceNotaCredito
+            : doc?.billing?.testSequenceNotaCredito;
+
+        if (!doc || !doc.billing || typeof nextSequential !== 'number') {
+            logger.error('Failed to get next sequential number for credit note', { environment });
             throw new Error('Failed to increment credit note sequential counter');
         }
 
-        const nextSequential = doc.billing.currentSequenceNotaCredito;
-        logger.info('Generated new sequential number for credit note', { sequential: nextSequential });
+        logger.info('Generated new sequential number for credit note', {
+            sequential: nextSequential,
+            environment: isProduction ? 'Producción' : 'Pruebas'
+        });
 
         try {
             const { cacheService } = await import('../utils/CacheService');

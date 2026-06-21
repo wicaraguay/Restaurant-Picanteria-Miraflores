@@ -48,9 +48,14 @@ export interface RestaurantConfig {
         regime: 'General' | 'RIMPE - Negocio Popular' | 'RIMPE - Emprendedor';
         agenteRetencion?: string;
         taxRate: number;               // Tarifa IVA activa (ej: 15, 12, 8, 0)
+        // Secuenciales de PRODUCCIÓN (ambiente '2')
         currentSequenceFactura: number;
         currentSequenceNotaCredito: number;
         currentSequenceNotaVenta: number;
+        // Secuenciales de PRUEBAS (ambiente '1') - separados para no afectar producción
+        testSequenceFactura?: number;
+        testSequenceNotaCredito?: number;
+        testSequenceNotaVenta?: number;
     };
 
     // Certificado Digital SRI (firma electrónica .p12)

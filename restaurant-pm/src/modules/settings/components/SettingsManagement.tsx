@@ -187,8 +187,9 @@ const SettingsManagement: React.FC = () => {
 
     const handleChangeCertificateEnvironment = async (environment: '1' | '2') => {
         try {
-            await api.config.updateCertificateEnvironment(environment);
+            const result = await api.config.updateCertificateEnvironment(environment);
             await refreshConfig();
+            return result; // Devolver resultado para mostrar en UI
         } catch (error) {
             console.error('Error changing certificate environment:', error);
             throw error;
