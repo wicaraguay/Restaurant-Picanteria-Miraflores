@@ -3,6 +3,31 @@ import Card from '../../../../components/ui/Card';
 import ConfirmModal from '../../../../components/ui/ConfirmModal';
 import { toast } from '../../../../components/ui/AlertProvider';
 
+/** Información de secuenciales por ambiente */
+interface SequentialInfo {
+    factura: number;
+    notaCredito: number;
+    notaVenta: number;
+}
+
+/** Resultado del cambio de ambiente */
+interface EnvironmentChangeResult {
+    success: boolean;
+    message: string;
+    previousEnvironment: {
+        code: '1' | '2';
+        name: string;
+        sequentials: SequentialInfo;
+    };
+    newEnvironment: {
+        code: '1' | '2';
+        name: string;
+        sequentials: SequentialInfo;
+    };
+    nextInvoiceNumber: string;
+    nextCreditNoteNumber: string;
+}
+
 interface CertificateSectionProps {
     certificate?: {
         environment: '1' | '2';
@@ -12,7 +37,7 @@ interface CertificateSectionProps {
     };
     onUpload: (certificateBase64: string, password: string, environment: '1' | '2') => Promise<void>;
     onDelete: () => Promise<void>;
-    onChangeEnvironment: (environment: '1' | '2') => Promise<void>;
+    onChangeEnvironment: (environment: '1' | '2') => Promise<EnvironmentChangeResult>;
 }
 
 const inputClass = "w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-gray-900 text-sm focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none transition-all dark:border-gray-700 dark:bg-dark-800 dark:text-white dark:placeholder-gray-500";
@@ -32,6 +57,10 @@ const CertificateSection: React.FC<CertificateSectionProps> = ({ certificate, on
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showEnvModal, setShowEnvModal] = useState(false);
     const [pendingEnv, setPendingEnv] = useState<'1' | '2' | null>(null);
+
+    // Modal de resultado del cambio de ambiente
+    const [showResultModal, setShowResultModal] = useState(false);
+    const [envChangeResult, setEnvChangeResult] = useState<EnvironmentChangeResult | null>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -114,13 +143,15 @@ const CertificateSection: React.FC<CertificateSectionProps> = ({ certificate, on
     const handleEnvironmentConfirm = async () => {
         if (!pendingEnv) return;
 
-        const envName = pendingEnv === '1' ? 'Pruebas' : 'Producción';
         try {
             setIsChangingEnv(true);
-            await onChangeEnvironment(pendingEnv);
+            const result = await onChangeEnvironment(pendingEnv);
             setShowEnvModal(false);
             setPendingEnv(null);
-            toast.success(`Ambiente cambiado a ${envName} correctamente`, 'Éxito');
+
+            // Mostrar modal con información detallada
+            setEnvChangeResult(result);
+            setShowResultModal(true);
         } catch (error) {
             toast.error('Error al cambiar el ambiente', 'Error');
         } finally {
@@ -404,6 +435,125 @@ const CertificateSection: React.FC<CertificateSectionProps> = ({ certificate, on
                 type="warning"
                 showLoading={isChangingEnv}
             />
+
+            {/* Modal informativo con resultado del cambio de ambiente */}
+            {showResultModal && envChangeResult && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-2xl max-w-lg w-full p-6 animate-in zoom-in-95 duration-300">
+                        {/* Header */}
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                                envChangeResult.newEnvironment.code === '2'
+                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                                    : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                            }`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                                    Ambiente Cambiado
+                                </h3>
+                                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                                    {envChangeResult.previousEnvironment.name} → {envChangeResult.newEnvironment.name}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Info de secuenciales */}
+                        <div className="space-y-4">
+                            {/* Ambiente anterior */}
+                            <div className="p-4 bg-gray-50 dark:bg-dark-700/50 rounded-2xl">
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
+                                    Secuenciales {envChangeResult.previousEnvironment.name} (anterior)
+                                </h4>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                        <span className="text-gray-500 dark:text-gray-400">Facturas:</span>
+                                        <span className="ml-2 font-black text-gray-700 dark:text-gray-200">
+                                            {envChangeResult.previousEnvironment.sequentials.factura}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 dark:text-gray-400">Notas Crédito:</span>
+                                        <span className="ml-2 font-black text-gray-700 dark:text-gray-200">
+                                            {envChangeResult.previousEnvironment.sequentials.notaCredito}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Ambiente nuevo */}
+                            <div className={`p-4 rounded-2xl ${
+                                envChangeResult.newEnvironment.code === '2'
+                                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/30'
+                                    : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30'
+                            }`}>
+                                <h4 className={`text-[10px] font-black uppercase tracking-widest mb-3 ${
+                                    envChangeResult.newEnvironment.code === '2'
+                                        ? 'text-green-700 dark:text-green-400'
+                                        : 'text-amber-700 dark:text-amber-400'
+                                }`}>
+                                    Secuenciales {envChangeResult.newEnvironment.name} (activo)
+                                </h4>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                        <span className="text-gray-600 dark:text-gray-300">Facturas:</span>
+                                        <span className="ml-2 font-black text-gray-800 dark:text-gray-100">
+                                            {envChangeResult.newEnvironment.sequentials.factura}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-600 dark:text-gray-300">Notas Crédito:</span>
+                                        <span className="ml-2 font-black text-gray-800 dark:text-gray-100">
+                                            {envChangeResult.newEnvironment.sequentials.notaCredito}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Próximos documentos */}
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-200 dark:border-blue-800/30">
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-400 mb-3">
+                                    Próximos Documentos a Emitir
+                                </h4>
+                                <div className="space-y-2 text-xs">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-blue-600 dark:text-blue-300">Próxima Factura:</span>
+                                        <span className="font-black text-blue-800 dark:text-blue-200 font-mono bg-blue-100 dark:bg-blue-900/40 px-3 py-1 rounded-lg">
+                                            {envChangeResult.nextInvoiceNumber}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-blue-600 dark:text-blue-300">Próxima N/C:</span>
+                                        <span className="font-black text-blue-800 dark:text-blue-200 font-mono bg-blue-100 dark:bg-blue-900/40 px-3 py-1 rounded-lg">
+                                            {envChangeResult.nextCreditNoteNumber}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Botón cerrar */}
+                        <div className="mt-6 flex justify-end">
+                            <button
+                                onClick={() => {
+                                    setShowResultModal(false);
+                                    setEnvChangeResult(null);
+                                }}
+                                className={`px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 ${
+                                    envChangeResult.newEnvironment.code === '2'
+                                        ? 'bg-green-600 text-white hover:bg-green-700 shadow-lg shadow-green-500/25'
+                                        : 'bg-amber-600 text-white hover:bg-amber-700 shadow-lg shadow-amber-500/25'
+                                }`}
+                            >
+                                Entendido
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

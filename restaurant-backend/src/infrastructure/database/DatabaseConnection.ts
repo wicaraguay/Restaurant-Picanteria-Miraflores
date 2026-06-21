@@ -10,6 +10,7 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { logger } from '../utils/Logger';
+import { migrateSequentialsToEnvironments } from './migrations/migrateSequentialsToEnvironments';
 
 /**
  * Clase DatabaseConnection - Implementa patrón Singleton
@@ -93,8 +94,9 @@ export class DatabaseConnection {
                 logger.info(`📊 Database: ${mongoose.connection.db.databaseName}`);
             }
 
-            // Run index migrations after connection
+            // Run migrations after connection
             await this.runIndexMigrations();
+            await this.runDataMigrations();
 
         } catch (error) {
             logger.warn(`⚠️  Local MongoDB connection failed: ${(error as Error).message}`);
@@ -164,6 +166,18 @@ export class DatabaseConnection {
                 // handleReconnection will be called again by 'disconnected' event
             }
         }, delay);
+    }
+
+    /**
+     * Runs data migrations (one-time fixes for historical data issues).
+     * Each migration is idempotent and tracks its own completion state.
+     */
+    private async runDataMigrations(): Promise<void> {
+        try {
+            await migrateSequentialsToEnvironments();
+        } catch (error) {
+            logger.error('[Data Migration] Failed (non-fatal):', error);
+        }
     }
 
     private async runIndexMigrations(): Promise<void> {

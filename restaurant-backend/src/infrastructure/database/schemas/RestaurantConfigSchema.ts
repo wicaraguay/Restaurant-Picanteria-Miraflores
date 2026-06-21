@@ -54,9 +54,14 @@ const RestaurantConfigSchema = new Schema({
         },
         agenteRetencion: { type: String },
         taxRate: { type: Number, default: 15, min: 0, max: 100 }, // Tarifa IVA configurable (ej: 15, 12, 8, 0)
+        // Secuenciales de PRODUCCIÓN (ambiente '2')
         currentSequenceFactura: { type: Number, required: true, default: 1 },
         currentSequenceNotaCredito: { type: Number, required: true, default: 1 },
-        currentSequenceNotaVenta: { type: Number, required: true, default: 1 }
+        currentSequenceNotaVenta: { type: Number, required: true, default: 1 },
+        // Secuenciales de PRUEBAS (ambiente '1') - separados para no afectar producción
+        testSequenceFactura: { type: Number, default: 1 },
+        testSequenceNotaCredito: { type: Number, default: 1 },
+        testSequenceNotaVenta: { type: Number, default: 1 }
     },
 
     // Certificado Digital SRI (firma electrónica .p12)
@@ -117,7 +122,10 @@ const RestaurantConfigSchema = new Schema({
             showMenu: { type: Boolean, default: true },
             showFooter: { type: Boolean, default: true }
         }
-    }
+    },
+
+    // Metadata para migraciones y configuraciones internas
+    metadata: { type: Object, default: {} }
 }, {
     timestamps: true,
     collection: 'restaurantconfig'
