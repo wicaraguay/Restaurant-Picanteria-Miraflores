@@ -15,6 +15,7 @@
 import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 import { logger } from '../../utils/Logger';
 import { EventEmitter } from 'events';
+import path from 'path';
 
 export interface SendMessageResult {
     success: boolean;
@@ -34,14 +35,20 @@ export class WhatsAppWebClient extends EventEmitter {
     private client: Client | null = null;
     private isReady: boolean = false;
     private isAuthenticated: boolean = false;
+    private isInitializing: boolean = false;
     private currentQR: string | null = null;
     private phoneNumber: string | null = null;
     private lastActivity: Date | null = null;
     private reconnectAttempts: number = 0;
     private maxReconnectAttempts: number = 5;
+    private sessionPath: string;
 
     constructor() {
         super();
+        // Ruta de sesión configurable por variable de entorno (para volumen en Docker)
+        this.sessionPath = process.env.WHATSAPP_SESSION_PATH ||
+            path.join(process.cwd(), 'whatsapp-session');
+        logger.info('[WhatsAppWeb] Session path configured', { sessionPath: this.sessionPath });
         this.initializeClient();
     }
 
@@ -52,7 +59,7 @@ export class WhatsAppWebClient extends EventEmitter {
         try {
             this.client = new Client({
                 authStrategy: new LocalAuth({
-                    dataPath: './whatsapp-session'
+                    dataPath: this.sessionPath
                 }),
                 puppeteer: {
                     headless: true,
@@ -170,14 +177,46 @@ export class WhatsAppWebClient extends EventEmitter {
     }
 
     /**
+     * Pre-inicializa Chromium en background para reducir tiempo de espera del QR
+     * Llamar al inicio del servidor para "calentar" el sistema
+     */
+    public async warmup(): Promise<void> {
+        if (this.isInitializing || this.isReady || this.isAuthenticated) {
+            logger.info('[WhatsAppWeb] Already initialized or initializing, skipping warmup');
+            return;
+        }
+
+        logger.info('[WhatsAppWeb] Starting warmup - pre-initializing Chromium in background...');
+
+        // Iniciar en background sin bloquear
+        this.start().catch(error => {
+            logger.warn('[WhatsAppWeb] Warmup completed with warning:', error.message);
+        });
+    }
+
+    /**
      * Inicia el cliente (genera QR o restaura sesión)
      */
     public async start(): Promise<void> {
+        // Evitar inicializaciones múltiples
+        if (this.isInitializing) {
+            logger.warn('[WhatsAppWeb] Already initializing, skipping duplicate start');
+            return;
+        }
+
+        if (this.isReady && this.isAuthenticated) {
+            logger.info('[WhatsAppWeb] Already connected, skipping start');
+            return;
+        }
+
+        this.isInitializing = true;
+
         if (!this.client) {
             this.initializeClient();
         }
 
         if (!this.client) {
+            this.isInitializing = false;
             logger.error('[WhatsAppWeb] Client is null after initialization');
             throw new Error('Failed to initialize WhatsApp client');
         }
@@ -189,21 +228,23 @@ export class WhatsAppWebClient extends EventEmitter {
             // Initialize with timeout and retry logic
             const initPromise = this.client.initialize();
 
-            // Log progress
+            // Log progress every 15 seconds (menos spam)
             const progressInterval = setInterval(() => {
                 logger.info('[WhatsAppWeb] Still initializing... waiting for Chrome');
-            }, 10000);
+            }, 15000);
 
-            // Add timeout to detect stuck initialization
+            // Timeout aumentado a 120 segundos para servidores lentos
             const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('WhatsApp initialization timeout after 90 seconds')), 90000)
+                setTimeout(() => reject(new Error('WhatsApp initialization timeout after 120 seconds')), 120000)
             );
 
             await Promise.race([initPromise, timeoutPromise]);
 
             clearInterval(progressInterval);
+            this.isInitializing = false;
             logger.info('[WhatsAppWeb] Client initialized successfully');
         } catch (error: any) {
+            this.isInitializing = false;
             logger.error('[WhatsAppWeb] Failed to start client', {
                 error: error.message,
                 stack: error.stack
@@ -217,6 +258,13 @@ export class WhatsAppWebClient extends EventEmitter {
 
             throw error;
         }
+    }
+
+    /**
+     * Verifica si está en proceso de inicialización
+     */
+    public isClientInitializing(): boolean {
+        return this.isInitializing;
     }
 
     /**

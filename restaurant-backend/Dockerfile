@@ -53,6 +53,10 @@ COPY --from=builder /app/dist ./dist
 # Crear directorios para WhatsApp session (con permisos correctos)
 RUN mkdir -p /app/whatsapp-session /app/.wwebjs_cache
 
+# VOLUME para persistir sesión de WhatsApp entre deploys
+# Montar este volumen en tu VPS/Docker para no perder la sesión
+VOLUME ["/app/whatsapp-session"]
+
 # Crear usuario no-root por seguridad
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
@@ -70,6 +74,7 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV WHATSAPP_ENABLED=false
+ENV WHATSAPP_SESSION_PATH=/app/whatsapp-session
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
