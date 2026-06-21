@@ -6,7 +6,7 @@
  */
 
 import type { ViewType } from './types';
-import { HomeIcon, UsersIcon, ClipboardListIcon, ChefHatIcon, BriefcaseIcon, BookOpenIcon, SettingsIcon, FileTextIcon, BarChartIcon, WhatsAppIcon, GlobeIcon } from './components/ui/Icons';
+import { HomeIcon, UsersIcon, ClipboardListIcon, ChefHatIcon, BriefcaseIcon, BookOpenIcon, SettingsIcon, FileTextIcon, BarChartIcon, WhatsAppIcon, GlobeIcon, LayoutIcon } from './components/ui/Icons';
 
 /**
  * Items de navegación de la aplicación
@@ -19,6 +19,7 @@ export const NAV_ITEMS = [
 
   { id: 'orders', label: 'Gestión de Pedidos', shortLabel: 'Pedidos', icon: ClipboardListIcon, view: 'orders' as ViewType },
   { id: 'menu', label: 'Gestión de Menú', shortLabel: 'Menú', icon: BookOpenIcon, view: 'menu' as ViewType },
+  { id: 'categories', label: 'Categorías', shortLabel: 'Categorías', icon: LayoutIcon, view: 'categories' as ViewType },
   { id: 'kitchen', label: 'Gestión de Cocina', shortLabel: 'Cocina', icon: ChefHatIcon, view: 'kitchen' as ViewType },
   { id: 'hr', label: 'Recursos Humanos', shortLabel: 'RRHH', icon: BriefcaseIcon, view: 'hr' as ViewType },
   { id: 'billing', label: 'Historial de Facturas', shortLabel: 'Historial', icon: FileTextIcon, view: 'billing' as ViewType },

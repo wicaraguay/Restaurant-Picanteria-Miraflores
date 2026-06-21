@@ -7,6 +7,7 @@ import { IRestaurantConfigRepository } from '../../../domain/repositories/IResta
 import { IBillRepository } from '../../../domain/repositories/IBillRepository';
 import { IRoleRepository } from '../../../domain/repositories/IRoleRepository';
 import { ICreditNoteRepository } from '../../../domain/repositories/ICreditNoteRepository';
+import { ICategoryRepository } from '../../../domain/repositories/ICategoryRepository';
 
 import { MongoCustomerRepository } from '../../repositories/MongoCustomerRepository';
 import { MongoEmployeeRepository } from '../../repositories/MongoEmployeeRepository';
@@ -16,6 +17,7 @@ import { MongoRestaurantConfigRepository } from '../../repositories/MongoRestaur
 import { MongoBillRepository } from '../../repositories/MongoBillRepository';
 import { MongoRoleRepository } from '../../repositories/MongoRoleRepository';
 import { MongoCreditNoteRepository } from '../../repositories/MongoCreditNoteRepository';
+import { MongoCategoryRepository } from '../../repositories/MongoCategoryRepository';
 import { logger } from '../../utils/Logger';
 
 export class RepositoryModule {
@@ -27,6 +29,7 @@ export class RepositoryModule {
     private billRepository?: IBillRepository;
     private roleRepository?: IRoleRepository;
     private creditNoteRepository?: ICreditNoteRepository;
+    private categoryRepository?: ICategoryRepository;
 
     public getCustomerRepository(): ICustomerRepository {
         if (!this.customerRepository) {
@@ -92,6 +95,14 @@ export class RepositoryModule {
         return this.creditNoteRepository;
     }
 
+    public getCategoryRepository(): ICategoryRepository {
+        if (!this.categoryRepository) {
+            this.categoryRepository = new MongoCategoryRepository();
+            logger.debug('CategoryRepository instantiated');
+        }
+        return this.categoryRepository;
+    }
+
     public reset(): void {
         this.customerRepository = undefined;
         this.employeeRepository = undefined;
@@ -101,5 +112,6 @@ export class RepositoryModule {
         this.billRepository = undefined;
         this.roleRepository = undefined;
         this.creditNoteRepository = undefined;
+        this.categoryRepository = undefined;
     }
 }

@@ -22,7 +22,8 @@ export interface MenuItemDocument extends Document {
     description: string;
     price: number;
     imageUrl: string;
-    category: string;
+    category: string; // Legacy: texto libre
+    categoryId?: mongoose.Types.ObjectId; // Referencia a Category
     available: boolean;
     taxRate: number;
 }
@@ -32,9 +33,13 @@ const MenuItemSchema: Schema = new Schema({
     description: { type: String },
     price: { type: Number, required: true },
     imageUrl: { type: String },
-    category: { type: String, required: true },
+    category: { type: String, required: true }, // Se mantiene para compatibilidad
+    categoryId: { type: Schema.Types.ObjectId, ref: 'Category' }, // Nueva referencia
     available: { type: Boolean, default: true },
     taxRate: { type: Number, default: 15, min: 0, max: 100 } // IVA por producto (0, 5, 12, 15)
 }, { timestamps: true });
+
+// Índice para filtrado por categoría
+MenuItemSchema.index({ categoryId: 1 });
 
 export const MenuItemModel = mongoose.model<MenuItemDocument>('MenuItem', MenuItemSchema);

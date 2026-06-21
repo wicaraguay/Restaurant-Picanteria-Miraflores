@@ -59,6 +59,7 @@ const MobileBottomNav = lazy(() => import('./components/layout/MobileBottomNav')
 const BillingHistory = lazy(() => import('./modules/billing/components/BillingHistory'));
 const WhatsAppManagement = lazy(() => import('./modules/whatsapp/components/WhatsAppManagement'));
 const WebsiteManagement = lazy(() => import('./modules/website/components/WebsiteManagement'));
+const CategoryManagement = lazy(() => import('./modules/categories/components/CategoryManagement'));
 
 /**
  * Loading fallback component
@@ -282,6 +283,7 @@ const AdminContent: React.FC = () => {
                                         setMenuItems={setMenuItems}
                                     />
                                 } />
+                                <Route path="categories" element={<CategoryManagement />} />
                                 <Route path="kitchen" element={<KitchenManagement orders={state.orders} setOrders={updateOrders} />} />
                                 <Route path="hr" element={
                                     <HRManagement

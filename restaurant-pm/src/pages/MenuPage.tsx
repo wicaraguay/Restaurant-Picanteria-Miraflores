@@ -8,12 +8,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { menuService } from '../modules/menu/services/MenuService';
 import { MenuItem } from '../modules/menu/types/menu.types';
+import { Category } from '../modules/categories/types/category.types';
+import { api } from '../api';
 import { logger } from '../utils/logger';
 import { useRestaurantConfig } from '../contexts/RestaurantConfigContext';
 import { defaultWebsiteConfig } from '../utils/defaultConfig';
 
 const MenuPage: React.FC = () => {
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [isOpen, setIsOpen] = useState(false);
     const [currentSlide, setCurrentSlide] = useState(0);
@@ -75,20 +78,54 @@ const MenuPage: React.FC = () => {
     const fetchMenu = async () => {
         try {
             logger.info('Fetching menu for public page');
-            const items = await menuService.getAll();
 
+            // Fetch categories and menu items in parallel
+            const [categoriesResponse, items] = await Promise.all([
+                api.categories.getAll(),
+                menuService.getAll()
+            ]);
+
+            // Build a set of visible category IDs
+            const visibleCategories = categoriesResponse.filter(
+                (cat: Category) => cat.visibleOnWebsite && cat.available
+            );
+            const visibleCategoryIds = new Set(visibleCategories.map((cat: Category) => cat.id));
+            const visibleCategoryNames = new Set(
+                visibleCategories.map((cat: Category) => cat.name.toLowerCase())
+            );
+
+            setCategories(visibleCategories);
+
+            // Filter items: available + category is visible on website
             const filteredItems = items.filter(item => {
                 if (!item.available) return false;
-                const category = item.category.toLowerCase();
-                const name = item.name.toLowerCase();
-                const beverageCategories = ['bebida', 'beverage', 'gaseosa', 'jugo', 'refresco', 'drink', 'licor', 'vino', 'cerveza', 'coctel'];
-                const isBeverageCategory = beverageCategories.some(cat => category.includes(cat));
-                const beverageNames = ['cafe', 'agua', 'cocacola', 'coca-cola', 'sprite', 'fanta', 'pepsi'];
-                const isSpecificBeverage = beverageNames.some(n => name.includes(n));
-                return !isBeverageCategory && !isSpecificBeverage;
+
+                // If item has categoryId, check if it's in visible categories
+                if (item.categoryId) {
+                    return visibleCategoryIds.has(item.categoryId);
+                }
+
+                // Legacy fallback: check by category name (text)
+                // This handles items that haven't been migrated yet
+                const categoryName = item.category?.toLowerCase() || '';
+                return visibleCategoryNames.has(categoryName);
             });
 
-            setMenuItems(filteredItems);
+            // Sort by category sortOrder, then by name
+            const sortedItems = filteredItems.sort((a, b) => {
+                const catA = visibleCategories.find(
+                    (c: Category) => c.id === a.categoryId || c.name.toLowerCase() === a.category?.toLowerCase()
+                );
+                const catB = visibleCategories.find(
+                    (c: Category) => c.id === b.categoryId || c.name.toLowerCase() === b.category?.toLowerCase()
+                );
+                const orderA = catA?.sortOrder ?? 999;
+                const orderB = catB?.sortOrder ?? 999;
+                if (orderA !== orderB) return orderA - orderB;
+                return a.name.localeCompare(b.name);
+            });
+
+            setMenuItems(sortedItems);
             setLoading(false);
         } catch (error) {
             logger.error('Failed to fetch menu', error);

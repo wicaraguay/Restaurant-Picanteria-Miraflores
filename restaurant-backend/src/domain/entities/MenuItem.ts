@@ -17,13 +17,17 @@
  * @layer Domain - Entidad pura sin dependencias externas
  */
 
+import { Category } from './Category';
+
 export interface MenuItem {
     id: string;
     name: string;
     description: string;
     price: number;
     imageUrl: string;
-    category: string;
+    category: string; // Legacy: texto libre (se mantiene para compatibilidad)
+    categoryId?: string; // Referencia a Category._id
+    categoryData?: Category; // Populated category data
     available: boolean;
     taxRate: number; // Porcentaje de IVA individual (0, 5, 12, 15). Default: 15
 }

@@ -56,4 +56,9 @@ export const API_ENDPOINTS = {
         BASE: '/roles',
         BY_ID: (id: string) => `/roles/${id}`,
     },
+    CATEGORIES: {
+        BASE: '/categories',
+        BY_ID: (id: string) => `/categories/${id}`,
+        REORDER: '/categories/reorder',
+    },
 } as const;
