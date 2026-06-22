@@ -108,7 +108,15 @@ class WhatsAppSocketService {
         });
 
         // Re-emit eventos de WhatsApp a los listeners
-        const whatsappEvents = ['qr', 'status', 'authenticated', 'ready', 'auth_failure'];
+        const whatsappEvents = [
+            'qr',
+            'status',
+            'authenticated',
+            'ready',
+            'auth_failure',
+            'human_support_requested',  // Notificación cuando cliente pide hablar con humano
+            'conversation_released'     // Notificación cuando se libera una conversación
+        ];
         whatsappEvents.forEach(event => {
             this.socket?.on(event, (data: any) => {
                 console.log(`[WhatsAppSocket] Event received: ${event}`, data);

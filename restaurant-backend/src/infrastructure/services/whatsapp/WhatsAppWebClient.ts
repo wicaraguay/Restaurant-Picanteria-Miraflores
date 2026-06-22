@@ -12,7 +12,7 @@
  * 3. Reconecta automáticamente
  */
 
-import { Client, LocalAuth, Message } from 'whatsapp-web.js';
+import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js';
 import { logger } from '../../utils/Logger';
 import { EventEmitter } from 'events';
 import path from 'path';
@@ -395,22 +395,135 @@ export class WhatsAppWebClient extends EventEmitter {
     }
 
     /**
-     * Envía un mensaje con botones (simulado con texto)
-     * whatsapp-web.js no soporta botones nativos en todas las versiones
+     * Envía un mensaje con botones (simulado con texto mejorado)
+     * whatsapp-web.js no soporta botones nativos - WhatsApp los bloquea activamente
+     * @see https://github.com/pedroslopez/whatsapp-web.js/issues/2632
      */
     public async sendButtons(
         to: string,
         bodyText: string,
-        buttons: Array<{ id: string; title: string }>
+        buttons: Array<{ id: string; title: string; emoji?: string }>
     ): Promise<SendMessageResult> {
-        // Convertir botones a texto con números
+        // Emojis numéricos para mejor visualización
+        const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
         const buttonText = buttons
-            .map((btn, index) => `${index + 1}. ${btn.title}`)
+            .map((btn, index) => {
+                const emoji = btn.emoji || numberEmojis[index] || `${index + 1}.`;
+                return `${emoji} ${btn.title}`;
+            })
             .join('\n');
 
         const fullMessage = `${bodyText}\n\n${buttonText}\n\n_Responde con el número de tu opción_`;
 
         return this.sendText(to, fullMessage);
+    }
+
+    /**
+     * Envía una lista de opciones (simulada con texto)
+     * Ideal para menús o listas largas de opciones
+     */
+    public async sendList(
+        to: string,
+        headerText: string,
+        bodyText: string,
+        sections: Array<{
+            title: string;
+            items: Array<{ id: string; title: string; description?: string }>
+        }>,
+        footerText?: string
+    ): Promise<SendMessageResult> {
+        let message = '';
+
+        if (headerText) {
+            message += `*${headerText}*\n\n`;
+        }
+
+        if (bodyText) {
+            message += `${bodyText}\n\n`;
+        }
+
+        let itemNumber = 1;
+        for (const section of sections) {
+            message += `━━━ *${section.title}* ━━━\n`;
+            for (const item of section.items) {
+                message += `*${itemNumber}.* ${item.title}`;
+                if (item.description) {
+                    message += `\n   _${item.description}_`;
+                }
+                message += '\n';
+                itemNumber++;
+            }
+            message += '\n';
+        }
+
+        if (footerText) {
+            message += `${footerText}\n`;
+        }
+
+        message += `\n_Responde con el número de tu opción_`;
+
+        return this.sendText(to, message);
+    }
+
+    /**
+     * Envía una imagen desde URL con caption opcional
+     * @param to Número de teléfono
+     * @param imageUrl URL de la imagen
+     * @param caption Texto opcional debajo de la imagen
+     */
+    public async sendImage(
+        to: string,
+        imageUrl: string,
+        caption?: string
+    ): Promise<SendMessageResult> {
+        if (!this.isEnabled()) {
+            logger.warn('[WhatsAppWeb] Cannot send image - client not ready');
+            return { success: false, error: 'WhatsApp no está conectado' };
+        }
+
+        try {
+            const chatId = this.formatPhoneNumber(to);
+
+            // Descargar imagen desde URL
+            const media = await MessageMedia.fromUrl(imageUrl, {
+                unsafeMime: true // Permitir tipos MIME no estándar
+            });
+
+            const result = await this.client?.sendMessage(chatId, media, {
+                caption: caption || ''
+            });
+
+            this.lastActivity = new Date();
+            logger.info('[WhatsAppWeb] Image sent', { to: chatId, messageId: result?.id?._serialized });
+
+            return {
+                success: true,
+                messageId: result?.id?._serialized
+            };
+        } catch (error: any) {
+            logger.error('[WhatsAppWeb] Failed to send image', { to, imageUrl, error: error.message });
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Envía una imagen con texto encima (como mensaje combinado)
+     * Primero envía el texto, luego la imagen
+     */
+    public async sendImageWithText(
+        to: string,
+        text: string,
+        imageUrl: string
+    ): Promise<SendMessageResult> {
+        // Enviar texto primero
+        const textResult = await this.sendText(to, text);
+        if (!textResult.success) {
+            return textResult;
+        }
+
+        // Luego enviar imagen
+        return this.sendImage(to, imageUrl);
     }
 
     /**

@@ -409,7 +409,7 @@ router.post('/take-conversation', async (req: Request, res: Response) => {
 
         logger.info('[WhatsAppAPI] Setting manual mode for phone', { phone });
         const chatbot = getWhatsAppChatbot();
-        const success = chatbot.setManualMode(phone, true);
+        const success = await chatbot.setManualMode(phone, true);
 
         logger.info('[WhatsAppAPI] setManualMode result', { phone, success });
 
@@ -451,7 +451,7 @@ router.post('/release-conversation', async (req: Request, res: Response) => {
         }
 
         const chatbot = getWhatsAppChatbot();
-        const success = chatbot.setManualMode(phone, false);
+        const success = await chatbot.setManualMode(phone, false);
 
         if (success) {
             logger.info('[WhatsAppAPI] Conversation released to chatbot', { phone });

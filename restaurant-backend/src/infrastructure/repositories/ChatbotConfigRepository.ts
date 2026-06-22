@@ -20,6 +20,39 @@ export interface PaymentInfo {
     banks: BankAccount[];
 }
 
+export interface ScheduleDay {
+    dayOfWeek: number;
+    dayName: string;
+    isOpen: boolean;
+    openTime: string;
+    closeTime: string;
+}
+
+export interface Schedule {
+    enabled: boolean;
+    timezone: string;
+    days: ScheduleDay[];
+    closedMessage: string;
+    allowMessagesWhenClosed: boolean;
+    messageReceivedWhenClosed: string;
+}
+
+export interface BusinessLocation {
+    lat: number;
+    lng: number;
+    address: string;
+}
+
+export interface LocationConfig {
+    enabled: boolean;
+    businessLocation: BusinessLocation;
+    maxDeliveryRadiusKm: number;
+    costPerKm: number;
+    minDeliveryCost: number;
+    outOfRangeMessage: string;
+    googleMapsApiKey: string;
+}
+
 export interface ChatbotConfig {
     businessName: string;
     messages: {
@@ -43,6 +76,8 @@ export interface ChatbotConfig {
         askForName: boolean;
         sendConfirmationMessage: boolean;
     };
+    schedule?: Schedule;
+    location?: LocationConfig;
     keywords: {
         greetings: string[];
         menu: string[];
@@ -73,6 +108,8 @@ export class ChatbotConfigRepository {
                 estimatedDeliveryTime: config.estimatedDeliveryTime || defaultConfig.estimatedDeliveryTime,
                 paymentInfo: config.paymentInfo || defaultConfig.paymentInfo,
                 settings: config.settings || defaultConfig.settings,
+                schedule: config.schedule || defaultConfig.schedule,
+                location: config.location || defaultConfig.location,
                 keywords: config.keywords || defaultConfig.keywords
             } as ChatbotConfig;
         } catch (error) {
@@ -109,6 +146,8 @@ export class ChatbotConfigRepository {
                 estimatedDeliveryTime: config.estimatedDeliveryTime || defaultConfig.estimatedDeliveryTime,
                 paymentInfo: config.paymentInfo || defaultConfig.paymentInfo,
                 settings: config.settings || defaultConfig.settings,
+                schedule: config.schedule || defaultConfig.schedule,
+                location: config.location || defaultConfig.location,
                 keywords: config.keywords || defaultConfig.keywords
             } as ChatbotConfig;
         } catch (error) {
@@ -116,7 +155,7 @@ export class ChatbotConfigRepository {
             throw error;
         }
     }
-    
+
     /**
      * Configuración por defecto
      */
@@ -148,6 +187,35 @@ export class ChatbotConfigRepository {
                 askForAddress: true,
                 askForName: true,
                 sendConfirmationMessage: true
+            },
+            schedule: {
+                enabled: false,
+                timezone: 'America/Guayaquil',
+                days: [
+                    { dayOfWeek: 0, dayName: 'Domingo', isOpen: false, openTime: '08:00', closeTime: '22:00' },
+                    { dayOfWeek: 1, dayName: 'Lunes', isOpen: true, openTime: '08:00', closeTime: '22:00' },
+                    { dayOfWeek: 2, dayName: 'Martes', isOpen: true, openTime: '08:00', closeTime: '22:00' },
+                    { dayOfWeek: 3, dayName: 'Miércoles', isOpen: true, openTime: '08:00', closeTime: '22:00' },
+                    { dayOfWeek: 4, dayName: 'Jueves', isOpen: true, openTime: '08:00', closeTime: '22:00' },
+                    { dayOfWeek: 5, dayName: 'Viernes', isOpen: true, openTime: '08:00', closeTime: '22:00' },
+                    { dayOfWeek: 6, dayName: 'Sábado', isOpen: true, openTime: '08:00', closeTime: '22:00' }
+                ],
+                closedMessage: '¡Hola! Gracias por escribirnos.\n\nEn este momento estamos *fuera de horario de atención*.\n\n🕐 Nuestro horario es:\n{schedule}\n\n¡Te esperamos!',
+                allowMessagesWhenClosed: true,
+                messageReceivedWhenClosed: 'Hemos recibido tu mensaje. Te responderemos cuando abramos. ¡Gracias!'
+            },
+            location: {
+                enabled: false,
+                businessLocation: {
+                    lat: -2.170998,
+                    lng: -79.922356,
+                    address: ''
+                },
+                maxDeliveryRadiusKm: 10,
+                costPerKm: 0.50,
+                minDeliveryCost: 2.00,
+                outOfRangeMessage: 'Lo sentimos, tu ubicación está fuera de nuestra área de cobertura ({distance}km). Nuestro radio máximo es de {maxRadius}km.',
+                googleMapsApiKey: ''
             },
             keywords: {
                 greetings: ['hola', 'hi', 'hello', 'buenas'],

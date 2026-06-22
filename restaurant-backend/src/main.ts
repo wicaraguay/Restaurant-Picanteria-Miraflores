@@ -220,7 +220,7 @@ const startServer = async () => {
                 whatsappClient.on('message', async (message: any) => {
                     try {
                         // Convert whatsapp-web.js message to our format
-                        const incomingMessage = {
+                        const incomingMessage: any = {
                             from: message.from.replace('@c.us', ''),
                             messageId: message.id._serialized || message.id.id,
                             type: message.type === 'chat' ? 'text' : message.type,
@@ -230,12 +230,28 @@ const startServer = async () => {
                             timestamp: message.timestamp
                         };
 
-                        logger.info('[WhatsApp] Message received, forwarding to chatbot', {
-                            from: incomingMessage.from,
-                            text: incomingMessage.text?.substring(0, 30)
-                        });
+                        // Extraer datos de ubicación si el mensaje es de tipo location
+                        if (message.type === 'location' && message.location) {
+                            incomingMessage.latitude = message.location.latitude;
+                            incomingMessage.longitude = message.location.longitude;
+                            incomingMessage.locationName = message.location.name;
+                            incomingMessage.locationAddress = message.location.address || message.location.description;
 
-                        await chatbot.processMessage(incomingMessage as any);
+                            logger.info('[WhatsApp] Location message received', {
+                                from: incomingMessage.from,
+                                lat: incomingMessage.latitude,
+                                lng: incomingMessage.longitude,
+                                address: incomingMessage.locationAddress
+                            });
+                        } else {
+                            logger.info('[WhatsApp] Message received, forwarding to chatbot', {
+                                from: incomingMessage.from,
+                                type: message.type,
+                                text: incomingMessage.text?.substring(0, 30)
+                            });
+                        }
+
+                        await chatbot.processMessage(incomingMessage);
                     } catch (error) {
                         logger.error('[WhatsApp] Error processing message', { error });
                     }

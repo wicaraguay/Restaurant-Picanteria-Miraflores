@@ -203,6 +203,30 @@ export class WhatsAppSocketManager {
     }
 
     /**
+     * Notifica al panel de admin que un cliente solicitó hablar con persona
+     */
+    public notifyHumanSupportRequested(phone: string, customerName?: string): void {
+        logger.info('[WhatsAppSocket] Notifying admin: human support requested', { phone, customerName });
+        this.broadcast('human_support_requested', {
+            phone,
+            customerName: customerName || 'Cliente',
+            timestamp: new Date().toISOString(),
+            message: `El cliente ${customerName || phone} solicita hablar con una persona`
+        });
+    }
+
+    /**
+     * Notifica al panel cuando se libera una conversación del modo manual
+     */
+    public notifyConversationReleased(phone: string): void {
+        logger.info('[WhatsAppSocket] Notifying admin: conversation released', { phone });
+        this.broadcast('conversation_released', {
+            phone,
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    /**
      * Obtiene la instancia de Socket.IO
      */
     public getIO(): SocketIOServer | null {

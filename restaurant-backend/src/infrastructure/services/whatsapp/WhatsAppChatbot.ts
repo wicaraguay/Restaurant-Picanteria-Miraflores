@@ -22,13 +22,36 @@ import { IMenuRepository } from '../../../domain/repositories/IMenuRepository';
 import { IOrderRepository } from '../../../domain/repositories/IOrderRepository';
 import { MenuItem as DomainMenuItem } from '../../../domain/entities/MenuItem';
 import { getChatbotConfigRepository, ChatbotConfig } from '../../repositories/ChatbotConfigRepository';
+import { getConversationRepository, ConversationRepository, ConversationState as PersistedConversationState } from '../../repositories/ConversationRepository';
+import { whatsAppSocketManager } from '../../websocket/WhatsAppSocketManager';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TIPOS PARA HORARIOS
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface ScheduleDay {
+    dayOfWeek: number;
+    dayName: string;
+    isOpen: boolean;
+    openTime: string;
+    closeTime: string;
+}
+
+interface BusinessHoursResult {
+    isOpen: boolean;
+    currentDay: string;
+    currentTime: string;
+    nextOpenDay?: string;
+    nextOpenTime?: string;
+    closedMessage?: string;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TIPOS
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface ConversationState {
-    step: 'IDLE' | 'SHOWING_MENU' | 'SELECTING_ITEMS' | 'CONFIRMING' | 'WAITING_NAME' | 'WAITING_ADDRESS' | 'WAITING_FINAL_CONFIRM' | 'WAITING_PAYMENT' | 'MANUAL';
+    step: 'IDLE' | 'SHOWING_MENU' | 'SELECTING_ITEMS' | 'CONFIRMING' | 'WAITING_NAME' | 'WAITING_ADDRESS' | 'WAITING_LOCATION' | 'WAITING_FINAL_CONFIRM' | 'WAITING_PAYMENT' | 'MANUAL';
     items: Array<{ name: string; quantity: number; price: number }>;
     customerName?: string;
     customerAddress?: string;
@@ -37,16 +60,29 @@ export interface ConversationState {
     lastOrderId?: string; // ID del ultimo pedido para consultas de estado
     manualMode?: boolean; // True cuando el admin toma control de la conversacion
     manualModeStartedAt?: Date; // Cuando se activo el modo manual
+    // Campos para ubicación y delivery
+    customerLocation?: {
+        latitude: number;
+        longitude: number;
+        address?: string;
+    };
+    deliveryDistance?: number; // Distancia en km
+    deliveryCost?: number; // Costo calculado del delivery
 }
 
 export interface IncomingMessage {
     from: string;           // Phone number (e.g., "593987654321")
     messageId: string;
-    type: 'text' | 'button' | 'interactive' | 'image' | 'document';
+    type: 'text' | 'button' | 'interactive' | 'image' | 'document' | 'location';
     text?: string;
     buttonPayload?: string;
     listReplyId?: string;
     timestamp: number;
+    // Campos para mensajes de ubicación
+    latitude?: number;
+    longitude?: number;
+    locationName?: string;
+    locationAddress?: string;
 }
 
 export interface ChatMenuItem {
@@ -55,6 +91,7 @@ export interface ChatMenuItem {
     price: number;
     category: string;
     description?: string;
+    imageUrl?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -67,15 +104,84 @@ export class WhatsAppChatbot {
     private menuItems: ChatMenuItem[] = [];
     private menuRepository?: IMenuRepository;
     private orderRepository?: IOrderRepository;
+    private conversationRepo: ConversationRepository;
     private onOrderCreated?: (order: any) => Promise<string | void>; // Retorna el ID del pedido
     private config: ChatbotConfig | null = null;
     private cleanupInterval?: NodeJS.Timeout;
     private manualModeTimeoutMs: number = 30 * 60 * 1000; // 30 minutos timeout para modo manual
+    private persistenceEnabled: boolean = true; // Flag para habilitar/deshabilitar persistencia
 
     constructor() {
         this.client = getWhatsAppClient();
+        this.conversationRepo = getConversationRepository();
         this.loadConfig();
+        this.loadPersistedConversations(); // Cargar conversaciones de BD al iniciar
         this.startCleanupScheduler();
+    }
+
+    /**
+     * Carga conversaciones persistidas de la base de datos al iniciar
+     */
+    private async loadPersistedConversations(): Promise<void> {
+        try {
+            const persistedConversations = await this.conversationRepo.loadAll();
+
+            for (const [phone, state] of persistedConversations.entries()) {
+                // Convertir el estado persistido al formato interno
+                const internalState: ConversationState = {
+                    step: state.step,
+                    items: state.items,
+                    customerName: state.customerName,
+                    customerAddress: state.customerAddress,
+                    lastActivity: state.lastActivity,
+                    lastOrderId: state.lastOrderId,
+                    manualMode: state.manualMode,
+                    manualModeStartedAt: state.manualModeStartedAt,
+                    customerLocation: state.customerLocation,
+                    deliveryDistance: state.deliveryDistance,
+                    deliveryCost: state.deliveryCost,
+                    // menuIndexMap se reconstruirá cuando el cliente pida el menú
+                };
+                this.conversations.set(phone, internalState);
+            }
+
+            logger.info('[WhatsAppChatbot] Loaded persisted conversations', {
+                count: this.conversations.size
+            });
+        } catch (error) {
+            logger.error('[WhatsAppChatbot] Error loading persisted conversations', { error });
+        }
+    }
+
+    /**
+     * Persiste el estado de una conversación en la BD
+     */
+    private async persistConversation(phone: string, state: ConversationState): Promise<void> {
+        if (!this.persistenceEnabled) return;
+
+        try {
+            // Normalizar phone para almacenamiento (sin @c.us)
+            const phoneClean = phone.replace('@c.us', '');
+
+            const persistedState: PersistedConversationState = {
+                phone: phoneClean,
+                step: state.step,
+                items: state.items,
+                customerName: state.customerName,
+                customerAddress: state.customerAddress,
+                lastActivity: state.lastActivity,
+                lastOrderId: state.lastOrderId,
+                manualMode: state.manualMode,
+                manualModeStartedAt: state.manualModeStartedAt,
+                customerLocation: state.customerLocation,
+                deliveryDistance: state.deliveryDistance,
+                deliveryCost: state.deliveryCost,
+            };
+
+            await this.conversationRepo.upsert(persistedState);
+        } catch (error) {
+            logger.error('[WhatsAppChatbot] Error persisting conversation', { phone, error });
+        }
     }
 
     /**
@@ -194,6 +300,164 @@ export class WhatsAppChatbot {
     }
 
     /**
+     * Verifica si estamos dentro del horario de atención
+     * Considera la zona horaria configurada (por defecto America/Guayaquil)
+     */
+    public checkBusinessHours(): BusinessHoursResult {
+        const schedule = this.config?.schedule;
+
+        // Si no hay horarios configurados o está deshabilitado, siempre abierto
+        if (!schedule?.enabled || !schedule?.days || schedule.days.length === 0) {
+            return {
+                isOpen: true,
+                currentDay: '',
+                currentTime: ''
+            };
+        }
+
+        const timezone = schedule.timezone || 'America/Guayaquil';
+        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+        // Obtener fecha/hora actual en la zona horaria configurada
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('es-EC', {
+            timeZone: timezone,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            weekday: 'long'
+        });
+
+        const parts = formatter.formatToParts(now);
+        const weekdayPart = parts.find(p => p.type === 'weekday')?.value || '';
+        const hourPart = parts.find(p => p.type === 'hour')?.value || '00';
+        const minutePart = parts.find(p => p.type === 'minute')?.value || '00';
+
+        const currentTime = `${hourPart}:${minutePart}`;
+        const currentDayIndex = this.getDayIndexFromSpanish(weekdayPart);
+        const currentDayName = dayNames[currentDayIndex];
+
+        // Buscar configuración del día actual
+        const todaySchedule = schedule.days.find((d: ScheduleDay) => d.dayOfWeek === currentDayIndex);
+
+        if (!todaySchedule || !todaySchedule.isOpen) {
+            // Día cerrado - buscar próximo día abierto
+            const nextOpen = this.findNextOpenDay(schedule.days, currentDayIndex);
+            return {
+                isOpen: false,
+                currentDay: currentDayName,
+                currentTime,
+                nextOpenDay: nextOpen?.dayName,
+                nextOpenTime: nextOpen?.openTime,
+                closedMessage: this.formatClosedMessage(schedule, dayNames)
+            };
+        }
+
+        // Verificar hora de apertura y cierre
+        const openTime = todaySchedule.openTime || '08:00';
+        const closeTime = todaySchedule.closeTime || '22:00';
+
+        const isWithinHours = this.isTimeInRange(currentTime, openTime, closeTime);
+
+        if (!isWithinHours) {
+            // Fuera de horario hoy
+            const beforeOpen = currentTime < openTime;
+            return {
+                isOpen: false,
+                currentDay: currentDayName,
+                currentTime,
+                nextOpenDay: beforeOpen ? currentDayName : this.findNextOpenDay(schedule.days, currentDayIndex)?.dayName,
+                nextOpenTime: beforeOpen ? openTime : this.findNextOpenDay(schedule.days, currentDayIndex)?.openTime,
+                closedMessage: this.formatClosedMessage(schedule, dayNames)
+            };
+        }
+
+        return {
+            isOpen: true,
+            currentDay: currentDayName,
+            currentTime
+        };
+    }
+
+    /**
+     * Convierte nombre de día en español a índice (0-6)
+     */
+    private getDayIndexFromSpanish(dayName: string): number {
+        const lowerDay = dayName.toLowerCase();
+        const days: Record<string, number> = {
+            'domingo': 0,
+            'lunes': 1,
+            'martes': 2,
+            'miércoles': 3,
+            'jueves': 4,
+            'viernes': 5,
+            'sábado': 6
+        };
+        return days[lowerDay] ?? 0;
+    }
+
+    /**
+     * Verifica si una hora está dentro de un rango
+     */
+    private isTimeInRange(current: string, open: string, close: string): boolean {
+        // Convertir a minutos para comparar fácilmente
+        const toMinutes = (time: string): number => {
+            const [h, m] = time.split(':').map(Number);
+            return h * 60 + m;
+        };
+
+        const currentMins = toMinutes(current);
+        const openMins = toMinutes(open);
+        const closeMins = toMinutes(close);
+
+        // Caso normal: apertura antes de cierre (ej: 08:00 - 22:00)
+        if (openMins <= closeMins) {
+            return currentMins >= openMins && currentMins <= closeMins;
+        }
+
+        // Caso especial: cierre después de medianoche (ej: 20:00 - 02:00)
+        return currentMins >= openMins || currentMins <= closeMins;
+    }
+
+    /**
+     * Encuentra el próximo día abierto
+     */
+    private findNextOpenDay(days: ScheduleDay[], currentDayIndex: number): ScheduleDay | undefined {
+        // Buscar en los próximos 7 días
+        for (let i = 1; i <= 7; i++) {
+            const checkDay = (currentDayIndex + i) % 7;
+            const daySchedule = days.find(d => d.dayOfWeek === checkDay);
+            if (daySchedule?.isOpen) {
+                return daySchedule;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Formatea el mensaje de cerrado con el horario
+     */
+    private formatClosedMessage(schedule: any, dayNames: string[]): string {
+        let template = schedule.closedMessage ||
+            '¡Hola! Gracias por escribirnos.\n\nEn este momento estamos *fuera de horario de atención*.\n\n🕐 Nuestro horario es:\n{schedule}\n\n¡Te esperamos!';
+
+        // Generar texto del horario
+        let scheduleText = '';
+        if (schedule.days && schedule.days.length > 0) {
+            const sortedDays = [...schedule.days].sort((a: ScheduleDay, b: ScheduleDay) => a.dayOfWeek - b.dayOfWeek);
+            for (const day of sortedDays) {
+                if (day.isOpen) {
+                    scheduleText += `• *${day.dayName}*: ${day.openTime} - ${day.closeTime}\n`;
+                } else {
+                    scheduleText += `• *${day.dayName}*: Cerrado\n`;
+                }
+            }
+        }
+
+        return template.replace('{schedule}', scheduleText.trim());
+    }
+
+    /**
      * Configura el repositorio de menu para cargar productos dinamicamente
      */
     public setMenuRepository(repository: IMenuRepository): void {
@@ -233,7 +497,8 @@ export class WhatsAppChatbot {
                 name: item.name,
                 price: item.price,
                 category: item.category,
-                description: item.description
+                description: item.description,
+                imageUrl: item.imageUrl
             }));
 
             logger.info('[WhatsAppChatbot] Menu loaded from database', {
@@ -342,6 +607,41 @@ export class WhatsAppChatbot {
 
         logger.info('[WhatsAppChatbot] Processing message', { from, normalizedFrom, type, text: text?.substring(0, 50) });
 
+        // ═══════════════════════════════════════════════════════════════════
+        // VERIFICACIÓN DE HORARIO DE ATENCIÓN
+        // ═══════════════════════════════════════════════════════════════════
+        const businessHours = this.checkBusinessHours();
+        if (!businessHours.isOpen) {
+            const schedule = this.config?.schedule;
+
+            logger.info('[WhatsAppChatbot] Outside business hours', {
+                from: normalizedFrom,
+                currentDay: businessHours.currentDay,
+                currentTime: businessHours.currentTime
+            });
+
+            // Enviar mensaje de horario cerrado
+            await this.getClientOrThrow().sendText(from, businessHours.closedMessage ||
+                '⏰ Estamos fuera de horario de atención. ¡Te esperamos pronto!'
+            );
+
+            // Si permite mensajes cuando está cerrado, guardar el mensaje y confirmar
+            if (schedule?.allowMessagesWhenClosed && text) {
+                const confirmMsg = schedule.messageReceivedWhenClosed ||
+                    'Hemos recibido tu mensaje. Te responderemos cuando abramos. ¡Gracias!';
+                await this.getClientOrThrow().sendText(from, `✅ ${confirmMsg}`);
+
+                // Registrar el mensaje recibido fuera de horario
+                logger.info('[WhatsAppChatbot] Message received outside hours', {
+                    from: normalizedFrom,
+                    text: text.substring(0, 100)
+                });
+            }
+
+            return; // No procesar más
+        }
+        // ═══════════════════════════════════════════════════════════════════
+
         // Get or create conversation state (usar número normalizado)
         let state = this.conversations.get(normalizedFrom);
         if (!state) {
@@ -371,6 +671,7 @@ export class WhatsAppChatbot {
                 );
                 await this.sendWelcome(from);
                 this.conversations.set(normalizedFrom, state);
+                await this.persistConversation(normalizedFrom, state);
                 return;
             }
             // Si no es comando de salida, no responder (modo manual activo)
@@ -382,6 +683,21 @@ export class WhatsAppChatbot {
         if (state.step === 'WAITING_PAYMENT' && type === 'image') {
             await this.confirmTransferPayment(from, state);
             this.conversations.set(normalizedFrom, state);
+            await this.persistConversation(normalizedFrom, state);
+            return;
+        }
+
+        // Si recibimos ubicación, procesarla
+        if (type === 'location' && message.latitude !== undefined && message.longitude !== undefined) {
+            await this.handleLocationMessage(
+                from,
+                message.latitude,
+                message.longitude,
+                message.locationAddress,
+                state
+            );
+            this.conversations.set(normalizedFrom, state);
+            await this.persistConversation(normalizedFrom, state);
             return;
         }
 
@@ -394,8 +710,9 @@ export class WhatsAppChatbot {
             await this.handleTextMessage(from, text.toLowerCase().trim(), state);
         }
 
-        // Save state (usar número normalizado)
+        // Save state (usar número normalizado) y persistir a BD
         this.conversations.set(normalizedFrom, state);
+        await this.persistConversation(normalizedFrom, state);
     }
 
     /**
@@ -408,6 +725,7 @@ export class WhatsAppChatbot {
         const orderKeywords = ['pedir', 'ordenar', 'quiero', 'pedido'];
         const statusKeywords = ['estado', 'mi pedido', 'donde esta', 'rastrear'];
         const cancelKeywords = ['cancelar', 'no quiero', 'salir', 'terminar'];
+        const historyKeywords = ['historial', 'mis pedidos', 'pedidos anteriores', 'compras'];
 
         // ========================================================
         // DETECTAR PEDIDOS DESDE LA PÁGINA WEB
@@ -439,9 +757,9 @@ export class WhatsAppChatbot {
             return;
         }
 
-        // Si está en IDLE y escribe un número (1, 2, 3, 4), es selección del menú de bienvenida
+        // Si está en IDLE y escribe un número (1, 2, 3, 4, 5), es selección del menú de bienvenida
         if (state.step === 'IDLE') {
-            // Opciones del menú de bienvenida: 1=Ver Menú, 2=Hacer Pedido, 3=Mi Pedido, 4=Hablar con persona
+            // Opciones del menú de bienvenida: 1=Ver Menú, 2=Hacer Pedido, 3=Mi Pedido, 4=Historial, 5=Hablar con persona
             if (text === '1') {
                 await this.sendMenu(from, state);
                 state.step = 'SHOWING_MENU';
@@ -455,6 +773,9 @@ export class WhatsAppChatbot {
                 await this.sendOrderStatus(from);
                 return;
             } else if (text === '4') {
+                await this.sendOrderHistory(from);
+                return;
+            } else if (text === '5') {
                 // Activar modo manual - hablar con persona real
                 await this.activateHumanSupport(from, state);
                 return;
@@ -476,8 +797,7 @@ export class WhatsAppChatbot {
         // Saludos siempre reinician la conversación
         if (greetings.some(g => text.includes(g))) {
             await this.sendWelcome(from);
-            state.step = 'IDLE';
-            state.items = [];
+            this.resetConversation(state);
             return;
         }
 
@@ -498,26 +818,99 @@ export class WhatsAppChatbot {
             return;
         }
 
+        if (historyKeywords.some(k => text.includes(k))) {
+            await this.sendOrderHistory(from);
+            return;
+        }
+
         if (cancelKeywords.some(k => text.includes(k))) {
-            state.step = 'IDLE';
-            state.items = [];
+            this.resetConversation(state);
             const cancelMsg = this.config?.messages?.orderCancelled || 'Pedido cancelado. Escribe "Hola" para comenzar de nuevo.';
             await this.getClientOrThrow().sendText(from, `❌ ${cancelMsg}`);
             return;
+        }
+
+        // Comandos de edición de carrito (eliminar, cambiar cantidad, ver carrito)
+        // Solo en pasos donde tiene sentido editar el carrito
+        if (state.step === 'SELECTING_ITEMS' || state.step === 'SHOWING_MENU' || state.step === 'IDLE') {
+            const handled = await this.handleCartEditCommand(from, text, state);
+            if (handled) {
+                return;
+            }
+        }
+
+        // Comando para ver detalle de producto con imagen ("ver 1", "detalle 2", "foto 3")
+        if (state.step === 'SELECTING_ITEMS' || state.step === 'SHOWING_MENU') {
+            const handled = await this.handleProductDetailCommand(from, text, state);
+            if (handled) {
+                return;
+            }
         }
 
         // Handle based on current step
         switch (state.step) {
             case 'WAITING_NAME':
                 state.customerName = text;
-                state.step = 'WAITING_ADDRESS';
-                const askAddressMsg = this.config?.messages?.askAddress || '¿Cuál es tu dirección para el delivery?';
-                await this.getClientOrThrow().sendText(from, `✅ Gracias ${text}!\n\n📍 ${askAddressMsg}`);
+
+                // Si la ubicación está habilitada, solicitar ubicación GPS primero
+                if (this.isLocationEnabled()) {
+                    state.step = 'WAITING_LOCATION';
+                    await this.getClientOrThrow().sendText(from,
+                        `✅ Gracias ${text}!\n\n` +
+                        `📍 *Para calcular el costo del delivery, necesitamos tu ubicación.*\n\n` +
+                        `Por favor, envía tu ubicación usando el botón 📎 → 📍 Ubicación de WhatsApp.\n\n` +
+                        `_O escribe "texto" si prefieres escribir tu dirección manualmente._`
+                    );
+                } else {
+                    state.step = 'WAITING_ADDRESS';
+                    const askAddressMsg = this.config?.messages?.askAddress || '¿Cuál es tu dirección para el delivery?';
+                    await this.getClientOrThrow().sendText(from, `✅ Gracias ${text}!\n\n📍 ${askAddressMsg}`);
+                }
+                break;
+
+            case 'WAITING_LOCATION':
+                // El cliente escribe texto en lugar de enviar ubicación
+                if (text === 'texto' || text === 'manual' || text === 'escribir') {
+                    // Quiere escribir la dirección manualmente
+                    state.step = 'WAITING_ADDRESS';
+                    await this.getClientOrThrow().sendText(from,
+                        `📝 *Ingreso manual de dirección*\n\n` +
+                        `Por favor, escribe tu dirección completa para el delivery:`
+                    );
+                } else if (text === 'local' || text === 'recoger' || text === 'retiro') {
+                    // Quiere recoger en el local (fuera de cobertura o preferencia)
+                    state.customerAddress = 'RETIRO EN LOCAL';
+                    state.deliveryCost = 0;
+                    state.deliveryDistance = 0;
+                    await this.confirmOrder(from, state);
+                } else if (text === 'cancelar' || text === 'no' || text === 'salir') {
+                    this.resetConversation(state);
+                    const cancelMsg = this.config?.messages?.orderCancelled || 'Pedido cancelado. Escribe "Hola" para comenzar de nuevo.';
+                    await this.getClientOrThrow().sendText(from, `❌ ${cancelMsg}`);
+                } else {
+                    // No entendió - recordarle que envíe ubicación
+                    await this.getClientOrThrow().sendText(from,
+                        `❓ Por favor envía tu ubicación usando:\n` +
+                        `📎 → 📍 Ubicación\n\n` +
+                        `O escribe:\n` +
+                        `• *"texto"* - para escribir tu dirección\n` +
+                        `• *"local"* - para recoger en el restaurante\n` +
+                        `• *"cancelar"* - para cancelar el pedido`
+                    );
+                }
                 break;
 
             case 'WAITING_ADDRESS':
-                state.customerAddress = text;
-                await this.confirmOrder(from, state);
+                // Si ya tiene ubicación y escribe "ok", usar la dirección de la ubicación
+                if ((text === 'ok' || text === 'si' || text === 'sí' || text === 'confirmar') && state.customerLocation) {
+                    state.customerAddress = state.customerLocation.address ||
+                        `GPS: ${state.customerLocation.latitude.toFixed(6)}, ${state.customerLocation.longitude.toFixed(6)}`;
+                    await this.confirmOrder(from, state);
+                } else {
+                    // Guardar la dirección escrita
+                    state.customerAddress = text;
+                    await this.confirmOrder(from, state);
+                }
                 break;
 
             case 'WAITING_FINAL_CONFIRM':
@@ -525,10 +918,7 @@ export class WhatsAppChatbot {
                 if (text === 'si' || text === 'sí' || text === 'confirmar' || text === 'ok') {
                     await this.createOrder(from, state);
                 } else if (text === 'no' || text === 'cancelar') {
-                    state.step = 'IDLE';
-                    state.items = [];
-                    state.customerName = undefined;
-                    state.customerAddress = undefined;
+                    this.resetConversation(state);
                     const cancelMsg = this.config?.messages?.orderCancelled || 'Pedido cancelado. Escribe "Hola" para comenzar de nuevo.';
                     await this.getClientOrThrow().sendText(from, `❌ ${cancelMsg}`);
                 } else {
@@ -621,8 +1011,7 @@ export class WhatsAppChatbot {
                 break;
 
             case 'CANCEL_ORDER':
-                state.step = 'IDLE';
-                state.items = [];
+                this.resetConversation(state);
                 const cancelMsgBtn = this.config?.messages?.orderCancelled || 'Pedido cancelado. Escribe "Hola" para comenzar de nuevo.';
                 await this.getClientOrThrow().sendText(from, `❌ ${cancelMsgBtn}`);
                 break;
@@ -679,7 +1068,8 @@ export class WhatsAppChatbot {
             `*1️⃣ Ver Menú* - Conoce nuestros productos\n` +
             `*2️⃣ Hacer Pedido* - Ordena ahora\n` +
             `*3️⃣ Mi Pedido* - Consulta el estado\n` +
-            `*4️⃣ Hablar con Persona* - Atención personalizada\n` +
+            `*4️⃣ Historial* - Tus pedidos anteriores\n` +
+            `*5️⃣ Hablar con Persona* - Atención personalizada\n` +
             `━━━━━━━━━━━━━━━━━━━━\n\n` +
             `_Responde con el número de tu opción_`
         );
@@ -698,6 +1088,12 @@ export class WhatsAppChatbot {
         state.step = 'MANUAL';
 
         logger.info('[WhatsAppChatbot] Human support activated by customer', { from: normalizedFrom });
+
+        // Notificar al panel de admin via WebSocket
+        whatsAppSocketManager.notifyHumanSupportRequested(
+            normalizedFrom.replace('@c.us', ''),
+            state.customerName
+        );
 
         // Enviar mensaje al cliente
         await this.getClientOrThrow().sendText(from,
@@ -747,6 +1143,7 @@ export class WhatsAppChatbot {
         menuText += `📝 *¿Cómo ordenar?*\n`;
         menuText += `• Escribe el *número* del producto (ej: "1")\n`;
         menuText += `• O escribe cantidad + número (ej: "2 del 1")\n`;
+        menuText += `• *"ver X"* - Ver foto del producto #X\n`;
         menuText += `• Escribe *"Listo"* cuando termines`;
 
         // Guardar mapa en el estado de la conversacion
@@ -905,6 +1302,86 @@ export class WhatsAppChatbot {
     }
 
     /**
+     * Envía el historial de pedidos del cliente
+     */
+    private async sendOrderHistory(from: string): Promise<void> {
+        if (!this.orderRepository || !this.conversationRepo) {
+            await this.getClientOrThrow().sendText(from,
+                '📋 *Historial de pedidos*\n\n' +
+                'El historial no está disponible en este momento.\n\n' +
+                '_Escribe *Hola* para hacer un nuevo pedido._'
+            );
+            return;
+        }
+
+        try {
+            const phoneClean = from.replace('@c.us', '');
+
+            // Obtener IDs de pedidos del historial persistido
+            const orderIds = await this.conversationRepo.getOrderHistory(phoneClean);
+
+            // También buscar por nombre en caso de que haya pedidos antiguos
+            const allOrders = await this.orderRepository.findAll();
+            const userOrders = allOrders
+                .filter(o =>
+                    orderIds.includes(o.id) ||
+                    o.customerName.includes(`[WhatsApp: ${phoneClean}]`)
+                )
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .slice(0, 10); // Últimos 10 pedidos
+
+            if (userOrders.length === 0) {
+                await this.getClientOrThrow().sendText(from,
+                    '📋 *Historial de pedidos*\n\n' +
+                    'No tienes pedidos anteriores registrados.\n\n' +
+                    '_Escribe *Hola* para hacer tu primer pedido._'
+                );
+                return;
+            }
+
+            let message = `📋 *TU HISTORIAL DE PEDIDOS*\n`;
+            message += `━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+            for (let i = 0; i < userOrders.length; i++) {
+                const order = userOrders[i];
+                const date = new Date(order.createdAt);
+                const dateStr = date.toLocaleDateString('es-EC', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric'
+                });
+                const statusEmoji = this.getStatusEmoji(order.status);
+
+                message += `*${i + 1}. Pedido del ${dateStr}*\n`;
+                message += `   ${statusEmoji} ${this.getStatusText(order.status)}\n`;
+
+                // Mostrar items resumidos
+                const itemsSummary = order.items
+                    .map(item => `${item.quantity}x ${item.name}`)
+                    .join(', ');
+                message += `   🛒 ${itemsSummary}\n`;
+
+                // Total
+                const total = order.items.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
+                message += `   💰 Total: $${total.toFixed(2)}\n\n`;
+            }
+
+            message += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            message += `📊 Total de pedidos: ${userOrders.length}\n\n`;
+            message += `_Escribe *Hola* para hacer un nuevo pedido._`;
+
+            await this.getClientOrThrow().sendText(from, message);
+        } catch (error) {
+            logger.error('[WhatsAppChatbot] Error getting order history', { error, from });
+            await this.getClientOrThrow().sendText(from,
+                '📋 *Historial de pedidos*\n\n' +
+                'Hubo un error al obtener tu historial.\n\n' +
+                '_Escribe *Hola* para hacer un nuevo pedido._'
+            );
+        }
+    }
+
+    /**
      * Agrega item al pedido
      */
     private async addItemToOrder(from: string, itemId: string, state: ConversationState): Promise<void> {
@@ -931,19 +1408,41 @@ export class WhatsAppChatbot {
      * Muestra confirmacion del pedido y pide confirmacion final
      */
     private async confirmOrder(from: string, state: ConversationState): Promise<void> {
-        const total = this.calculateTotal(state.items);
+        const subtotal = this.calculateTotal(state.items);
+        const deliveryCost = state.deliveryCost || 0;
+        const total = subtotal + deliveryCost;
 
-        await this.getClientOrThrow().sendText(from,
-            `📋 *RESUMEN DE TU PEDIDO*\n\n` +
-            `👤 *Cliente:* ${state.customerName}\n` +
-            `📍 *Dirección:* ${state.customerAddress}\n\n` +
-            `🛒 *Productos:*\n${this.formatOrderItems(state.items)}\n\n` +
-            `━━━━━━━━━━━━━━━━━━━━\n` +
-            `💰 *TOTAL: $${total.toFixed(2)}*\n` +
-            `━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `¿Confirmas tu pedido?\n` +
-            `Escribe *Si* para confirmar o *No* para cancelar.`
-        );
+        // Construir mensaje de resumen
+        let summaryLines = [
+            `📋 *RESUMEN DE TU PEDIDO*\n`,
+            `👤 *Cliente:* ${state.customerName}`,
+            `📍 *Dirección:* ${state.customerAddress}`,
+        ];
+
+        // Agregar info de distancia si existe
+        if (state.deliveryDistance !== undefined && state.deliveryDistance > 0) {
+            summaryLines.push(`🚗 *Distancia:* ${state.deliveryDistance.toFixed(1)} km`);
+        }
+
+        summaryLines.push('');
+        summaryLines.push(`🛒 *Productos:*`);
+        summaryLines.push(this.formatOrderItems(state.items));
+        summaryLines.push('');
+        summaryLines.push(`━━━━━━━━━━━━━━━━━━━━`);
+        summaryLines.push(`💵 *Subtotal:* $${subtotal.toFixed(2)}`);
+
+        // Agregar costo de delivery si aplica
+        if (deliveryCost > 0) {
+            summaryLines.push(`🚗 *Delivery:* $${deliveryCost.toFixed(2)}`);
+        }
+
+        summaryLines.push(`💰 *TOTAL: $${total.toFixed(2)}*`);
+        summaryLines.push(`━━━━━━━━━━━━━━━━━━━━`);
+        summaryLines.push('');
+        summaryLines.push(`¿Confirmas tu pedido?`);
+        summaryLines.push(`Escribe *Si* para confirmar o *No* para cancelar.`);
+
+        await this.getClientOrThrow().sendText(from, summaryLines.join('\n'));
 
         state.step = 'WAITING_FINAL_CONFIRM';
     }
@@ -953,18 +1452,47 @@ export class WhatsAppChatbot {
      */
     private async createOrder(from: string, state: ConversationState): Promise<void> {
         try {
+            const subtotal = this.calculateTotal(state.items);
+            const deliveryCost = state.deliveryCost || 0;
+            const total = subtotal + deliveryCost;
+
+            // Determinar tipo de pedido
+            let orderType = 'Para Llevar';
+            if (state.customerAddress) {
+                if (state.customerAddress === 'RETIRO EN LOCAL') {
+                    orderType = 'Para Llevar';
+                } else {
+                    orderType = 'Delivery';
+                }
+            }
+
+            // Agregar delivery como item si tiene costo
+            const orderItems = state.items.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price
+            }));
+
+            if (deliveryCost > 0) {
+                orderItems.push({
+                    name: `Delivery (${state.deliveryDistance?.toFixed(1) || '?'} km)`,
+                    quantity: 1,
+                    price: deliveryCost
+                });
+            }
+
             const orderData = {
                 customerName: state.customerName || 'Cliente WhatsApp',
                 customerPhone: from,
-                customerAddress: state.customerAddress,
-                items: state.items.map(item => ({
-                    name: item.name,
-                    quantity: item.quantity,
-                    price: item.price
-                })),
-                total: this.calculateTotal(state.items),
-                type: state.customerAddress ? 'Delivery' : 'Para Llevar',
-                source: 'whatsapp'
+                customerAddress: state.customerAddress === 'RETIRO EN LOCAL' ? undefined : state.customerAddress,
+                items: orderItems,
+                total: total,
+                type: orderType,
+                source: 'whatsapp',
+                // Datos adicionales de ubicación
+                customerLocation: state.customerLocation,
+                deliveryDistance: state.deliveryDistance,
+                deliveryCost: deliveryCost
             };
 
             // Call the order creation callback y guardar el ID
@@ -974,13 +1502,15 @@ export class WhatsAppChatbot {
                 if (typeof result === 'string') {
                     orderId = result;
                     state.lastOrderId = orderId;
+                    // Agregar al historial de pedidos en BD
+                    const phoneClean = from.replace('@c.us', '');
+                    await this.conversationRepo.addToOrderHistory(phoneClean, orderId);
                 }
             }
 
             const estimatedTime = this.config?.estimatedDeliveryTime || '30-45 minutos';
             const confirmTemplate = this.config?.messages?.orderConfirmed || '¡PEDIDO CONFIRMADO!\n\nTiempo estimado: {estimatedTime}';
             const confirmMsg = confirmTemplate.replace('{estimatedTime}', estimatedTime);
-            const total = this.calculateTotal(state.items);
 
             // Mensaje de confirmación
             let confirmationMessage = `✅ *${confirmMsg}*\n\n` +
@@ -1150,6 +1680,9 @@ export class WhatsAppChatbot {
         state.items = [];
         state.customerName = undefined;
         state.customerAddress = undefined;
+        state.customerLocation = undefined;
+        state.deliveryDistance = undefined;
+        state.deliveryCost = undefined;
         state.lastOrderId = lastOrderId; // Mantener para consultas de estado
     }
 
@@ -1303,11 +1836,18 @@ export class WhatsAppChatbot {
     }
 
     /**
-     * Formatea items del pedido
+     * Formatea items del pedido (con números para edición)
+     * @param withNumbers Si true, incluye números para identificar items
      */
-    private formatOrderItems(items: Array<{ name: string; quantity: number; price: number }>): string {
+    private formatOrderItems(
+        items: Array<{ name: string; quantity: number; price: number }>,
+        withNumbers: boolean = false
+    ): string {
         return items
-            .map(item => `• ${item.quantity}x ${item.name} - $${(item.price * item.quantity).toFixed(2)}`)
+            .map((item, index) => {
+                const prefix = withNumbers ? `*${index + 1}.* ` : '• ';
+                return `${prefix}${item.quantity}x ${item.name} - $${(item.price * item.quantity).toFixed(2)}`;
+            })
             .join('\n');
     }
 
@@ -1318,17 +1858,482 @@ export class WhatsAppChatbot {
         return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FUNCIONES DE CARRITO (EDICIÓN Y ELIMINACIÓN)
+    // ═══════════════════════════════════════════════════════════════════════════
+
     /**
-     * Limpia conversaciones inactivas (mas de 30 min)
+     * Muestra el carrito con opciones para editar
      */
-    public cleanupInactiveConversations(): void {
+    private async showCartWithOptions(from: string, state: ConversationState): Promise<void> {
+        if (state.items.length === 0) {
+            await this.getClientOrThrow().sendText(from,
+                `🛒 *Tu carrito está vacío*\n\n` +
+                `Escribe un número del menú para agregar productos.`
+            );
+            return;
+        }
+
+        let message = `🛒 *TU CARRITO*\n\n`;
+        message += `━━━━━━━━━━━━━━━━━━━━\n`;
+        message += this.formatOrderItems(state.items, true);
+        message += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+        message += `💰 *Total: $${this.calculateTotal(state.items).toFixed(2)}*\n\n`;
+        message += `📝 *Opciones:*\n`;
+        message += `• *"eliminar X"* - Quita el producto #X\n`;
+        message += `• *"cambiar X a Y"* - Cambia cantidad del #X a Y unidades\n`;
+        message += `• *"vaciar"* - Vacía todo el carrito\n`;
+        message += `• *"listo"* - Confirmar pedido\n`;
+        message += `• Escribe un *número del menú* para agregar más`;
+
+        await this.getClientOrThrow().sendText(from, message);
+    }
+
+    /**
+     * Elimina un item del carrito por su índice
+     * @returns true si se eliminó, false si el índice no es válido
+     */
+    private removeCartItem(state: ConversationState, itemIndex: number): boolean {
+        if (itemIndex < 1 || itemIndex > state.items.length) {
+            return false;
+        }
+        state.items.splice(itemIndex - 1, 1);
+        return true;
+    }
+
+    /**
+     * Cambia la cantidad de un item en el carrito
+     * @returns true si se cambió, false si el índice o cantidad no es válida
+     */
+    private changeCartItemQuantity(state: ConversationState, itemIndex: number, newQuantity: number): boolean {
+        if (itemIndex < 1 || itemIndex > state.items.length) {
+            return false;
+        }
+        if (newQuantity < 1 || newQuantity > 99) {
+            return false;
+        }
+        state.items[itemIndex - 1].quantity = newQuantity;
+        return true;
+    }
+
+    /**
+     * Parsea comandos de edición del carrito
+     * @returns Objeto con acción y parámetros, o null si no es un comando de edición
+     */
+    private parseCartEditCommand(text: string): {
+        action: 'remove' | 'change' | 'clear' | 'cart';
+        itemIndex?: number;
+        quantity?: number;
+    } | null {
+        const textLower = text.toLowerCase().trim();
+
+        // "eliminar X" o "quitar X" o "borrar X"
+        const removeMatch = textLower.match(/^(?:eliminar|quitar|borrar)\s+(\d+)$/);
+        if (removeMatch) {
+            return { action: 'remove', itemIndex: parseInt(removeMatch[1], 10) };
+        }
+
+        // "cambiar X a Y" o "modificar X a Y" o "X=Y"
+        const changeMatch = textLower.match(/^(?:cambiar|modificar)\s+(\d+)\s+(?:a|=)\s*(\d+)$/) ||
+                           textLower.match(/^(\d+)\s*=\s*(\d+)$/);
+        if (changeMatch) {
+            return {
+                action: 'change',
+                itemIndex: parseInt(changeMatch[1], 10),
+                quantity: parseInt(changeMatch[2], 10)
+            };
+        }
+
+        // "vaciar" o "limpiar carrito"
+        if (textLower === 'vaciar' || textLower === 'limpiar' || textLower === 'vaciar carrito') {
+            return { action: 'clear' };
+        }
+
+        // "carrito" o "ver carrito" o "mi carrito"
+        if (textLower === 'carrito' || textLower === 'ver carrito' || textLower === 'mi carrito') {
+            return { action: 'cart' };
+        }
+
+        return null;
+    }
+
+    /**
+     * Maneja comandos de edición del carrito
+     * @returns true si se procesó un comando de carrito, false si no
+     */
+    private async handleCartEditCommand(
+        from: string,
+        text: string,
+        state: ConversationState
+    ): Promise<boolean> {
+        const command = this.parseCartEditCommand(text);
+        if (!command) {
+            return false;
+        }
+
+        switch (command.action) {
+            case 'cart':
+                await this.showCartWithOptions(from, state);
+                return true;
+
+            case 'remove':
+                if (!command.itemIndex) return false;
+                if (state.items.length === 0) {
+                    await this.getClientOrThrow().sendText(from, '🛒 Tu carrito está vacío.');
+                    return true;
+                }
+                if (this.removeCartItem(state, command.itemIndex)) {
+                    if (state.items.length === 0) {
+                        await this.getClientOrThrow().sendText(from,
+                            `✅ Producto eliminado.\n\n🛒 Tu carrito ahora está vacío.\n\n` +
+                            `_Escribe un número del menú para agregar productos._`
+                        );
+                    } else {
+                        await this.getClientOrThrow().sendText(from,
+                            `✅ Producto eliminado.\n\n` +
+                            `🛒 *Tu carrito:*\n${this.formatOrderItems(state.items, true)}\n\n` +
+                            `💰 *Total: $${this.calculateTotal(state.items).toFixed(2)}*`
+                        );
+                    }
+                } else {
+                    await this.getClientOrThrow().sendText(from,
+                        `❌ Número inválido. Tu carrito tiene ${state.items.length} producto(s).\n` +
+                        `Escribe *"carrito"* para ver los números.`
+                    );
+                }
+                return true;
+
+            case 'change':
+                if (!command.itemIndex || !command.quantity) return false;
+                if (state.items.length === 0) {
+                    await this.getClientOrThrow().sendText(from, '🛒 Tu carrito está vacío.');
+                    return true;
+                }
+                if (this.changeCartItemQuantity(state, command.itemIndex, command.quantity)) {
+                    const item = state.items[command.itemIndex - 1];
+                    await this.getClientOrThrow().sendText(from,
+                        `✅ Cantidad actualizada: ${command.quantity}x ${item.name}\n\n` +
+                        `🛒 *Tu carrito:*\n${this.formatOrderItems(state.items, true)}\n\n` +
+                        `💰 *Total: $${this.calculateTotal(state.items).toFixed(2)}*`
+                    );
+                } else {
+                    await this.getClientOrThrow().sendText(from,
+                        `❌ No se pudo cambiar. Verifica:\n` +
+                        `• Número de producto válido (1-${state.items.length})\n` +
+                        `• Cantidad entre 1 y 99\n\n` +
+                        `Escribe *"carrito"* para ver los productos.`
+                    );
+                }
+                return true;
+
+            case 'clear':
+                if (state.items.length === 0) {
+                    await this.getClientOrThrow().sendText(from, '🛒 Tu carrito ya está vacío.');
+                } else {
+                    state.items = [];
+                    await this.getClientOrThrow().sendText(from,
+                        `🗑️ *Carrito vaciado*\n\n` +
+                        `_Escribe un número del menú para agregar productos._`
+                    );
+                }
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FUNCIONES DE DETALLE DE PRODUCTO (IMÁGENES)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Parsea comandos para ver detalle de producto
+     * "ver 1", "detalle 1", "foto 1", "imagen 1"
+     */
+    private parseProductDetailCommand(text: string): number | null {
+        const textLower = text.toLowerCase().trim();
+        const match = textLower.match(/^(?:ver|detalle|foto|imagen)\s+(\d+)$/);
+        if (match) {
+            return parseInt(match[1], 10);
+        }
+        return null;
+    }
+
+    /**
+     * Envía detalle de un producto con imagen
+     * @returns true si se procesó el comando, false si no
+     */
+    private async handleProductDetailCommand(
+        from: string,
+        text: string,
+        state: ConversationState
+    ): Promise<boolean> {
+        const productIndex = this.parseProductDetailCommand(text);
+        if (productIndex === null) {
+            return false;
+        }
+
+        // Verificar que tenemos el mapa de menú
+        if (!state.menuIndexMap || state.menuIndexMap.size === 0) {
+            await this.getClientOrThrow().sendText(from,
+                `❌ Primero escribe *"menu"* para ver los productos.`
+            );
+            return true;
+        }
+
+        // Buscar el producto
+        const item = state.menuIndexMap.get(productIndex);
+        if (!item) {
+            await this.getClientOrThrow().sendText(from,
+                `❌ No encontré el producto #${productIndex}.\n` +
+                `Escribe un número del 1 al ${state.menuIndexMap.size}.`
+            );
+            return true;
+        }
+
+        // Construir mensaje de detalle
+        let detailMessage = `📦 *${item.name}*\n\n`;
+        detailMessage += `💵 *Precio:* $${item.price.toFixed(2)}\n`;
+        detailMessage += `📂 *Categoría:* ${item.category}\n`;
+        if (item.description) {
+            detailMessage += `\n📝 ${item.description}\n`;
+        }
+        detailMessage += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+        detailMessage += `_Escribe *"${productIndex}"* para agregar al carrito_`;
+
+        // Si tiene imagen, enviarla con el caption
+        if (item.imageUrl) {
+            try {
+                await this.getClientOrThrow().sendImage(from, item.imageUrl, detailMessage);
+                logger.info('[WhatsAppChatbot] Product image sent', { productIndex, name: item.name });
+            } catch (error) {
+                // Si falla la imagen, enviar solo texto
+                logger.error('[WhatsAppChatbot] Failed to send product image', { item: item.name, error });
+                await this.getClientOrThrow().sendText(from, detailMessage);
+            }
+        } else {
+            // Sin imagen, solo texto
+            await this.getClientOrThrow().sendText(from,
+                detailMessage + `\n\n_Este producto no tiene foto disponible_`
+            );
+        }
+
+        return true;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FUNCIONES DE UBICACIÓN Y DELIVERY
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Calcula la distancia entre dos puntos geográficos usando la fórmula de Haversine
+     * @param lat1 Latitud del punto 1
+     * @param lng1 Longitud del punto 1
+     * @param lat2 Latitud del punto 2
+     * @param lng2 Longitud del punto 2
+     * @returns Distancia en kilómetros
+     */
+    private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+        const R = 6371; // Radio de la Tierra en km
+        const dLat = this.toRadians(lat2 - lat1);
+        const dLng = this.toRadians(lng2 - lng1);
+
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c;
+
+        return Math.round(distance * 100) / 100; // Redondear a 2 decimales
+    }
+
+    /**
+     * Convierte grados a radianes
+     */
+    private toRadians(degrees: number): number {
+        return degrees * (Math.PI / 180);
+    }
+
+    /**
+     * Valida si la ubicación del cliente está dentro del área de cobertura
+     * y calcula el costo del delivery
+     * @returns Objeto con validación y costo, o null si ubicación no está configurada
+     */
+    private validateDeliveryCoverage(customerLat: number, customerLng: number): {
+        isValid: boolean;
+        distance: number;
+        deliveryCost: number;
+        message?: string;
+    } | null {
+        const locationConfig = this.config?.location;
+
+        // Si no hay configuración de ubicación o no está habilitada, retornar null
+        if (!locationConfig || !locationConfig.enabled) {
+            return null;
+        }
+
+        const businessLat = locationConfig.businessLocation.lat;
+        const businessLng = locationConfig.businessLocation.lng;
+
+        // Calcular distancia
+        const distance = this.calculateDistance(
+            customerLat,
+            customerLng,
+            businessLat,
+            businessLng
+        );
+
+        logger.info('[WhatsAppChatbot] Distance calculated', {
+            customerLat,
+            customerLng,
+            businessLat,
+            businessLng,
+            distance,
+            maxRadius: locationConfig.maxDeliveryRadiusKm
+        });
+
+        // Verificar si está dentro del radio
+        if (distance > locationConfig.maxDeliveryRadiusKm) {
+            // Fuera de cobertura
+            const message = (locationConfig.outOfRangeMessage ||
+                'Lo sentimos, tu ubicación está fuera de nuestra área de cobertura ({distance}km). Nuestro radio máximo es de {maxRadius}km.')
+                .replace('{distance}', distance.toFixed(1))
+                .replace('{maxRadius}', locationConfig.maxDeliveryRadiusKm.toString());
+
+            return {
+                isValid: false,
+                distance,
+                deliveryCost: 0,
+                message
+            };
+        }
+
+        // Calcular costo de delivery
+        let deliveryCost = distance * locationConfig.costPerKm;
+
+        // Aplicar costo mínimo si es necesario
+        if (deliveryCost < locationConfig.minDeliveryCost) {
+            deliveryCost = locationConfig.minDeliveryCost;
+        }
+
+        // Redondear a 2 decimales
+        deliveryCost = Math.round(deliveryCost * 100) / 100;
+
+        return {
+            isValid: true,
+            distance,
+            deliveryCost
+        };
+    }
+
+    /**
+     * Verifica si la funcionalidad de ubicación está habilitada
+     */
+    private isLocationEnabled(): boolean {
+        return this.config?.location?.enabled === true;
+    }
+
+    /**
+     * Maneja el mensaje de ubicación recibido del cliente
+     */
+    private async handleLocationMessage(
+        from: string,
+        latitude: number,
+        longitude: number,
+        locationAddress: string | undefined,
+        state: ConversationState
+    ): Promise<void> {
+        logger.info('[WhatsAppChatbot] Processing location message', {
+            from,
+            latitude,
+            longitude,
+            currentStep: state.step
+        });
+
+        // Solo procesar si estamos esperando la ubicación
+        if (state.step !== 'WAITING_LOCATION') {
+            // Si envía ubicación en otro momento, ignorar pero agradecer
+            await this.getClientOrThrow().sendText(from,
+                '📍 Ubicación recibida.\n\n' +
+                'Para usarla en tu pedido, primero agrega productos al carrito y continúa con el proceso de compra.'
+            );
+            return;
+        }
+
+        // Validar cobertura
+        const coverageResult = this.validateDeliveryCoverage(latitude, longitude);
+
+        if (!coverageResult) {
+            // La ubicación no está configurada - no debería llegar aquí
+            logger.error('[WhatsAppChatbot] Location validation failed - config not found');
+            state.step = 'WAITING_ADDRESS';
+            await this.getClientOrThrow().sendText(from,
+                '⚠️ Hubo un problema validando tu ubicación.\n\n' +
+                '📝 Por favor, escribe tu dirección manualmente:'
+            );
+            return;
+        }
+
+        if (!coverageResult.isValid) {
+            // Fuera del área de cobertura
+            await this.getClientOrThrow().sendText(from,
+                `❌ *Fuera de área de cobertura*\n\n` +
+                `📍 ${coverageResult.message}\n\n` +
+                `¿Deseas continuar con recogida en local? Escribe *"local"* o *"cancelar"* para terminar.`
+            );
+            // Mantener en WAITING_LOCATION para que pueda reintentar o cambiar a local
+            return;
+        }
+
+        // Dentro de cobertura - guardar datos
+        state.customerLocation = {
+            latitude,
+            longitude,
+            address: locationAddress
+        };
+        state.deliveryDistance = coverageResult.distance;
+        state.deliveryCost = coverageResult.deliveryCost;
+
+        // Mostrar confirmación con costo de delivery
+        await this.getClientOrThrow().sendText(from,
+            `✅ *Ubicación recibida*\n\n` +
+            `📍 Distancia: ${coverageResult.distance.toFixed(1)} km\n` +
+            `🚗 Costo de delivery: $${coverageResult.deliveryCost.toFixed(2)}\n\n` +
+            (locationAddress ? `📮 Dirección: ${locationAddress}\n\n` : '') +
+            `Si la dirección no es correcta, escríbela a continuación.\n` +
+            `Si está correcta, escribe *"ok"* para continuar.`
+        );
+
+        // Cambiar a WAITING_ADDRESS para que pueda corregir o confirmar
+        state.step = 'WAITING_ADDRESS';
+    }
+
+    /**
+     * Limpia conversaciones inactivas (mas de 30 min) de memoria
+     * También limpia conversaciones inactivas de la BD (>60 min, solo IDLE sin historial)
+     */
+    public async cleanupInactiveConversations(): Promise<void> {
         const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
+        // Limpiar de memoria local
         for (const [phone, state] of this.conversations.entries()) {
             if (state.lastActivity < thirtyMinutesAgo) {
                 this.conversations.delete(phone);
-                logger.info('[WhatsAppChatbot] Cleaned up inactive conversation', { phone });
+                logger.info('[WhatsAppChatbot] Cleaned up inactive conversation from memory', { phone });
             }
+        }
+
+        // Limpiar de BD (conversaciones IDLE sin historial de pedidos, >60 min de inactividad)
+        try {
+            const deletedCount = await this.conversationRepo.cleanupInactive(60);
+            if (deletedCount > 0) {
+                logger.info('[WhatsAppChatbot] Cleaned up inactive conversations from DB', { deletedCount });
+            }
+        } catch (error) {
+            logger.error('[WhatsAppChatbot] Error cleaning up DB conversations', { error });
         }
     }
 
@@ -1357,7 +2362,7 @@ export class WhatsAppChatbot {
      * Activa modo manual para una conversación (el admin toma control)
      * El chatbot dejará de responder automáticamente
      */
-    public setManualMode(phone: string, enabled: boolean): boolean {
+    public async setManualMode(phone: string, enabled: boolean): Promise<boolean> {
         const normalizedPhone = this.normalizePhone(phone);
         logger.info('[WhatsAppChatbot] setManualMode called', { phone, normalizedPhone, enabled });
 
@@ -1373,6 +2378,7 @@ export class WhatsAppChatbot {
                 manualModeStartedAt: new Date()
             };
             this.conversations.set(normalizedPhone, state);
+            await this.persistConversation(normalizedPhone, state);
             logger.info('[WhatsAppChatbot] Manual mode enabled (new conversation)', { normalizedPhone });
             return true;
         }
@@ -1388,6 +2394,7 @@ export class WhatsAppChatbot {
                 state.step = 'IDLE';
                 logger.info('[WhatsAppChatbot] Manual mode disabled, returning to IDLE', { normalizedPhone });
             }
+            await this.persistConversation(normalizedPhone, state);
             return true;
         }
 
@@ -1401,6 +2408,7 @@ export class WhatsAppChatbot {
                 manualModeStartedAt: new Date()
             };
             this.conversations.set(normalizedPhone, state);
+            await this.persistConversation(normalizedPhone, state);
             logger.info('[WhatsAppChatbot] Manual mode enabled (created new)', { normalizedPhone });
             return true;
         }
@@ -1434,6 +2442,149 @@ export class WhatsAppChatbot {
         }
 
         return result;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NOTIFICACIONES PROACTIVAS DE ESTADO
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Envía notificación proactiva cuando cambia el estado de un pedido
+     * Llamar desde UpdateOrder o desde el controller de órdenes
+     */
+    public async notifyOrderStatusChange(
+        orderId: string,
+        customerPhone: string,
+        oldStatus: string,
+        newStatus: string,
+        orderItems?: Array<{ name: string; quantity: number }>
+    ): Promise<boolean> {
+        if (!this.client) {
+            logger.warn('[WhatsAppChatbot] Cannot send notification - client not available');
+            return false;
+        }
+
+        try {
+            // Limpiar el número de teléfono
+            let phone = customerPhone.replace('@c.us', '');
+            // Limpiar cualquier formato WhatsApp adicional
+            phone = phone.replace('[WhatsApp: ', '').replace(']', '');
+
+            // Si el teléfono empieza con 0 (Ecuador local), convertir
+            if (phone.startsWith('09') && phone.length === 10) {
+                phone = '593' + phone.substring(1);
+            }
+
+            let message = '';
+
+            switch (newStatus) {
+                case 'Listo':
+                    message = `🎉 *¡Tu pedido está LISTO!*\n\n`;
+                    message += `━━━━━━━━━━━━━━━━━━━━\n`;
+                    if (orderItems && orderItems.length > 0) {
+                        message += `🛒 *Tu pedido:*\n`;
+                        for (const item of orderItems) {
+                            message += `   • ${item.quantity}x ${item.name}\n`;
+                        }
+                        message += `━━━━━━━━━━━━━━━━━━━━\n`;
+                    }
+                    message += `\n✅ Puedes pasar a recogerlo o está en camino.\n`;
+                    message += `\n_¡Gracias por tu preferencia!_`;
+                    break;
+
+                case 'Completado':
+                    message = `✔️ *Pedido entregado*\n\n`;
+                    message += `¡Gracias por tu compra!\n\n`;
+                    message += `⭐ Si te gustó nuestro servicio, compártelo con tus amigos.\n\n`;
+                    message += `_Escribe *Hola* para hacer un nuevo pedido._`;
+                    break;
+
+                case 'Nuevo':
+                    // Notificar si se agregaron items adicionales o se reactivó
+                    if (oldStatus === 'Listo' || oldStatus === 'Completado') {
+                        message = `🔄 *Actualización de tu pedido*\n\n`;
+                        message += `Se han agregado más productos a tu pedido.\n`;
+                        message += `Estamos preparándolo nuevamente.\n\n`;
+                        message += `_Te avisaremos cuando esté listo._`;
+                    }
+                    break;
+
+                default:
+                    // No enviar notificación para otros estados
+                    return true;
+            }
+
+            if (message) {
+                await this.client.sendText(phone, message);
+                logger.info('[WhatsAppChatbot] Order status notification sent', {
+                    orderId,
+                    phone,
+                    oldStatus,
+                    newStatus
+                });
+                return true;
+            }
+
+            return true;
+        } catch (error) {
+            logger.error('[WhatsAppChatbot] Error sending order status notification', {
+                orderId,
+                customerPhone,
+                newStatus,
+                error
+            });
+            return false;
+        }
+    }
+
+    /**
+     * Envía notificación con tiempo estimado de entrega
+     * Llamar cuando el admin establece un tiempo estimado
+     */
+    public async notifyEstimatedTime(
+        customerPhone: string,
+        estimatedMinutes: number,
+        orderItems?: Array<{ name: string; quantity: number }>
+    ): Promise<boolean> {
+        if (!this.client) {
+            logger.warn('[WhatsAppChatbot] Cannot send notification - client not available');
+            return false;
+        }
+
+        try {
+            let phone = customerPhone.replace('@c.us', '');
+            phone = phone.replace('[WhatsApp: ', '').replace(']', '');
+
+            if (phone.startsWith('09') && phone.length === 10) {
+                phone = '593' + phone.substring(1);
+            }
+
+            let message = `⏱️ *Actualización de tu pedido*\n\n`;
+            message += `━━━━━━━━━━━━━━━━━━━━\n`;
+            if (orderItems && orderItems.length > 0) {
+                message += `🛒 *Tu pedido:*\n`;
+                for (const item of orderItems) {
+                    message += `   • ${item.quantity}x ${item.name}\n`;
+                }
+                message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+            }
+            message += `🕐 *Tiempo estimado: ${estimatedMinutes} minutos*\n\n`;
+            message += `_Te avisaremos cuando esté listo._`;
+
+            await this.client.sendText(phone, message);
+            logger.info('[WhatsAppChatbot] Estimated time notification sent', {
+                phone,
+                estimatedMinutes
+            });
+            return true;
+        } catch (error) {
+            logger.error('[WhatsAppChatbot] Error sending estimated time notification', {
+                customerPhone,
+                estimatedMinutes,
+                error
+            });
+            return false;
+        }
     }
 }
 
