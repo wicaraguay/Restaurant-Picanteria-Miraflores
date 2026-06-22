@@ -72,6 +72,39 @@ export interface PaymentInfo {
     banks: BankAccount[];
 }
 
+export interface ScheduleDay {
+    dayOfWeek: number;
+    dayName: string;
+    isOpen: boolean;
+    openTime: string;
+    closeTime: string;
+}
+
+export interface Schedule {
+    enabled: boolean;
+    timezone: string;
+    days: ScheduleDay[];
+    closedMessage: string;
+    allowMessagesWhenClosed: boolean;
+    messageReceivedWhenClosed: string;
+}
+
+export interface BusinessLocation {
+    lat: number;
+    lng: number;
+    address: string;
+}
+
+export interface LocationConfig {
+    enabled: boolean;
+    businessLocation: BusinessLocation;
+    maxDeliveryRadiusKm: number;
+    costPerKm: number;
+    minDeliveryCost: number;
+    outOfRangeMessage: string;
+    googleMapsApiKey: string;
+}
+
 export interface ChatbotConfig {
     businessName: string;
     messages: {
@@ -95,6 +128,8 @@ export interface ChatbotConfig {
         askForName: boolean;
         sendConfirmationMessage: boolean;
     };
+    schedule?: Schedule;
+    location?: LocationConfig;
     keywords: {
         greetings: string[];
         menu: string[];

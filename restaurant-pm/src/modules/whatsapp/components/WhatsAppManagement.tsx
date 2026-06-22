@@ -3,12 +3,21 @@
  * Pagina principal de gestion de WhatsApp (whatsapp-web.js)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { WhatsAppConfigSection } from './WhatsAppConfigSection';
 import { WhatsAppConversationsSection } from './WhatsAppConversationsSection';
 import { WhatsAppStatsSection } from './WhatsAppStatsSection';
 import { ChatbotConfigSection } from './ChatbotConfigSection';
+import { whatsappSocket } from '../services/whatsappSocket';
 import type { WhatsAppTab } from '../types';
+
+interface HumanSupportNotification {
+    id: string;
+    phone: string;
+    customerName: string;
+    timestamp: string;
+    message: string;
+}
 
 const tabs: { id: WhatsAppTab; label: string; icon: string }[] = [
     { id: 'stats', label: 'Dashboard', icon: '📊' },
@@ -19,6 +28,55 @@ const tabs: { id: WhatsAppTab; label: string; icon: string }[] = [
 
 export const WhatsAppManagement: React.FC = () => {
     const [activeTab, setActiveTab] = useState<WhatsAppTab>('config');
+    const [notifications, setNotifications] = useState<HumanSupportNotification[]>([]);
+
+    // Conectar al WebSocket y escuchar notificaciones
+    useEffect(() => {
+        whatsappSocket.connect();
+
+        const unsubHumanSupport = whatsappSocket.on('human_support_requested', (data: any) => {
+            console.log('[WhatsApp] Human support requested:', data);
+
+            const notification: HumanSupportNotification = {
+                id: `${Date.now()}-${data.phone}`,
+                phone: data.phone,
+                customerName: data.customerName || 'Cliente',
+                timestamp: data.timestamp,
+                message: data.message
+            };
+
+            setNotifications(prev => [...prev, notification]);
+
+            // Reproducir sonido de notificacion
+            try {
+                const audio = new Audio('/notification.mp3');
+                audio.volume = 0.5;
+                audio.play().catch(() => {
+                    // Ignorar error si no hay archivo de audio
+                });
+            } catch {
+                // Ignorar
+            }
+
+            // Auto-remove notification after 15 seconds
+            setTimeout(() => {
+                setNotifications(prev => prev.filter(n => n.id !== notification.id));
+            }, 15000);
+        });
+
+        return () => {
+            unsubHumanSupport();
+        };
+    }, []);
+
+    const dismissNotification = useCallback((id: string) => {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+    }, []);
+
+    const goToConversations = useCallback((phone: string) => {
+        setActiveTab('conversations');
+        // Podriamos pasar el phone como parametro para filtrar/seleccionar
+    }, []);
 
     const renderContent = () => {
         switch (activeTab) {
@@ -37,6 +95,56 @@ export const WhatsAppManagement: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-light-background dark:bg-dark-900 p-4 md:p-6">
+            {/* Notificaciones de soporte humano */}
+            {notifications.length > 0 && (
+                <div className="fixed top-4 right-4 z-50 space-y-3 max-w-md">
+                    {notifications.map(notification => (
+                        <div
+                            key={notification.id}
+                            className="bg-orange-500 text-white rounded-xl shadow-lg p-4 animate-slide-in-right"
+                        >
+                            <div className="flex items-start gap-3">
+                                <div className="flex-shrink-0 w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                                    <span className="text-xl">👤</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-semibold">Solicitud de Atencion</p>
+                                    <p className="text-sm opacity-90">
+                                        {notification.customerName} ({notification.phone})
+                                    </p>
+                                    <p className="text-xs opacity-75 mt-1">
+                                        solicita hablar con una persona
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => dismissNotification(notification.id)}
+                                    className="flex-shrink-0 text-white/70 hover:text-white"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <div className="mt-3 flex gap-2">
+                                <button
+                                    onClick={() => {
+                                        goToConversations(notification.phone);
+                                        dismissNotification(notification.id);
+                                    }}
+                                    className="flex-1 px-3 py-2 bg-white text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-50 transition-colors"
+                                >
+                                    Ver Conversacion
+                                </button>
+                                <button
+                                    onClick={() => dismissNotification(notification.id)}
+                                    className="px-3 py-2 bg-white/20 rounded-lg text-sm font-medium hover:bg-white/30 transition-colors"
+                                >
+                                    Despues
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Header */}
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">

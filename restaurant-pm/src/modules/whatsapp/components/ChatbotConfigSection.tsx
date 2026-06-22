@@ -4,14 +4,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { whatsappService, ChatbotConfig, BankAccount } from '../services/whatsappService';
+import { whatsappService, ChatbotConfig, BankAccount, ScheduleDay } from '../services/whatsappService';
 
 export const ChatbotConfigSection: React.FC = () => {
     const [config, setConfig] = useState<ChatbotConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const [activeTab, setActiveTab] = useState<'general' | 'messages' | 'settings' | 'payments'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'messages' | 'settings' | 'payments' | 'schedule' | 'location'>('general');
 
     useEffect(() => {
         loadConfig();
@@ -83,6 +83,8 @@ export const ChatbotConfigSection: React.FC = () => {
                     { id: 'general', label: 'General' },
                     { id: 'messages', label: 'Mensajes' },
                     { id: 'payments', label: 'Pagos' },
+                    { id: 'schedule', label: 'Horarios' },
+                    { id: 'location', label: 'Ubicacion' },
                     { id: 'settings', label: 'Ajustes' }
                 ].map(tab => (
                     <button
@@ -440,6 +442,343 @@ export const ChatbotConfigSection: React.FC = () => {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Schedule Tab */}
+            {activeTab === 'schedule' && (
+                <div className="space-y-6">
+                    {/* Toggle principal */}
+                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-700 rounded-lg">
+                        <div>
+                            <p className="font-medium text-gray-900 dark:text-white">Horarios de Atencion</p>
+                            <p className="text-sm text-gray-500">
+                                {config.schedule?.enabled
+                                    ? 'El chatbot responde solo en horario de atencion'
+                                    : 'El chatbot responde 24/7'}
+                            </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={config.schedule?.enabled ?? false}
+                                onChange={(e) => updateField('schedule.enabled', e.target.checked)}
+                                className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+                        </label>
+                    </div>
+
+                    {config.schedule?.enabled && (
+                        <>
+                            {/* Zona horaria */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Zona Horaria
+                                </label>
+                                <select
+                                    value={config.schedule?.timezone || 'America/Guayaquil'}
+                                    onChange={(e) => updateField('schedule.timezone', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                >
+                                    <option value="America/Guayaquil">Ecuador (America/Guayaquil)</option>
+                                    <option value="America/Lima">Peru (America/Lima)</option>
+                                    <option value="America/Bogota">Colombia (America/Bogota)</option>
+                                    <option value="America/Mexico_City">Mexico (America/Mexico_City)</option>
+                                    <option value="America/Santiago">Chile (America/Santiago)</option>
+                                    <option value="America/Buenos_Aires">Argentina (America/Buenos_Aires)</option>
+                                </select>
+                            </div>
+
+                            {/* Horarios por dia */}
+                            <div className="space-y-3">
+                                <h3 className="font-medium text-gray-900 dark:text-white">Horarios por Dia</h3>
+
+                                {(config.schedule?.days || []).map((day, index) => (
+                                    <div key={day.dayOfWeek} className="p-4 bg-gray-50 dark:bg-dark-700 rounded-lg">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="font-medium text-gray-900 dark:text-white">
+                                                {day.dayName}
+                                            </span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={day.isOpen}
+                                                    onChange={(e) => {
+                                                        const days = [...(config.schedule?.days || [])];
+                                                        days[index] = { ...days[index], isOpen: e.target.checked };
+                                                        updateField('schedule.days', days);
+                                                    }}
+                                                    className="sr-only peer"
+                                                />
+                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+                                                <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
+                                                    {day.isOpen ? 'Abierto' : 'Cerrado'}
+                                                </span>
+                                            </label>
+                                        </div>
+
+                                        {day.isOpen && (
+                                            <div className="flex gap-4 items-center">
+                                                <div className="flex-1">
+                                                    <label className="block text-xs text-gray-500 mb-1">Apertura</label>
+                                                    <input
+                                                        type="time"
+                                                        value={day.openTime}
+                                                        onChange={(e) => {
+                                                            const days = [...(config.schedule?.days || [])];
+                                                            days[index] = { ...days[index], openTime: e.target.value };
+                                                            updateField('schedule.days', days);
+                                                        }}
+                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-white"
+                                                    />
+                                                </div>
+                                                <span className="text-gray-400 pt-5">-</span>
+                                                <div className="flex-1">
+                                                    <label className="block text-xs text-gray-500 mb-1">Cierre</label>
+                                                    <input
+                                                        type="time"
+                                                        value={day.closeTime}
+                                                        onChange={(e) => {
+                                                            const days = [...(config.schedule?.days || [])];
+                                                            days[index] = { ...days[index], closeTime: e.target.value };
+                                                            updateField('schedule.days', days);
+                                                        }}
+                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-white"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Mensajes de horario cerrado */}
+                            <div className="space-y-4">
+                                <h3 className="font-medium text-gray-900 dark:text-white">Mensajes Fuera de Horario</h3>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Mensaje de Cerrado
+                                    </label>
+                                    <textarea
+                                        value={config.schedule?.closedMessage || ''}
+                                        onChange={(e) => updateField('schedule.closedMessage', e.target.value)}
+                                        rows={4}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                        placeholder="Mensaje que se muestra cuando esta cerrado..."
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500">Usa {'{schedule}'} para mostrar el horario</p>
+                                </div>
+
+                                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-700 rounded-lg">
+                                    <div>
+                                        <p className="font-medium text-gray-900 dark:text-white">Permitir Mensajes</p>
+                                        <p className="text-sm text-gray-500">Clientes pueden dejar mensajes fuera de horario</p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={config.schedule?.allowMessagesWhenClosed ?? true}
+                                            onChange={(e) => updateField('schedule.allowMessagesWhenClosed', e.target.checked)}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+                                    </label>
+                                </div>
+
+                                {config.schedule?.allowMessagesWhenClosed && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Confirmacion de Mensaje Recibido
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={config.schedule?.messageReceivedWhenClosed || ''}
+                                            onChange={(e) => updateField('schedule.messageReceivedWhenClosed', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                            placeholder="Mensaje de confirmacion..."
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+
+                    {!config.schedule?.enabled && (
+                        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                            <p className="text-sm text-blue-600 dark:text-blue-400">
+                                Los horarios de atencion estan deshabilitados. El chatbot respondera las 24 horas del dia, los 7 dias de la semana.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Location Tab */}
+            {activeTab === 'location' && (
+                <div className="space-y-6">
+                    {/* Toggle principal */}
+                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-700 rounded-lg">
+                        <div>
+                            <p className="font-medium text-gray-900 dark:text-white">Configuracion de Ubicacion</p>
+                            <p className="text-sm text-gray-500">
+                                {config.location?.enabled
+                                    ? 'Calculo de distancia y costo de delivery activo'
+                                    : 'El chatbot no verificara ubicacion'}
+                            </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={config.location?.enabled ?? false}
+                                onChange={(e) => updateField('location.enabled', e.target.checked)}
+                                className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+                        </label>
+                    </div>
+
+                    {config.location?.enabled && (
+                        <>
+                            {/* Ubicacion del negocio */}
+                            <div className="space-y-4">
+                                <h3 className="font-medium text-gray-900 dark:text-white">Ubicacion del Negocio</h3>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Direccion
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={config.location?.businessLocation?.address || ''}
+                                        onChange={(e) => updateField('location.businessLocation.address', e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                        placeholder="Av. Principal 123, Guayaquil"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Latitud
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.000001"
+                                            value={config.location?.businessLocation?.lat || -2.170998}
+                                            onChange={(e) => updateField('location.businessLocation.lat', parseFloat(e.target.value))}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Longitud
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.000001"
+                                            value={config.location?.businessLocation?.lng || -79.922356}
+                                            onChange={(e) => updateField('location.businessLocation.lng', parseFloat(e.target.value))}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <p className="text-xs text-gray-500">
+                                    Puedes obtener las coordenadas desde Google Maps: click derecho en tu ubicacion {">"} Copiar coordenadas
+                                </p>
+                            </div>
+
+                            {/* Configuracion de delivery */}
+                            <div className="space-y-4">
+                                <h3 className="font-medium text-gray-900 dark:text-white">Configuracion de Delivery</h3>
+
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Radio Maximo (km)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            step="0.5"
+                                            value={config.location?.maxDeliveryRadiusKm || 10}
+                                            onChange={(e) => updateField('location.maxDeliveryRadiusKm', parseFloat(e.target.value))}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Costo por km ($)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.10"
+                                            value={config.location?.costPerKm || 0.50}
+                                            onChange={(e) => updateField('location.costPerKm', parseFloat(e.target.value))}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Costo Minimo ($)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.50"
+                                            value={config.location?.minDeliveryCost || 2.00}
+                                            onChange={(e) => updateField('location.minDeliveryCost', parseFloat(e.target.value))}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Mensaje fuera de rango */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Mensaje Fuera de Cobertura
+                                </label>
+                                <textarea
+                                    value={config.location?.outOfRangeMessage || ''}
+                                    onChange={(e) => updateField('location.outOfRangeMessage', e.target.value)}
+                                    rows={3}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                    placeholder="Mensaje cuando el cliente esta fuera del area..."
+                                />
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Usa {'{distance}'} para la distancia y {'{maxRadius}'} para el radio maximo
+                                </p>
+                            </div>
+
+                            {/* API Key de Google Maps */}
+                            <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                <h4 className="font-medium text-blue-600 dark:text-blue-400 mb-2">Google Maps API (Opcional)</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                    Para mostrar mapas interactivos, necesitas una API Key de Google Maps.
+                                    Sin ella, solo se calculara la distancia usando las coordenadas.
+                                </p>
+                                <input
+                                    type="password"
+                                    value={config.location?.googleMapsApiKey || ''}
+                                    onChange={(e) => updateField('location.googleMapsApiKey', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-lg bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+                                    placeholder="AIza..."
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    {!config.location?.enabled && (
+                        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                            <p className="text-sm text-blue-600 dark:text-blue-400">
+                                La configuracion de ubicacion esta deshabilitada. El chatbot no verificara la distancia ni calculara costos de delivery basados en ubicacion.
+                            </p>
                         </div>
                     )}
                 </div>
