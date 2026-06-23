@@ -80,8 +80,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - whatsapp_session:/app/whatsapp-session
-      - whatsapp_cache:/app/.wwebjs_cache
+      - ./whatsapp-data/session:/app/whatsapp-session
+      - ./whatsapp-data/cache:/app/.wwebjs_cache
     networks:
       - restaurant-network
     healthcheck:
@@ -97,10 +97,7 @@ services:
 volumes:
   mongodb_data:
     driver: local
-  whatsapp_session:
-    driver: local
-  whatsapp_cache:
-    driver: local
+  # WhatsApp usa directorios locales (./whatsapp-data/) para mejor control de permisos
 
 # ============================================
 # Red interna
