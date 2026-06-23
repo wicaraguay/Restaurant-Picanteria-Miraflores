@@ -56,6 +56,9 @@ export class WhatsAppWebClient extends EventEmitter {
      * Inicializa el cliente de WhatsApp Web
      */
     private initializeClient(): void {
+        const startTime = Date.now();
+        logger.info('[WhatsAppWeb] Starting client initialization...');
+
         try {
             this.client = new Client({
                 authStrategy: new LocalAuth({
@@ -63,7 +66,6 @@ export class WhatsAppWebClient extends EventEmitter {
                 }),
                 puppeteer: {
                     headless: true,
-                    // Use system Chromium if available (Docker/production)
                     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
                     args: [
                         '--no-sandbox',
@@ -73,10 +75,9 @@ export class WhatsAppWebClient extends EventEmitter {
                         '--no-first-run',
                         '--no-zygote',
                         '--disable-gpu',
-                        '--single-process', // Important for Alpine Linux
-                        '--disable-features=VizDisplayCompositor',
+                        '--single-process',
+                        '--disable-features=VizDisplayCompositor,TranslateUI',
                         '--disable-software-rasterizer',
-                        // Memory optimization flags
                         '--disable-extensions',
                         '--disable-background-networking',
                         '--disable-background-timer-throttling',
@@ -87,20 +88,25 @@ export class WhatsAppWebClient extends EventEmitter {
                         '--disable-hang-monitor',
                         '--disable-prompt-on-repost',
                         '--disable-sync',
+                        '--disable-ipc-flooding-protection',
+                        '--disable-renderer-backgrounding',
                         '--metrics-recording-only',
                         '--no-default-browser-check',
                         '--no-pings',
                         '--password-store=basic',
                         '--use-mock-keychain',
                         '--disable-blink-features=AutomationControlled',
-                        '--js-flags=--max-old-space-size=256' // Limit V8 heap to 256MB
+                        '--js-flags=--max-old-space-size=256'
                     ]
                 },
                 webVersionCache: {
-                    type: 'remote',
-                    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+                    type: 'local',
+                    path: process.env.WHATSAPP_CACHE_PATH || './.wwebjs_cache',
+                    strict: false
                 }
             });
+
+            logger.info('[WhatsAppWeb] Client created', { elapsed: `${Date.now() - startTime}ms` });
 
             this.setupEventListeners();
 
@@ -116,11 +122,18 @@ export class WhatsAppWebClient extends EventEmitter {
     private setupEventListeners(): void {
         if (!this.client) return;
 
+        const initStartTime = Date.now();
+
+        // Pantalla de carga (diagnóstico de velocidad)
+        this.client.on('loading_screen', (percent: number, message: string) => {
+            logger.info('[WhatsAppWeb] Loading...', { percent, message, elapsed: `${Date.now() - initStartTime}ms` });
+        });
+
         // QR Code para escanear
         this.client.on('qr', (qr: string) => {
             this.currentQR = qr;
             this.isAuthenticated = false;
-            logger.info('[WhatsAppWeb] QR Code generated - scan with your phone');
+            logger.info('[WhatsAppWeb] QR Code generated', { elapsed: `${Date.now() - initStartTime}ms` });
             this.emit('qr', qr);
         });
 
@@ -129,8 +142,15 @@ export class WhatsAppWebClient extends EventEmitter {
             this.isAuthenticated = true;
             this.currentQR = null;
             this.reconnectAttempts = 0;
-            logger.info('[WhatsAppWeb] Authenticated successfully');
+            logger.info('[WhatsAppWeb] Authenticated', { elapsed: `${Date.now() - initStartTime}ms` });
             this.emit('authenticated');
+        });
+
+        // Sesión restaurada desde cache
+        this.client.on('auth_failure', (msg: string) => {
+            logger.error('[WhatsAppWeb] Auth failed - need new QR', { msg, elapsed: `${Date.now() - initStartTime}ms` });
+            this.isAuthenticated = false;
+            this.currentQR = null;
         });
 
         // Cliente listo para enviar/recibir
@@ -138,11 +158,10 @@ export class WhatsAppWebClient extends EventEmitter {
             this.isReady = true;
             this.lastActivity = new Date();
 
-            // Obtener número de teléfono
             const info = this.client?.info;
             this.phoneNumber = info?.wid?.user || null;
 
-            logger.info('[WhatsAppWeb] Client is ready', { phone: this.phoneNumber });
+            logger.info('[WhatsAppWeb] READY', { phone: this.phoneNumber, totalTime: `${Date.now() - initStartTime}ms` });
             this.emit('ready', this.phoneNumber);
         });
 

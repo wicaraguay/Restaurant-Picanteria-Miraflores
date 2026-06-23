@@ -75,6 +75,7 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV WHATSAPP_ENABLED=false
 ENV WHATSAPP_SESSION_PATH=/app/whatsapp-session
+ENV WHATSAPP_CACHE_PATH=/app/.wwebjs_cache
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

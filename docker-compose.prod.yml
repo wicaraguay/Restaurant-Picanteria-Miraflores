@@ -39,6 +39,17 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+    # Recursos para Chromium/Puppeteer (WhatsApp)
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Shared memory para Chromium (evita crashes)
+    shm_size: '256m'
     environment:
       - NODE_ENV=production
       - PORT=3000
