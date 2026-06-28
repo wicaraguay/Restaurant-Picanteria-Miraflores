@@ -2339,9 +2339,12 @@ export class WhatsAppChatbot {
 
     /**
      * Normaliza el número de teléfono al formato usado internamente (con @c.us)
+     * Maneja tanto @c.us como @lid (formato alternativo de WhatsApp)
      */
     private normalizePhone(phone: string): string {
-        let cleaned = phone.replace(/[\s\-\(\)\+]/g, '');
+        // Primero, extraer solo el número (quitar @lid, @c.us, @s.whatsapp.net, etc.)
+        let cleaned = phone.replace(/@(lid|c\.us|s\.whatsapp\.net|g\.us)$/i, '');
+        cleaned = cleaned.replace(/[\s\-\(\)\+]/g, '');
 
         // Ecuador: convertir 09xxxxxxxx a 593xxxxxxxx
         if (cleaned.startsWith('09') && cleaned.length === 10) {
@@ -2350,12 +2353,8 @@ export class WhatsAppChatbot {
             cleaned = '593' + cleaned;
         }
 
-        // Agregar @c.us para WhatsApp
-        if (!cleaned.includes('@')) {
-            cleaned = cleaned + '@c.us';
-        }
-
-        return cleaned;
+        // Siempre usar formato @c.us para consistencia
+        return cleaned + '@c.us';
     }
 
     /**
