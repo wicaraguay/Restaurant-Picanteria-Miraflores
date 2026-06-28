@@ -27,6 +27,7 @@ export interface CartItem {
     name: string;
     quantity: number;
     price: number;
+    taxRate: number;
 }
 
 export interface CustomerLocation {
@@ -74,7 +75,8 @@ export interface ConversationDocument extends Document {
 const CartItemSchema = new Schema({
     name: { type: String, required: true },
     quantity: { type: Number, required: true, min: 1 },
-    price: { type: Number, required: true, min: 0 }
+    price: { type: Number, required: true, min: 0 },
+    taxRate: { type: Number, required: true, default: 0 }
 }, { _id: false });
 
 const CustomerLocationSchema = new Schema({

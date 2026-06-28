@@ -52,7 +52,7 @@ interface BusinessHoursResult {
 
 export interface ConversationState {
     step: 'IDLE' | 'SHOWING_MENU' | 'SELECTING_ITEMS' | 'CONFIRMING' | 'WAITING_NAME' | 'WAITING_ADDRESS' | 'WAITING_LOCATION' | 'WAITING_FINAL_CONFIRM' | 'WAITING_PAYMENT' | 'MANUAL';
-    items: Array<{ name: string; quantity: number; price: number }>;
+    items: Array<{ name: string; quantity: number; price: number; taxRate: number }>;
     customerName?: string;
     customerAddress?: string;
     lastActivity: Date;
@@ -92,6 +92,7 @@ export interface ChatMenuItem {
     category: string;
     description?: string;
     imageUrl?: string;
+    taxRate: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -498,7 +499,8 @@ export class WhatsAppChatbot {
                 price: item.price,
                 category: item.category,
                 description: item.description,
-                imageUrl: item.imageUrl
+                imageUrl: item.imageUrl,
+                taxRate: item.taxRate ?? 0
             }));
 
             logger.info('[WhatsAppChatbot] Menu loaded from database', {
@@ -1037,7 +1039,7 @@ export class WhatsAppChatbot {
         const menuItems = await this.getMenu();
         const item = menuItems.find(i => i.id === listReplyId);
         if (item) {
-            state.items.push({ name: item.name, quantity: 1, price: item.price });
+            state.items.push({ name: item.name, quantity: 1, price: item.price, taxRate: item.taxRate });
             state.step = 'SELECTING_ITEMS';
 
             await this.getClientOrThrow().sendButtons(from,
@@ -1392,7 +1394,7 @@ export class WhatsAppChatbot {
             if (existingItem) {
                 existingItem.quantity += 1;
             } else {
-                state.items.push({ name: item.name, quantity: 1, price: item.price });
+                state.items.push({ name: item.name, quantity: 1, price: item.price, taxRate: item.taxRate });
             }
 
             await this.getClientOrThrow().sendText(from,
@@ -1470,14 +1472,16 @@ export class WhatsAppChatbot {
             const orderItems = state.items.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
-                price: item.price
+                price: item.price,
+                taxRate: item.taxRate
             }));
 
             if (deliveryCost > 0) {
                 orderItems.push({
                     name: `Delivery (${state.deliveryDistance?.toFixed(1) || '?'} km)`,
                     quantity: 1,
-                    price: deliveryCost
+                    price: deliveryCost,
+                    taxRate: 0
                 });
             }
 
@@ -1693,7 +1697,7 @@ export class WhatsAppChatbot {
     private parseNumberSelection(
         text: string,
         menuIndexMap?: Map<number, ChatMenuItem>
-    ): { name: string; quantity: number; price: number } | null {
+    ): { name: string; quantity: number; price: number; taxRate: number } | null {
         if (!menuIndexMap || menuIndexMap.size === 0) return null;
 
         // Pattern: solo numero "1", "2", "15"
@@ -1702,7 +1706,7 @@ export class WhatsAppChatbot {
             const itemIndex = parseInt(singleNumber[1], 10);
             const item = menuIndexMap.get(itemIndex);
             if (item) {
-                return { name: item.name, quantity: 1, price: item.price };
+                return { name: item.name, quantity: 1, price: item.price, taxRate: item.taxRate };
             }
         }
 
@@ -1713,7 +1717,7 @@ export class WhatsAppChatbot {
             const itemIndex = parseInt(quantityOfItem[2], 10);
             const item = menuIndexMap.get(itemIndex);
             if (item && quantity > 0 && quantity <= 20) {
-                return { name: item.name, quantity, price: item.price };
+                return { name: item.name, quantity, price: item.price, taxRate: item.taxRate };
             }
         }
 
@@ -1724,7 +1728,7 @@ export class WhatsAppChatbot {
             const itemIndex = parseInt(xPattern[2], 10);
             const item = menuIndexMap.get(itemIndex);
             if (item && quantity > 0 && quantity <= 20) {
-                return { name: item.name, quantity, price: item.price };
+                return { name: item.name, quantity, price: item.price, taxRate: item.taxRate };
             }
         }
 
@@ -1735,7 +1739,7 @@ export class WhatsAppChatbot {
      * Parsea pedidos que vienen desde la página web
      * Formato: "Hola *Restaurante*, quisiera ordenar: 🍽️ *Producto* - $XX.XX 📝 Descripcion"
      */
-    private async parseWebOrder(text: string): Promise<{ name: string; quantity: number; price: number } | null> {
+    private async parseWebOrder(text: string): Promise<{ name: string; quantity: number; price: number; taxRate: number } | null> {
         // Detectar si es un pedido desde la web
         if (!text.includes('quisiera ordenar') && !text.includes('quiero ordenar')) {
             return null;
@@ -1766,11 +1770,11 @@ export class WhatsAppChatbot {
 
                 if (menuItem) {
                     // Usar precio del menú (más actualizado)
-                    return { name: menuItem.name, quantity: 1, price: menuItem.price };
+                    return { name: menuItem.name, quantity: 1, price: menuItem.price, taxRate: menuItem.taxRate };
                 }
 
-                // Si no está en el menú, usar el precio del mensaje
-                return { name: productName, quantity: 1, price };
+                // Si no está en el menú, usar el precio del mensaje con taxRate 0
+                return { name: productName, quantity: 1, price, taxRate: 0 };
             }
         }
 
@@ -1785,7 +1789,7 @@ export class WhatsAppChatbot {
             );
 
             if (menuItem) {
-                return { name: menuItem.name, quantity: 1, price: menuItem.price };
+                return { name: menuItem.name, quantity: 1, price: menuItem.price, taxRate: menuItem.taxRate };
             }
         }
 
@@ -1799,7 +1803,7 @@ export class WhatsAppChatbot {
     private async parseItemSelection(
         text: string,
         state?: ConversationState
-    ): Promise<{ name: string; quantity: number; price: number } | null> {
+    ): Promise<{ name: string; quantity: number; price: number; taxRate: number } | null> {
         // Pattern: "2 ceviches" or "ceviche de camaron"
         const quantityMatch = text.match(/^(\d+)\s+(.+)$/);
 
@@ -1816,7 +1820,7 @@ export class WhatsAppChatbot {
             for (const [, item] of state.menuIndexMap) {
                 if (item.name.toLowerCase().includes(itemName) ||
                     itemName.includes(item.name.toLowerCase())) {
-                    return { name: item.name, quantity, price: item.price };
+                    return { name: item.name, quantity, price: item.price, taxRate: item.taxRate };
                 }
             }
         }
@@ -1829,7 +1833,7 @@ export class WhatsAppChatbot {
         );
 
         if (item) {
-            return { name: item.name, quantity, price: item.price };
+            return { name: item.name, quantity, price: item.price, taxRate: item.taxRate };
         }
 
         return null;
@@ -1840,7 +1844,7 @@ export class WhatsAppChatbot {
      * @param withNumbers Si true, incluye números para identificar items
      */
     private formatOrderItems(
-        items: Array<{ name: string; quantity: number; price: number }>,
+        items: Array<{ name: string; quantity: number; price: number; taxRate?: number }>,
         withNumbers: boolean = false
     ): string {
         return items
@@ -1854,7 +1858,7 @@ export class WhatsAppChatbot {
     /**
      * Calcula total del pedido
      */
-    private calculateTotal(items: Array<{ name: string; quantity: number; price: number }>): number {
+    private calculateTotal(items: Array<{ name: string; quantity: number; price: number; taxRate?: number }>): number {
         return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     }
 
