@@ -452,7 +452,10 @@ export class WhatsAppWebClient extends EventEmitter {
      * Formatea número de teléfono para WhatsApp
      */
     private formatPhoneNumber(phone: string): string {
-        let cleaned = phone.replace(/[\s\-\(\)\+]/g, '');
+        // Primero quitar cualquier sufijo de WhatsApp (@c.us, @lid, @s.whatsapp.net, etc.)
+        let cleaned = phone.replace(/@(c\.us|lid|s\.whatsapp\.net|g\.us)$/i, '');
+        // Quitar caracteres especiales
+        cleaned = cleaned.replace(/[\s\-\(\)\+]/g, '');
 
         // Ecuador: convertir 09xxxxxxxx a 593xxxxxxxx
         if (cleaned.startsWith('09') && cleaned.length === 10) {
@@ -461,12 +464,8 @@ export class WhatsAppWebClient extends EventEmitter {
             cleaned = '593' + cleaned;
         }
 
-        // Agregar @c.us para WhatsApp
-        if (!cleaned.includes('@')) {
-            cleaned = cleaned + '@c.us';
-        }
-
-        return cleaned;
+        // Siempre usar @c.us para enviar mensajes
+        return cleaned + '@c.us';
     }
 
     /**
