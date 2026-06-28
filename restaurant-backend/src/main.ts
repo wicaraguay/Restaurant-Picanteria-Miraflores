@@ -268,7 +268,8 @@ const startServer = async () => {
                         items: orderData.items.map((item: any) => ({
                             name: item.name,
                             quantity: item.quantity,
-                            price: item.price
+                            price: item.price,
+                            taxRate: item.taxRate ?? 0
                         })),
                         type: orderData.type as 'En Local' | 'Delivery' | 'Para Llevar',
                         status: OrderStatus.New
