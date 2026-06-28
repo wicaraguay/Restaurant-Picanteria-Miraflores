@@ -9,6 +9,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Evitar que puppeteer descargue Chromium (usamos el del sistema)
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
 # Copiar archivos de dependencias
 COPY package*.json ./
 
