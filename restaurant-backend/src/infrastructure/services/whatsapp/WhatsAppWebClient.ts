@@ -16,6 +16,7 @@ import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js';
 import { logger } from '../../utils/Logger';
 import { EventEmitter } from 'events';
 import path from 'path';
+import fs from 'fs/promises';
 
 export interface SendMessageResult {
     success: boolean;
@@ -176,14 +177,25 @@ export class WhatsAppWebClient extends EventEmitter {
         });
 
         // Desconectado
-        this.client.on('disconnected', (reason: string) => {
+        this.client.on('disconnected', async (reason: string) => {
             this.isReady = false;
             this.isAuthenticated = false;
             logger.warn('[WhatsAppWeb] Client disconnected', { reason });
             this.emit('disconnected', reason);
 
-            // Intentar reconectar
-            this.attemptReconnect();
+            // Si fue logout desde el celular, limpiar sesión automáticamente
+            if (reason === 'LOGOUT' || reason === 'CONFLICT' || reason === 'NAVIGATION') {
+                logger.info('[WhatsAppWeb] Session closed from phone, clearing local session...');
+                await this.clearSession();
+                // Reinicializar para mostrar nuevo QR
+                setTimeout(() => {
+                    this.initializeClient();
+                    this.start();
+                }, 2000);
+            } else {
+                // Intentar reconectar para otros casos
+                this.attemptReconnect();
+            }
         });
 
         // Error de autenticación
@@ -318,6 +330,76 @@ export class WhatsAppWebClient extends EventEmitter {
         } catch (error) {
             logger.error('[WhatsAppWeb] Error logging out', { error });
         }
+    }
+
+    /**
+     * Limpia archivos de sesión (para forzar nuevo QR)
+     */
+    public async clearSession(): Promise<void> {
+        try {
+            // Destruir cliente si existe
+            if (this.client) {
+                try {
+                    await this.client.destroy();
+                } catch (e) {
+                    // Ignorar errores al destruir
+                }
+                this.client = null;
+            }
+
+            this.isReady = false;
+            this.isAuthenticated = false;
+            this.phoneNumber = null;
+            this.currentQR = null;
+
+            // Limpiar archivos de sesión
+            const sessionDir = this.sessionPath;
+            try {
+                const files = await fs.readdir(sessionDir);
+                for (const file of files) {
+                    const filePath = path.join(sessionDir, file);
+                    await fs.rm(filePath, { recursive: true, force: true });
+                }
+                logger.info('[WhatsAppWeb] Session files cleared', { sessionDir });
+            } catch (e) {
+                // Directorio puede no existir
+                logger.warn('[WhatsAppWeb] Could not clear session dir', { error: e });
+            }
+
+            this.emit('session_cleared');
+        } catch (error) {
+            logger.error('[WhatsAppWeb] Error clearing session', { error });
+            throw error;
+        }
+    }
+
+    /**
+     * Cierra sesión y limpia archivos (fuerza nuevo QR)
+     */
+    public async logoutAndClear(): Promise<void> {
+        logger.info('[WhatsAppWeb] Logout and clear session requested');
+
+        try {
+            // Intentar logout primero
+            if (this.client && this.isAuthenticated) {
+                try {
+                    await this.client.logout();
+                } catch (e) {
+                    logger.warn('[WhatsAppWeb] Logout failed, will clear anyway', { error: e });
+                }
+            }
+        } catch (e) {
+            // Continuar con limpieza
+        }
+
+        // Limpiar sesión
+        await this.clearSession();
+
+        // Reinicializar para mostrar nuevo QR
+        setTimeout(() => {
+            this.initializeClient();
+            this.start();
+        }, 1000);
     }
 
     /**
