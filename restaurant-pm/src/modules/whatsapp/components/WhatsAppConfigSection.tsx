@@ -237,6 +237,28 @@ export const WhatsAppConfigSection: React.FC = () => {
         }
     };
 
+    const handleResetSession = async () => {
+        if (!confirm('¿Estás seguro? Esto cerrará la sesión y tendrás que escanear el QR nuevamente.')) {
+            return;
+        }
+        try {
+            setLoading(true);
+            setMessage({ type: 'info', text: 'Reiniciando sesión...' });
+            await whatsappService.resetSession();
+            setMessage({ type: 'success', text: 'Sesión reiniciada. Espera unos segundos para el nuevo QR.' });
+            setQrCode(null);
+            setStatus(prev => prev ? { ...prev, isConnected: false, isAuthenticated: false } : null);
+            // Esperar y refrescar
+            setTimeout(() => {
+                loadStatusHTTP(true);
+            }, 3000);
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.message || 'Error al reiniciar sesión' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleReloadMenu = async () => {
         try {
             const result = await whatsappService.reloadMenu();
@@ -392,6 +414,16 @@ export const WhatsAppConfigSection: React.FC = () => {
                             >
                                 {connecting ? 'Conectando...' : 'Conectar WhatsApp'}
                             </button>
+                            <button
+                                onClick={handleResetSession}
+                                disabled={loading}
+                                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                                Reiniciar Sesión
+                            </button>
+                            <p className="text-xs text-gray-500 text-center max-w-xs">
+                                Usa "Reiniciar" si ves error de perfil bloqueado
+                            </p>
                         </div>
                     )}
                 </div>
@@ -408,7 +440,13 @@ export const WhatsAppConfigSection: React.FC = () => {
                         <button onClick={handleDisconnect} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
                             Cerrar Sesion
                         </button>
+                        <button onClick={handleResetSession} className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors">
+                            Reiniciar Sesion
+                        </button>
                     </div>
+                    <p className="text-xs text-gray-500 mt-3">
+                        Usa "Reiniciar Sesión" si tienes problemas de conexión o errores de perfil bloqueado.
+                    </p>
                 </div>
             )}
 

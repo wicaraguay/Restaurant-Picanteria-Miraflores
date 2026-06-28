@@ -177,19 +177,41 @@ router.post('/connect', async (req: Request, res: Response) => {
 
 /**
  * POST /api/whatsapp/disconnect
- * Cierra sesión de WhatsApp
+ * Cierra sesión de WhatsApp y limpia archivos de sesión
  */
 router.post('/disconnect', async (req: Request, res: Response) => {
     try {
         const client = getClient();
-        await client.logout();
+        await client.logoutAndClear();
 
         res.json({
             success: true,
-            data: { message: 'Sesion cerrada. Necesitaras escanear QR de nuevo.' }
+            data: { message: 'Sesión cerrada y limpiada. Escanea el QR para reconectar.' }
         });
     } catch (error: any) {
         logger.error('[WhatsAppAPI] Error disconnecting', { error });
+        res.status(500).json({
+            success: false,
+            error: { code: 'INTERNAL_ERROR', message: error.message }
+        });
+    }
+});
+
+/**
+ * POST /api/whatsapp/reset-session
+ * Fuerza limpieza de sesión (para cuando hay errores de perfil bloqueado)
+ */
+router.post('/reset-session', async (req: Request, res: Response) => {
+    try {
+        const client = getClient();
+        await client.logoutAndClear();
+
+        res.json({
+            success: true,
+            data: { message: 'Sesión reiniciada. Espera unos segundos y escanea el nuevo QR.' }
+        });
+    } catch (error: any) {
+        logger.error('[WhatsAppAPI] Error resetting session', { error });
         res.status(500).json({
             success: false,
             error: { code: 'INTERNAL_ERROR', message: error.message }

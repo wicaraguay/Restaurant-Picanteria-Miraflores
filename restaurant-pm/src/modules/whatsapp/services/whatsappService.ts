@@ -11,6 +11,7 @@ const WHATSAPP_ENDPOINTS = {
     QR: '/whatsapp/qr',
     CONNECT: '/whatsapp/connect',
     DISCONNECT: '/whatsapp/disconnect',
+    RESET_SESSION: '/whatsapp/reset-session',
     CONVERSATIONS: '/whatsapp/conversations',
     STATS: '/whatsapp/stats',
     SEND: '/whatsapp/send',
@@ -161,6 +162,10 @@ export class WhatsAppService {
 
     async disconnect(): Promise<{ message: string }> {
         return apiService.post<{ message: string }>(WHATSAPP_ENDPOINTS.DISCONNECT, {});
+    }
+
+    async resetSession(): Promise<{ message: string }> {
+        return apiService.post<{ message: string }>(WHATSAPP_ENDPOINTS.RESET_SESSION, {});
     }
 
     async getConversations(): Promise<WhatsAppConversation[]> {
