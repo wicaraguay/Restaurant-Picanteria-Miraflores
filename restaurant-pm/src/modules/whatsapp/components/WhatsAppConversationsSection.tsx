@@ -45,7 +45,8 @@ export const WhatsAppConversationsSection: React.FC = () => {
     };
 
     const formatPhone = (phone: string) => {
-        const clean = phone.replace('@c.us', '');
+        // Limpiar cualquier sufijo de WhatsApp (@c.us, @lid, @s.whatsapp.net, etc.)
+        const clean = phone.replace(/@(c\.us|lid|s\.whatsapp\.net|g\.us)$/i, '');
         if (clean.startsWith('593')) {
             return '+593 ' + clean.substring(3, 5) + ' ' + clean.substring(5, 8) + ' ' + clean.substring(8);
         }
@@ -106,7 +107,8 @@ export const WhatsAppConversationsSection: React.FC = () => {
 
         setSending(true);
         try {
-            const phone = selectedConv.customerPhone.replace('@c.us', '');
+            // Limpiar cualquier sufijo de WhatsApp (@c.us, @lid, @s.whatsapp.net, etc.)
+            const phone = selectedConv.customerPhone.replace(/@(c\.us|lid|s\.whatsapp\.net|g\.us)$/i, '');
             await whatsappService.sendMessage(phone, message.trim());
             setMessage('');
             setActionMessage({ type: 'success', text: 'Mensaje enviado' });
