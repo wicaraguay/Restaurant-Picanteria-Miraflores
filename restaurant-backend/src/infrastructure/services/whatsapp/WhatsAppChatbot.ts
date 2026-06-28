@@ -544,6 +544,16 @@ export class WhatsAppChatbot {
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
         for (const [phone, state] of this.conversations.entries()) {
+            // Filtrar conversaciones no válidas
+            if (phone.includes('broadcast') || phone.includes('status') || phone.includes('@g.us')) {
+                continue;
+            }
+            // Filtrar números que no parecen válidos
+            const phoneDigits = phone.replace(/\D/g, '');
+            if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+                continue;
+            }
+
             result.push({
                 id: phone,
                 customerPhone: phone,
@@ -603,6 +613,29 @@ export class WhatsAppChatbot {
      */
     public async processMessage(message: IncomingMessage): Promise<void> {
         const { from, type, text, buttonPayload, listReplyId } = message;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // FILTRAR MENSAJES NO VÁLIDOS
+        // ═══════════════════════════════════════════════════════════════════
+        // Ignorar mensajes de broadcast/status de WhatsApp
+        if (from.includes('broadcast') || from.includes('status')) {
+            logger.debug('[WhatsAppChatbot] Ignoring broadcast/status message', { from });
+            return;
+        }
+
+        // Ignorar mensajes de grupos
+        if (from.includes('@g.us')) {
+            logger.debug('[WhatsAppChatbot] Ignoring group message', { from });
+            return;
+        }
+
+        // Ignorar números que no parecen válidos (muy cortos o sin dígitos)
+        const phoneDigits = from.replace(/\D/g, '');
+        if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+            logger.debug('[WhatsAppChatbot] Ignoring invalid phone number', { from, digits: phoneDigits.length });
+            return;
+        }
+        // ═══════════════════════════════════════════════════════════════════
 
         // Normalizar el número de teléfono para consistencia
         const normalizedFrom = this.normalizePhone(from);
