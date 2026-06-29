@@ -222,9 +222,31 @@ const startServer = async () => {
                 // Connect WhatsApp client messages to chatbot
                 whatsappClient.on('message', async (message: any) => {
                     try {
+                        // Obtener el número real del contacto (WhatsApp puede enviar LID interno)
+                        let fromNumber = message.from;
+
+                        // Si es un LID (@lid), intentar obtener el número real del contacto
+                        if (message.from.includes('@lid') || !message.from.includes('@c.us')) {
+                            try {
+                                const contact = await message.getContact();
+                                if (contact && contact.number) {
+                                    fromNumber = contact.number + '@c.us';
+                                    logger.info('[WhatsApp] Resolved LID to real number', {
+                                        lid: message.from,
+                                        realNumber: fromNumber
+                                    });
+                                }
+                            } catch (contactErr) {
+                                logger.warn('[WhatsApp] Could not resolve contact number', {
+                                    from: message.from,
+                                    error: (contactErr as Error).message
+                                });
+                            }
+                        }
+
                         // Convert whatsapp-web.js message to our format
                         const incomingMessage: any = {
-                            from: message.from.replace('@c.us', ''),
+                            from: fromNumber,
                             messageId: message.id._serialized || message.id.id,
                             type: message.type === 'chat' ? 'text' : message.type,
                             text: message.body,
