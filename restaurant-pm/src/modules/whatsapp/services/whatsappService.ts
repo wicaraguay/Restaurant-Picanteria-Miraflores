@@ -40,6 +40,13 @@ export interface WhatsAppQR {
     phoneNumber?: string;
 }
 
+export interface ChatMessage {
+    direction: 'in' | 'out';
+    text: string;
+    timestamp: string;
+    type?: 'text' | 'image' | 'location' | 'button';
+}
+
 export interface WhatsAppConversation {
     id: string;
     customerPhone: string;
@@ -170,6 +177,11 @@ export class WhatsAppService {
 
     async getConversations(): Promise<WhatsAppConversation[]> {
         return apiService.get<WhatsAppConversation[]>(WHATSAPP_ENDPOINTS.CONVERSATIONS);
+    }
+
+    async getConversationMessages(conversationId: string): Promise<ChatMessage[]> {
+        const cleanId = conversationId.replace(/@(c\.us|lid|s\.whatsapp\.net)$/i, '');
+        return apiService.get<ChatMessage[]>(`${WHATSAPP_ENDPOINTS.CONVERSATIONS}/${cleanId}/messages`);
     }
 
     async getStats(): Promise<WhatsAppStats> {
