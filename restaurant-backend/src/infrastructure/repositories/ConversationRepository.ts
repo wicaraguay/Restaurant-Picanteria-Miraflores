@@ -20,7 +20,8 @@ import {
     ConversationDocument,
     ConversationStep,
     CartItem,
-    CustomerLocation
+    CustomerLocation,
+    ChatMessage
 } from '../database/schemas/ConversationSchema';
 import { logger } from '../utils/Logger';
 
@@ -332,6 +333,53 @@ export class ConversationRepository {
             return doc?.orderHistory || [];
         } catch (error) {
             logger.error('[ConversationRepository] Error getting order history', { phone, error });
+            return [];
+        }
+    }
+
+    /**
+     * Agregar mensaje al historial de la conversación
+     * Mantiene solo los últimos 50 mensajes para no sobrecargar
+     */
+    async addMessage(phone: string, direction: 'in' | 'out', text: string, type: string = 'text'): Promise<boolean> {
+        try {
+            const message: ChatMessage = {
+                direction,
+                text: text.substring(0, 1000), // Limitar longitud del mensaje
+                timestamp: new Date(),
+                type: type as 'text' | 'image' | 'location' | 'button'
+            };
+
+            await ConversationModel.updateOne(
+                { phone },
+                {
+                    $push: {
+                        messages: {
+                            $each: [message],
+                            $slice: -50 // Mantener solo los últimos 50 mensajes
+                        }
+                    },
+                    $set: { lastActivity: new Date() }
+                },
+                { upsert: true }
+            );
+
+            return true;
+        } catch (error) {
+            logger.error('[ConversationRepository] Error adding message', { phone, direction, error });
+            return false;
+        }
+    }
+
+    /**
+     * Obtener historial de mensajes de una conversación
+     */
+    async getMessages(phone: string): Promise<ChatMessage[]> {
+        try {
+            const doc = await ConversationModel.findOne({ phone }).select('messages').lean();
+            return doc?.messages || [];
+        } catch (error) {
+            logger.error('[ConversationRepository] Error getting messages', { phone, error });
             return [];
         }
     }

@@ -48,6 +48,13 @@ export type ConversationStep =
     | 'WAITING_PAYMENT'
     | 'MANUAL';
 
+export interface ChatMessage {
+    direction: 'in' | 'out';
+    text: string;
+    timestamp: Date;
+    type?: 'text' | 'image' | 'location' | 'button';
+}
+
 export interface ConversationDocument extends Document {
     phone: string;
     step: ConversationStep;
@@ -63,6 +70,8 @@ export interface ConversationDocument extends Document {
     deliveryCost?: number;
     // Historial de pedidos del cliente
     orderHistory: string[];
+    // Historial de mensajes de la conversación
+    messages: ChatMessage[];
     // Metadatos
     createdAt: Date;
     updatedAt: Date;
@@ -83,6 +92,13 @@ const CustomerLocationSchema = new Schema({
     latitude: { type: Number, required: true },
     longitude: { type: Number, required: true },
     address: { type: String }
+}, { _id: false });
+
+const ChatMessageSchema = new Schema({
+    direction: { type: String, enum: ['in', 'out'], required: true },
+    text: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now },
+    type: { type: String, enum: ['text', 'image', 'location', 'button'], default: 'text' }
 }, { _id: false });
 
 const ConversationSchema = new Schema({
@@ -136,6 +152,12 @@ const ConversationSchema = new Schema({
     // Historial de IDs de pedidos del cliente
     orderHistory: {
         type: [String],
+        default: []
+    },
+
+    // Historial de mensajes (últimos 50 para no sobrecargar)
+    messages: {
+        type: [ChatMessageSchema],
         default: []
     }
 }, {

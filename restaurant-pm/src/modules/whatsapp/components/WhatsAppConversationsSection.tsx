@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { whatsappService, WhatsAppConversation } from '../services/whatsappService';
+import { whatsappService, WhatsAppConversation, ChatMessage } from '../services/whatsappService';
 
 interface SelectedConversation extends WhatsAppConversation {
     isManualMode?: boolean;
@@ -14,17 +14,45 @@ export const WhatsAppConversationsSection: React.FC = () => {
     const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedConv, setSelectedConv] = useState<SelectedConversation | null>(null);
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [loadingMessages, setLoadingMessages] = useState(false);
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [takingControl, setTakingControl] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         loadConversations();
         const interval = setInterval(loadConversations, 5000); // Actualizar cada 5s para chat en vivo
         return () => clearInterval(interval);
     }, []);
+
+    // Cargar mensajes cuando se selecciona una conversación
+    useEffect(() => {
+        if (selectedConv) {
+            loadMessages(selectedConv.customerPhone);
+            const msgInterval = setInterval(() => {
+                loadMessages(selectedConv.customerPhone);
+            }, 3000); // Actualizar mensajes cada 3s
+            return () => clearInterval(msgInterval);
+        }
+    }, [selectedConv?.customerPhone]);
+
+    // Scroll al final cuando hay nuevos mensajes
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatMessages]);
+
+    const loadMessages = async (phone: string) => {
+        try {
+            const messages = await whatsappService.getConversationMessages(phone);
+            setChatMessages(messages);
+        } catch (err) {
+            console.error('Error loading messages:', err);
+        }
+    };
 
     const loadConversations = async () => {
         try {
@@ -58,13 +86,26 @@ export const WhatsAppConversationsSection: React.FC = () => {
         return d.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
     };
 
-    const handleSelectConversation = (conv: WhatsAppConversation) => {
+    const handleSelectConversation = async (conv: WhatsAppConversation) => {
         setSelectedConv({
             ...conv,
             isManualMode: conv.currentStep === 'MANUAL'
         });
         setMessage('');
         setActionMessage(null);
+        setChatMessages([]);
+        setLoadingMessages(true);
+
+        // Cargar mensajes
+        try {
+            const messages = await whatsappService.getConversationMessages(conv.customerPhone);
+            setChatMessages(messages);
+        } catch (err) {
+            console.error('Error loading messages:', err);
+        } finally {
+            setLoadingMessages(false);
+        }
+
         // Focus en el input de mensaje
         setTimeout(() => inputRef.current?.focus(), 100);
     };
@@ -260,12 +301,43 @@ export const WhatsAppConversationsSection: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Area de chat (placeholder para historial futuro) */}
-                        <div className="flex-1 p-4 overflow-y-auto">
-                            <div className="text-center text-gray-400 py-8">
-                                <p className="text-sm">El historial de mensajes no esta disponible aun.</p>
-                                <p className="text-xs mt-1">Puedes enviar mensajes directamente al cliente.</p>
-                            </div>
+                        {/* Area de chat con historial de mensajes */}
+                        <div className="flex-1 p-4 overflow-y-auto bg-gray-50 dark:bg-dark-900">
+                            {loadingMessages ? (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500"></div>
+                                </div>
+                            ) : chatMessages.length === 0 ? (
+                                <div className="text-center text-gray-400 py-8">
+                                    <p className="text-sm">No hay mensajes aun.</p>
+                                    <p className="text-xs mt-1">Los mensajes apareceran aqui.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {chatMessages.map((msg, i) => (
+                                        <div
+                                            key={i}
+                                            className={`flex ${msg.direction === 'out' ? 'justify-end' : 'justify-start'}`}
+                                        >
+                                            <div
+                                                className={`max-w-[75%] px-3 py-2 rounded-lg ${
+                                                    msg.direction === 'out'
+                                                        ? 'bg-green-500 text-white rounded-br-none'
+                                                        : 'bg-white dark:bg-dark-700 text-gray-800 dark:text-white rounded-bl-none shadow'
+                                                }`}
+                                            >
+                                                <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>
+                                                <p className={`text-xs mt-1 ${
+                                                    msg.direction === 'out' ? 'text-green-100' : 'text-gray-400'
+                                                }`}>
+                                                    {formatTime(msg.timestamp)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div ref={messagesEndRef} />
+                                </div>
+                            )}
                         </div>
 
                         {/* Mensajes rapidos */}

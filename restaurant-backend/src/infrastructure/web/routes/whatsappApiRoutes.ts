@@ -8,6 +8,7 @@ import { getWhatsAppChatbot, getWhatsAppClient, isWhatsAppEnabled } from '../../
 import { logger } from '../../utils/Logger';
 import QRCode from 'qrcode';
 import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepository';
+import { getConversationRepository } from '../../repositories/ConversationRepository';
 
 const router = Router();
 
@@ -265,6 +266,32 @@ router.get('/conversations/:id', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/whatsapp/conversations/:id/messages
+ * Obtiene el historial de mensajes de una conversación
+ */
+router.get('/conversations/:id/messages', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        // El id puede venir con o sin @c.us
+        const phone = id.replace('@c.us', '');
+
+        const conversationRepo = getConversationRepository();
+        const messages = await conversationRepo.getMessages(phone);
+
+        res.json({
+            success: true,
+            data: messages
+        });
+    } catch (error: any) {
+        logger.error('[WhatsAppAPI] Error getting conversation messages', { error });
+        res.status(500).json({
+            success: false,
+            error: { code: 'INTERNAL_ERROR', message: error.message }
+        });
+    }
+});
+
+/**
  * GET /api/whatsapp/stats
  * Obtiene estadísticas de WhatsApp
  */
@@ -321,6 +348,11 @@ router.post('/send', async (req: Request, res: Response) => {
         const result = await client.sendText(phone, message);
 
         if (result.success) {
+            // Guardar mensaje saliente en el historial
+            const conversationRepo = getConversationRepository();
+            const phoneClean = phone.replace(/@(c\.us|lid|s\.whatsapp\.net)$/i, '');
+            await conversationRepo.addMessage(phoneClean, 'out', message, 'text');
+
             res.json({
                 success: true,
                 data: { message: 'Mensaje enviado', messageId: result.messageId }
