@@ -612,7 +612,8 @@ export class WhatsAppChatbot {
      * Procesa un mensaje entrante
      */
     public async processMessage(message: IncomingMessage): Promise<void> {
-        const { from, type, text, buttonPayload, listReplyId } = message;
+        let { from } = message;
+        const { type, text, buttonPayload, listReplyId } = message;
 
         // ═══════════════════════════════════════════════════════════════════
         // FILTRAR MENSAJES NO VÁLIDOS
@@ -638,9 +639,12 @@ export class WhatsAppChatbot {
         // ═══════════════════════════════════════════════════════════════════
 
         // Normalizar el número de teléfono para consistencia
+        // IMPORTANTE: Sobrescribir 'from' para que todas las respuestas usen el formato correcto (@c.us)
+        const originalFrom = from;
         const normalizedFrom = this.normalizePhone(from);
+        from = normalizedFrom; // Usar el normalizado en todas las respuestas
 
-        logger.info('[WhatsAppChatbot] Processing message', { from, normalizedFrom, type, text: text?.substring(0, 50) });
+        logger.info('[WhatsAppChatbot] Processing message', { originalFrom, from, type, text: text?.substring(0, 50) });
 
         // ═══════════════════════════════════════════════════════════════════
         // VERIFICACIÓN DE HORARIO DE ATENCIÓN
