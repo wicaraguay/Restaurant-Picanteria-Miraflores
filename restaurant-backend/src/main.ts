@@ -229,11 +229,39 @@ const startServer = async () => {
                         if (message.from.includes('@lid') || !message.from.includes('@c.us')) {
                             try {
                                 const contact = await message.getContact();
-                                if (contact && contact.number) {
-                                    fromNumber = contact.number + '@c.us';
+
+                                // Buscar el número real en diferentes propiedades
+                                let realNumber = null;
+
+                                // Intentar desde contact.id._serialized (formato: numero@c.us)
+                                if (contact?.id?._serialized && contact.id._serialized.includes('@c.us')) {
+                                    realNumber = contact.id._serialized;
+                                }
+                                // Intentar desde contact.id.user
+                                else if (contact?.id?.user && !contact.id.user.includes(':')) {
+                                    realNumber = contact.id.user + '@c.us';
+                                }
+                                // Intentar desde contact.number si parece un número real (empieza con código de país)
+                                else if (contact?.number && /^[1-9]\d{9,14}$/.test(contact.number)) {
+                                    realNumber = contact.number + '@c.us';
+                                }
+
+                                // También revisar message._data por si tiene el número real
+                                if (!realNumber && message._data?.from && message._data.from.includes('@c.us')) {
+                                    realNumber = message._data.from;
+                                }
+
+                                if (realNumber && !realNumber.includes('@lid')) {
+                                    fromNumber = realNumber;
                                     logger.info('[WhatsApp] Resolved LID to real number', {
                                         lid: message.from,
                                         realNumber: fromNumber
+                                    });
+                                } else {
+                                    logger.warn('[WhatsApp] Could not resolve LID - using original', {
+                                        lid: message.from,
+                                        contactId: contact?.id,
+                                        contactNumber: contact?.number
                                     });
                                 }
                             } catch (contactErr) {
