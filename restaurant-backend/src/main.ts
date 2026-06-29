@@ -53,6 +53,9 @@ metricsService.init();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy (needed for express-rate-limit behind reverse proxy/Docker)
+app.set('trust proxy', 1);
+
 // Middleware
 // Request ID (must be first to ensure all subsequent middleware has access to requestId)
 app.use(requestIdMiddleware);
