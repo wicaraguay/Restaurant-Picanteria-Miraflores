@@ -90,11 +90,12 @@ class WhatsAppClient extends EventEmitter {
                 },
                 printQRInTerminal: false,
                 logger: silentLogger,
-                browser: ['Restaurant PM', 'Chrome', '120.0.0'],
+                browser: ['Ubuntu', 'Chrome', '114.0.0.0'],
                 connectTimeoutMs: 60000,
                 defaultQueryTimeoutMs: 60000,
                 keepAliveIntervalMs: 30000,
-                markOnlineOnConnect: false
+                markOnlineOnConnect: false,
+                syncFullHistory: false
             });
 
             // Manejar actualizaciones de conexión
