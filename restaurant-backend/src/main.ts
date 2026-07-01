@@ -108,6 +108,10 @@ const limiter = rateLimit({
     max: parseInt(process.env.RATE_LIMIT_MAX || '500', 10), // Configurable, default 500 requests/15min
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => {
+        // Skip rate limit for WhatsApp endpoints (polling for QR)
+        return req.path.startsWith('/api/whatsapp/');
+    },
     handler: (req, res) => {
         logger.warn('Rate limit exceeded', { ip: req.ip, path: req.path });
         res.status(429).json({
