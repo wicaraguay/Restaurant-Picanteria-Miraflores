@@ -144,21 +144,26 @@ class WhatsAppClient extends EventEmitter {
                     this.isConnecting = false;
 
                     const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-                    const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
                     logger.warn('[WhatsApp] Disconnected', {
                         statusCode,
-                        shouldReconnect,
                         reason: DisconnectReason[statusCode] || 'unknown'
                     });
 
-                    if (statusCode === DisconnectReason.loggedOut) {
-                        // Usuario cerró sesión desde el teléfono
-                        logger.info('[WhatsApp] Logged out from phone, clearing session...');
+                    // Errores que requieren limpiar sesión
+                    const needsClearSession = [
+                        DisconnectReason.loggedOut,      // 401
+                        DisconnectReason.badSession,     // 500
+                        405                               // Method not allowed
+                    ].includes(statusCode);
+
+                    if (needsClearSession) {
+                        logger.info('[WhatsApp] Clearing corrupted session...');
                         await this.clearSession();
                         this.emit('logged_out');
-                    } else if (shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
-                        // Intentar reconectar
+                        // NO reconectar automáticamente - usuario debe escanear QR nuevo
+                    } else if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                        // Intentar reconectar para otros errores
                         this.reconnectAttempts++;
                         const delay = Math.min(5000 * this.reconnectAttempts, 30000);
                         logger.info('[WhatsApp] Reconnecting...', { attempt: this.reconnectAttempts, delay });
@@ -313,15 +318,33 @@ class WhatsAppClient extends EventEmitter {
             lastActivity: null
         };
 
-        // Eliminar archivos de sesión
+        // Eliminar archivos de sesión - múltiples intentos
         try {
+            // Intento 1: fs.rmSync
             if (fs.existsSync(this.sessionPath)) {
-                fs.rmSync(this.sessionPath, { recursive: true, force: true });
-                fs.mkdirSync(this.sessionPath, { recursive: true });
+                const files = fs.readdirSync(this.sessionPath);
+                for (const file of files) {
+                    try {
+                        const filePath = path.join(this.sessionPath, file);
+                        fs.rmSync(filePath, { recursive: true, force: true });
+                    } catch (e) {
+                        // Continuar con otros archivos
+                    }
+                }
             }
             logger.info('[WhatsApp] Session cleared');
         } catch (e) {
-            logger.warn('[WhatsApp] Could not clear session files');
+            // Intento 2: crear directorio nuevo si falla
+            try {
+                const backupPath = this.sessionPath + '_old_' + Date.now();
+                if (fs.existsSync(this.sessionPath)) {
+                    fs.renameSync(this.sessionPath, backupPath);
+                }
+                fs.mkdirSync(this.sessionPath, { recursive: true });
+                logger.info('[WhatsApp] Session cleared (renamed old)');
+            } catch (e2) {
+                logger.warn('[WhatsApp] Could not clear session files', { error: e2 });
+            }
         }
 
         this.emit('session_cleared');
