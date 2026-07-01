@@ -1,14 +1,10 @@
 /**
- * WhatsApp Chatbot - Versión Simplificada
- *
- * Funcionalidad:
- * - Responde con el menú del día cuando alguien escribe
- * - Informa que está cerrado si está fuera de horario
- * - Muestra horarios de atención
+ * WhatsApp Chatbot - Versión Simplificada y Optimizada
  */
 
 import { WhatsAppWebClient } from './WhatsAppWebClient';
 import { logger } from '../../utils/Logger';
+import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepository';
 
 export interface IncomingMessage {
     from: string;
@@ -25,7 +21,6 @@ export interface DaySchedule {
 }
 
 export interface ChatbotConfig {
-    welcomeMessage?: string;
     businessName?: string;
     businessPhone?: string;
     businessAddress?: string;
@@ -42,10 +37,17 @@ export class WhatsAppChatbot {
     private config: ChatbotConfig | null = null;
     private menuRepository: any = null;
 
+    // Cache del menú para no consultar DB cada mensaje
+    private menuCache: string | null = null;
+    private menuCacheTime: number = 0;
+    private readonly MENU_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
     constructor(client?: WhatsAppWebClient) {
         if (client) {
             this.client = client;
         }
+        // Cargar config automáticamente
+        this.loadConfig();
     }
 
     public setClient(client: WhatsAppWebClient): void {
@@ -54,19 +56,41 @@ export class WhatsAppChatbot {
 
     public setMenuRepository(repo: any): void {
         this.menuRepository = repo;
+        logger.info('[WhatsAppChatbot] Menu repository set');
+    }
+
+    /**
+     * Carga configuración desde el repositorio
+     */
+    private async loadConfig(): Promise<void> {
+        try {
+            const configRepo = getChatbotConfigRepository();
+            const fullConfig = await configRepo.get();
+            this.config = {
+                businessName: fullConfig.businessName,
+                businessPhone: fullConfig.paymentInfo?.banks?.[0]?.accountNumber || '',
+                schedule: fullConfig.schedule
+            };
+            logger.info('[WhatsAppChatbot] Config loaded', { businessName: this.config.businessName });
+        } catch (error) {
+            logger.error('[WhatsAppChatbot] Failed to load config', { error });
+        }
     }
 
     public async reloadConfig(): Promise<void> {
-        // Se carga desde el repositorio de configuración
+        await this.loadConfig();
+        this.clearMenuCache();
     }
 
     public setConfig(config: ChatbotConfig): void {
         this.config = config;
     }
 
-    /**
-     * Normaliza el número de teléfono
-     */
+    private clearMenuCache(): void {
+        this.menuCache = null;
+        this.menuCacheTime = 0;
+    }
+
     private normalizePhone(phone: string): string {
         let cleaned = phone.replace(/@(lid|c\.us|s\.whatsapp\.net|g\.us)$/i, '');
         cleaned = cleaned.replace(/[\s\-\(\)\+]/g, '');
@@ -80,9 +104,6 @@ export class WhatsAppChatbot {
         return cleaned + '@c.us';
     }
 
-    /**
-     * Verifica si está dentro del horario de atención
-     */
     private checkBusinessHours(): { isOpen: boolean; message: string } {
         const schedule = this.config?.schedule;
         if (!schedule?.enabled || !schedule.days) {
@@ -117,9 +138,6 @@ export class WhatsAppChatbot {
         return { isOpen: true, message: '' };
     }
 
-    /**
-     * Construye mensaje de horario cerrado
-     */
     private buildClosedMessage(days: DaySchedule[]): string {
         const businessName = this.config?.businessName || 'el negocio';
         let message = `Hola! Gracias por escribirnos.\n\n`;
@@ -139,23 +157,30 @@ export class WhatsAppChatbot {
     }
 
     /**
-     * Obtiene el menú del día actual
+     * Obtiene el menú del día (con cache)
      */
     private async getDailyMenu(): Promise<string> {
+        // Verificar cache
+        const now = Date.now();
+        if (this.menuCache && (now - this.menuCacheTime) < this.MENU_CACHE_TTL) {
+            logger.debug('[WhatsAppChatbot] Using cached menu');
+            return this.menuCache;
+        }
+
         try {
             if (!this.menuRepository) {
+                logger.warn('[WhatsAppChatbot] Menu repository not set');
                 return 'Menu no disponible en este momento.';
             }
 
             const items = await this.menuRepository.findAvailable();
 
             if (!items || items.length === 0) {
+                logger.warn('[WhatsAppChatbot] No available items found');
                 return 'No hay productos disponibles en este momento.';
             }
 
             const businessName = this.config?.businessName || 'Nuestro Restaurante';
-            const businessPhone = this.config?.businessPhone || '';
-            const businessAddress = this.config?.businessAddress || '';
 
             let menu = `*${businessName}*\n\n`;
             menu += `*MENU DEL DIA*\n`;
@@ -178,15 +203,12 @@ export class WhatsAppChatbot {
             }
 
             menu += `━━━━━━━━━━━━━━━━━━━━\n`;
+            menu += `\nPara pedidos, responde a este mensaje o llama!`;
 
-            if (businessPhone) {
-                menu += `*Pedidos:* ${businessPhone}\n`;
-            }
-            if (businessAddress) {
-                menu += `*Direccion:* ${businessAddress}\n`;
-            }
-
-            menu += `\nTe esperamos!`;
+            // Guardar en cache
+            this.menuCache = menu;
+            this.menuCacheTime = now;
+            logger.info('[WhatsAppChatbot] Menu cached', { itemCount: items.length });
 
             return menu;
         } catch (error) {
@@ -210,12 +232,18 @@ export class WhatsAppChatbot {
         // Normalizar teléfono
         from = this.normalizePhone(from);
 
-        logger.info('[WhatsAppChatbot] Message received', { from, text: text?.substring(0, 50) });
+        logger.info('[WhatsAppChatbot] Processing message', { from, text: text?.substring(0, 50) });
+
+        // Cargar config si no existe
+        if (!this.config) {
+            await this.loadConfig();
+        }
 
         // Verificar horario
         const businessHours = this.checkBusinessHours();
 
         if (!businessHours.isOpen) {
+            logger.info('[WhatsAppChatbot] Outside business hours, sending closed message');
             await this.sendMessage(from, businessHours.message);
             return;
         }
@@ -225,42 +253,33 @@ export class WhatsAppChatbot {
         await this.sendMessage(from, menu);
     }
 
-    /**
-     * Envía un mensaje
-     */
     private async sendMessage(to: string, text: string): Promise<void> {
         if (!this.client) {
-            logger.warn('[WhatsAppChatbot] Client not available');
+            logger.error('[WhatsAppChatbot] Client not set - cannot send message');
+            return;
+        }
+
+        if (!this.client.isEnabled()) {
+            logger.error('[WhatsAppChatbot] Client not ready - cannot send message');
             return;
         }
 
         try {
-            await this.client.sendText(to, text);
+            const result = await this.client.sendText(to, text);
+            if (result.success) {
+                logger.info('[WhatsAppChatbot] Message sent successfully', { to });
+            } else {
+                logger.error('[WhatsAppChatbot] Failed to send message', { to, error: result.error });
+            }
         } catch (error) {
             logger.error('[WhatsAppChatbot] Error sending message', { to, error });
         }
     }
 
-    /**
-     * Métodos de compatibilidad (retornan datos vacíos)
-     */
-    public getActiveConversations(): any[] {
-        return [];
-    }
-
-    public getConversation(id: string): any {
-        return null;
-    }
-
-    public async setManualMode(phone: string, enabled: boolean): Promise<boolean> {
-        return false;
-    }
-
-    public getManualModeConversations(): any[] {
-        return [];
-    }
-
-    public async loadMenuFromDatabase(): Promise<number> {
-        return 0;
-    }
+    // Métodos de compatibilidad
+    public getActiveConversations(): any[] { return []; }
+    public getConversation(id: string): any { return null; }
+    public async setManualMode(phone: string, enabled: boolean): Promise<boolean> { return false; }
+    public getManualModeConversations(): any[] { return []; }
+    public async loadMenuFromDatabase(): Promise<number> { return 0; }
 }
