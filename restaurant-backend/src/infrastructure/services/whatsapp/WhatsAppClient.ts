@@ -8,7 +8,8 @@ import makeWASocket, {
     useMultiFileAuthState,
     WASocket,
     proto,
-    makeCacheableSignalKeyStore
+    makeCacheableSignalKeyStore,
+    fetchLatestBaileysVersion
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import * as QRCode from 'qrcode';
@@ -77,25 +78,31 @@ class WhatsAppClient extends EventEmitter {
         logger.info('[WhatsApp] Connecting...');
 
         try {
+            // Obtener última versión de WhatsApp Web
+            const { version, isLatest } = await fetchLatestBaileysVersion();
+            logger.info('[WhatsApp] Using WA version', { version, isLatest });
+
             // Cargar estado de autenticación
             const { state, saveCreds } = await useMultiFileAuthState(this.sessionPath);
 
-            // Crear socket con configuración silenciosa
-            const silentLogger = pino({ level: 'silent' });
+            // Logger para debug
+            const silentLogger = pino({ level: 'warn' });
 
             this.socket = makeWASocket({
+                version,
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, silentLogger)
                 },
-                printQRInTerminal: false,
+                printQRInTerminal: true,
                 logger: silentLogger,
-                browser: ['Ubuntu', 'Chrome', '114.0.0.0'],
+                browser: ['WhatsApp Web', 'Chrome', '120.0.0'],
                 connectTimeoutMs: 60000,
                 defaultQueryTimeoutMs: 60000,
-                keepAliveIntervalMs: 30000,
+                keepAliveIntervalMs: 25000,
                 markOnlineOnConnect: false,
-                syncFullHistory: false
+                syncFullHistory: false,
+                generateHighQualityLinkPreview: false
             });
 
             // Manejar actualizaciones de conexión
