@@ -1,27 +1,27 @@
 /**
- * WhatsApp Stats Section
- * Estadisticas del chatbot
+ * WhatsApp Stats Section - Simplificado
+ * Solo muestra estado de conexion
  */
 
 import React, { useState, useEffect } from 'react';
-import { whatsappService, WhatsAppStats } from '../services/whatsappService';
+import { whatsappService, WhatsAppStatus } from '../services/whatsappService';
 
 export const WhatsAppStatsSection: React.FC = () => {
-    const [stats, setStats] = useState<WhatsAppStats | null>(null);
+    const [status, setStatus] = useState<WhatsAppStatus | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        loadStats();
-        const interval = setInterval(loadStats, 30000);
+        loadStatus();
+        const interval = setInterval(loadStatus, 30000);
         return () => clearInterval(interval);
     }, []);
 
-    const loadStats = async () => {
+    const loadStatus = async () => {
         try {
-            const data = await whatsappService.getStats();
-            setStats(data);
+            const data = await whatsappService.getStatus();
+            setStatus(data);
         } catch (err) {
-            console.error('Error loading stats:', err);
+            console.error('Error loading status:', err);
         } finally {
             setLoading(false);
         }
@@ -35,48 +35,48 @@ export const WhatsAppStatsSection: React.FC = () => {
         );
     }
 
-    if (!stats) {
+    if (!status) {
         return (
             <div className="text-center py-12 text-gray-500">
-                <p>No se pudieron cargar las estadisticas</p>
+                <p>No se pudo cargar el estado</p>
             </div>
         );
     }
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-dark-800 rounded-xl p-6 border border-gray-200 dark:border-dark-700">
-                    <p className="text-sm text-gray-500">Estado</p>
-                    <p className={`text-2xl font-bold ${stats.isConnected ? 'text-green-500' : 'text-red-500'}`}>
-                        {stats.isConnected ? 'Conectado' : 'Desconectado'}
+                    <p className="text-sm text-gray-500 mb-2">Estado de Conexion</p>
+                    <p className={`text-2xl font-bold ${status.isConnected ? 'text-green-500' : 'text-red-500'}`}>
+                        {status.isConnected ? 'Conectado' : 'Desconectado'}
                     </p>
                 </div>
                 <div className="bg-white dark:bg-dark-800 rounded-xl p-6 border border-gray-200 dark:border-dark-700">
-                    <p className="text-sm text-gray-500">Numero</p>
+                    <p className="text-sm text-gray-500 mb-2">Numero Conectado</p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {stats.phoneNumber || 'N/A'}
+                        {status.phoneNumber || 'Sin numero'}
                     </p>
-                </div>
-                <div className="bg-white dark:bg-dark-800 rounded-xl p-6 border border-gray-200 dark:border-dark-700">
-                    <p className="text-sm text-gray-500">Conversaciones Totales</p>
-                    <p className="text-2xl font-bold text-blue-500">{stats.totalConversations}</p>
-                </div>
-                <div className="bg-white dark:bg-dark-800 rounded-xl p-6 border border-gray-200 dark:border-dark-700">
-                    <p className="text-sm text-gray-500">Conversaciones Activas</p>
-                    <p className="text-2xl font-bold text-green-500">{stats.activeConversations}</p>
                 </div>
             </div>
 
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
                 <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-2">
-                    Informacion
+                    Funcionamiento del Chatbot
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Las estadisticas de pedidos se muestran en el Dashboard principal. 
-                    Los pedidos de WhatsApp se sincronizan automaticamente con la seccion de Gestion de Pedidos.
-                </p>
+                <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                    <li>• Cuando alguien escribe, el bot envia automaticamente el menu del dia</li>
+                    <li>• El menu se obtiene de la seccion "Menu Diario" configurada para hoy</li>
+                    <li>• Si esta fuera del horario de atencion, envia el mensaje de cerrado</li>
+                    <li>• Configura horarios y mensaje en la pestana "Chatbot"</li>
+                </ul>
             </div>
+
+            {status.lastActivity && (
+                <div className="text-sm text-gray-500 text-center">
+                    Ultima actividad: {new Date(status.lastActivity).toLocaleString()}
+                </div>
+            )}
         </div>
     );
 };

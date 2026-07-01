@@ -210,99 +210,26 @@ const startServer = async () => {
         if (isWhatsAppEnabled()) {
             logger.info('📱 WhatsApp is ENABLED - initializing...');
 
-            // Initialize WhatsApp Chatbot with dynamic menu from database
             const chatbot = getWhatsAppChatbot();
             const whatsappClient = getWhatsAppClient();
 
             if (whatsappClient) {
+                // Configurar repositorio de menú para mostrar productos disponibles
                 chatbot.setMenuRepository(container.getMenuRepository());
-                chatbot.setOrderRepository(container.getOrderRepository());
-                await chatbot.loadMenuFromDatabase();
 
-                // Connect WhatsApp client messages to chatbot
+                // Conectar mensajes de WhatsApp al chatbot
                 whatsappClient.on('message', async (message: any) => {
                     try {
-                        // Obtener el número real del contacto (WhatsApp puede enviar LID interno)
-                        let fromNumber = message.from;
-
-                        // Si es un LID (@lid), intentar obtener el número real del contacto
-                        if (message.from.includes('@lid') || !message.from.includes('@c.us')) {
-                            try {
-                                const contact = await message.getContact();
-
-                                // Buscar el número real en diferentes propiedades
-                                let realNumber = null;
-
-                                // Intentar desde contact.id._serialized (formato: numero@c.us)
-                                if (contact?.id?._serialized && contact.id._serialized.includes('@c.us')) {
-                                    realNumber = contact.id._serialized;
-                                }
-                                // Intentar desde contact.id.user
-                                else if (contact?.id?.user && !contact.id.user.includes(':')) {
-                                    realNumber = contact.id.user + '@c.us';
-                                }
-                                // Intentar desde contact.number si parece un número real (empieza con código de país)
-                                else if (contact?.number && /^[1-9]\d{9,14}$/.test(contact.number)) {
-                                    realNumber = contact.number + '@c.us';
-                                }
-
-                                // También revisar message._data por si tiene el número real
-                                if (!realNumber && message._data?.from && message._data.from.includes('@c.us')) {
-                                    realNumber = message._data.from;
-                                }
-
-                                if (realNumber && !realNumber.includes('@lid')) {
-                                    fromNumber = realNumber;
-                                    logger.info('[WhatsApp] Resolved LID to real number', {
-                                        lid: message.from,
-                                        realNumber: fromNumber
-                                    });
-                                } else {
-                                    logger.warn('[WhatsApp] Could not resolve LID - using original', {
-                                        lid: message.from,
-                                        contactId: contact?.id,
-                                        contactNumber: contact?.number
-                                    });
-                                }
-                            } catch (contactErr) {
-                                logger.warn('[WhatsApp] Could not resolve contact number', {
-                                    from: message.from,
-                                    error: (contactErr as Error).message
-                                });
-                            }
-                        }
-
-                        // Convert whatsapp-web.js message to our format
-                        const incomingMessage: any = {
-                            from: fromNumber,
-                            messageId: message.id._serialized || message.id.id,
-                            type: message.type === 'chat' ? 'text' : message.type,
+                        const incomingMessage = {
+                            from: message.from,
                             text: message.body,
-                            buttonPayload: message.selectedButtonId,
-                            listReplyId: message.selectedRowId,
-                            timestamp: message.timestamp
+                            type: message.type === 'chat' ? 'text' : message.type
                         };
 
-                        // Extraer datos de ubicación si el mensaje es de tipo location
-                        if (message.type === 'location' && message.location) {
-                            incomingMessage.latitude = message.location.latitude;
-                            incomingMessage.longitude = message.location.longitude;
-                            incomingMessage.locationName = message.location.name;
-                            incomingMessage.locationAddress = message.location.address || message.location.description;
-
-                            logger.info('[WhatsApp] Location message received', {
-                                from: incomingMessage.from,
-                                lat: incomingMessage.latitude,
-                                lng: incomingMessage.longitude,
-                                address: incomingMessage.locationAddress
-                            });
-                        } else {
-                            logger.info('[WhatsApp] Message received, forwarding to chatbot', {
-                                from: incomingMessage.from,
-                                type: message.type,
-                                text: incomingMessage.text?.substring(0, 30)
-                            });
-                        }
+                        logger.info('[WhatsApp] Message received', {
+                            from: message.from,
+                            text: message.body?.substring(0, 30)
+                        });
 
                         await chatbot.processMessage(incomingMessage);
                     } catch (error) {
@@ -310,28 +237,7 @@ const startServer = async () => {
                     }
                 });
 
-                // Connect chatbot to order creation system (retorna el ID del pedido)
-                const createOrderUseCase = container.getCreateOrderUseCase();
-                chatbot.setOrderCallback(async (orderData): Promise<string> => {
-                    const addressInfo = orderData.customerAddress ? ` (${orderData.customerAddress})` : '';
-                    const customerNameWithInfo = `${orderData.customerName} [WhatsApp: ${orderData.customerPhone}]${addressInfo}`;
-
-                    const order = await createOrderUseCase.execute({
-                        customerName: customerNameWithInfo,
-                        items: orderData.items.map((item: any) => ({
-                            name: item.name,
-                            quantity: item.quantity,
-                            price: item.price,
-                            taxRate: item.taxRate ?? 0
-                        })),
-                        type: orderData.type as 'En Local' | 'Delivery' | 'Para Llevar',
-                        status: OrderStatus.New
-                    });
-                    logger.info('WhatsApp order created', { orderId: order.id, customer: orderData.customerName, items: orderData.items.length });
-                    return order.id;
-                });
-
-                logger.info('📱 WhatsApp Chatbot initialized with dynamic menu');
+                logger.info('📱 WhatsApp Chatbot initialized (simple menu mode)');
             }
         } else {
             logger.info('📱 WhatsApp is DISABLED (set WHATSAPP_ENABLED=true to enable)');

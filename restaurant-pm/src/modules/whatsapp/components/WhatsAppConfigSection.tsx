@@ -259,15 +259,6 @@ export const WhatsAppConfigSection: React.FC = () => {
         }
     };
 
-    const handleReloadMenu = async () => {
-        try {
-            const result = await whatsappService.reloadMenu();
-            setMessage({ type: 'success', text: `Menu recargado: ${result.itemsLoaded} productos` });
-        } catch (err: any) {
-            setMessage({ type: 'error', text: err.message || 'Error al recargar menu' });
-        }
-    };
-
     const handleRefreshQR = () => {
         if (wsConnected) {
             whatsappSocket.requestQR();
@@ -434,9 +425,6 @@ export const WhatsAppConfigSection: React.FC = () => {
                 <div className="bg-white dark:bg-dark-800 rounded-xl p-6 border border-gray-200 dark:border-dark-700">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Acciones</h3>
                     <div className="flex flex-wrap gap-3">
-                        <button onClick={handleReloadMenu} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors">
-                            Recargar Menu
-                        </button>
                         <button onClick={handleDisconnect} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
                             Cerrar Sesion
                         </button>
