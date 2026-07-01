@@ -236,10 +236,13 @@ class WhatsAppClient extends EventEmitter {
      * Formatea número a JID de WhatsApp
      */
     private formatJid(phone: string): string {
-        // Quitar sufijos existentes
-        let cleaned = phone.replace(/@(s\.whatsapp\.net|c\.us|g\.us)$/i, '');
+        // Si ya tiene sufijo de WhatsApp, usarlo tal cual
+        if (phone.includes('@')) {
+            return phone;
+        }
+
         // Quitar caracteres especiales
-        cleaned = cleaned.replace(/[\s\-\(\)\+]/g, '');
+        let cleaned = phone.replace(/[\s\-\(\)\+]/g, '');
 
         // Ecuador: 09xxxxxxxx -> 593xxxxxxxx
         if (cleaned.startsWith('09') && cleaned.length === 10) {

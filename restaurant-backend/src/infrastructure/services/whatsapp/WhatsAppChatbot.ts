@@ -169,9 +169,9 @@ export class WhatsAppChatbot {
             const name = this.config?.businessName || 'Restaurante';
             let menu = `*${name}*\n\n`;
             menu += `*MENU DEL DIA*\n`;
-            menu += `━━━━━━━━━━━━━━━━\n\n`;
+            menu += `----------------\n\n`;
 
-            // Agrupar por categoría
+            // Agrupar por categoria
             const cats: Record<string, any[]> = {};
             for (const item of items) {
                 const cat = item.category || 'General';
@@ -182,12 +182,13 @@ export class WhatsAppChatbot {
             for (const [cat, catItems] of Object.entries(cats)) {
                 menu += `*${cat}*\n`;
                 for (const item of catItems) {
-                    menu += `• ${item.name} - $${item.price.toFixed(2)}\n`;
+                    const price = item.price?.toFixed(2) || '0.00';
+                    menu += `- ${item.name} - $${price}\n`;
                 }
                 menu += `\n`;
             }
 
-            menu += `━━━━━━━━━━━━━━━━\n`;
+            menu += `----------------\n`;
             menu += `Para pedidos responde este mensaje!`;
 
             this.menuCache = menu;
