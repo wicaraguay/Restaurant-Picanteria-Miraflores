@@ -101,8 +101,42 @@ export const WhatsAppConfigSection: React.FC = () => {
             setMessage({ type: 'info', text: 'Conectando... el QR aparecera en segundos' });
             await whatsappService.connect();
 
-            // El QR llegará por WebSocket o polling
-            setTimeout(loadStatus, 1000);
+            // Polling agresivo para obtener el QR (cada 500ms por 30 segundos)
+            let attempts = 0;
+            const maxAttempts = 60;
+            const pollForQR = async () => {
+                if (attempts >= maxAttempts) {
+                    setMessage({ type: 'error', text: 'Timeout esperando QR. Intenta de nuevo.' });
+                    setConnecting(false);
+                    return;
+                }
+                attempts++;
+
+                try {
+                    const qrResponse = await whatsappService.getQR();
+                    if (qrResponse.qrCode) {
+                        setQrCode(qrResponse.qrCode);
+                        setConnecting(false);
+                        setMessage(null);
+                        return;
+                    }
+
+                    const statusResponse = await whatsappService.getStatus();
+                    if (statusResponse.isConnected) {
+                        setStatus(statusResponse);
+                        setQrCode(null);
+                        setConnecting(false);
+                        setMessage({ type: 'success', text: 'WhatsApp conectado!' });
+                        return;
+                    }
+                } catch {
+                    // Ignorar errores, seguir intentando
+                }
+
+                setTimeout(pollForQR, 500);
+            };
+
+            setTimeout(pollForQR, 500);
         } catch (err: any) {
             setMessage({ type: 'error', text: err.message || 'Error al conectar' });
             setConnecting(false);
