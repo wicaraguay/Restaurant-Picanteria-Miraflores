@@ -20,6 +20,7 @@ export interface IMenuRepository {
     create(item: MenuItem): Promise<MenuItem>;
     findById(id: string): Promise<MenuItem | null>;
     findAll(): Promise<MenuItem[]>;
+    findAvailable(): Promise<MenuItem[]>;
     update(id: string, item: Partial<MenuItem>): Promise<MenuItem | null>;
     delete(id: string): Promise<boolean>;
 }

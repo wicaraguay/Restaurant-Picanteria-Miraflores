@@ -46,6 +46,14 @@ export class MongoMenuRepository extends BaseRepository<MenuItem> implements IMe
     }
 
     /**
+     * Find all available menu items (for WhatsApp chatbot)
+     */
+    async findAvailable(): Promise<MenuItem[]> {
+        const docs = await this.model.find({ available: true }).lean();
+        return docs.map(doc => this.mapToEntity(doc));
+    }
+
+    /**
      * Find all menu items with populated category
      */
     async findAllWithCategory(): Promise<MenuItem[]> {
