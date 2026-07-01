@@ -667,3 +667,15 @@ export async function initWhatsAppClient(): Promise<void> {
         await client.start();
     }
 }
+
+// Chatbot singleton
+import { WhatsAppChatbot } from './WhatsAppChatbot';
+let whatsAppChatbotInstance: WhatsAppChatbot | null = null;
+
+export function getWhatsAppChatbot(): WhatsAppChatbot {
+    if (!whatsAppChatbotInstance) {
+        const client = getWhatsAppClient();
+        whatsAppChatbotInstance = new WhatsAppChatbot(client || undefined);
+    }
+    return whatsAppChatbotInstance;
+}
