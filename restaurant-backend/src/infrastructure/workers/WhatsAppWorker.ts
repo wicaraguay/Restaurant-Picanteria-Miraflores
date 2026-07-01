@@ -8,7 +8,7 @@
 
 import { Worker, Queue, Job } from 'bullmq';
 import { logger } from '../utils/Logger';
-import { getWhatsAppClient, isWhatsAppEnabled } from '../services/whatsapp/WhatsAppWebClient';
+import { getWhatsAppClient, isWhatsAppEnabled } from '../services/whatsapp';
 
 const QUEUE_NAME = 'whatsapp-operations';
 
@@ -122,7 +122,7 @@ export class WhatsAppWorker {
     private async processJob(job: Job): Promise<any> {
         const client = getWhatsAppClient();
 
-        if (!client || !client.isEnabled()) {
+        if (!client || !client.isConnected()) {
             throw new Error('WhatsApp client not available or not ready');
         }
 
