@@ -1,21 +1,15 @@
 /**
- * @file WhatsAppSocketManager.ts
- * @description Gestiona WebSocket para comunicación en tiempo real del QR de WhatsApp
- *
- * Elimina la necesidad de polling HTTP cada 10 segundos.
- * El QR se envía instantáneamente cuando está disponible.
+ * WhatsApp Socket Manager - Para QR en tiempo real
  */
 
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import QRCode from 'qrcode';
 import { logger } from '../utils/Logger';
-import { getWhatsAppClient, isWhatsAppEnabled } from '../services/whatsapp/WhatsAppWebClient';
+import { getWhatsAppClient, isWhatsAppEnabled } from '../services/whatsapp';
 
-export class WhatsAppSocketManager {
+class WhatsAppSocketManager {
     private static instance: WhatsAppSocketManager;
     private io: SocketIOServer | null = null;
-    private qrImageCache: string | null = null;
 
     private constructor() {}
 
@@ -26,12 +20,8 @@ export class WhatsAppSocketManager {
         return WhatsAppSocketManager.instance;
     }
 
-    /**
-     * Inicializa el servidor WebSocket
-     */
     public initialize(server: HttpServer): void {
         if (!isWhatsAppEnabled()) {
-            logger.info('[WhatsAppSocket] WhatsApp disabled, skipping WebSocket initialization');
             return;
         }
 
@@ -46,201 +36,77 @@ export class WhatsAppSocketManager {
         });
 
         this.io.on('connection', (socket: Socket) => {
-            logger.info(`[WhatsAppSocket] Client connected: ${socket.id}`);
+            logger.debug('[WS] Client connected', { id: socket.id });
+            this.sendStatus(socket);
 
-            // Enviar estado actual inmediatamente al conectar
-            this.sendCurrentStatus(socket);
-
+            socket.on('request-status', () => this.sendStatus(socket));
+            socket.on('request-qr', () => this.sendStatus(socket));
             socket.on('disconnect', () => {
-                logger.debug(`[WhatsAppSocket] Client disconnected: ${socket.id}`);
-            });
-
-            // Cliente solicita QR manualmente
-            socket.on('request-qr', () => {
-                logger.debug(`[WhatsAppSocket] QR requested by client: ${socket.id}`);
-                this.sendCurrentStatus(socket);
-            });
-
-            // Cliente solicita estado
-            socket.on('request-status', () => {
-                this.sendCurrentStatus(socket);
+                logger.debug('[WS] Client disconnected', { id: socket.id });
             });
         });
 
-        this.setupWhatsAppListeners();
-        logger.info('[WhatsAppSocket] WebSocket server initialized on /ws/whatsapp');
+        this.setupClientListeners();
+        logger.info('[WS] WhatsApp Socket initialized');
     }
 
-    /**
-     * Configura los listeners de eventos de WhatsApp
-     */
-    private setupWhatsAppListeners(): void {
+    private setupClientListeners(): void {
         const client = getWhatsAppClient();
-        if (!client) {
-            logger.warn('[WhatsAppSocket] WhatsApp client not available for listeners');
-            return;
-        }
+        if (!client) return;
 
-        // QR generado - convertir a imagen y enviar
-        client.on('qr', async (qr: string) => {
-            try {
-                // Cachear QR como imagen base64
-                this.qrImageCache = await QRCode.toDataURL(qr, {
-                    width: 300,
-                    margin: 2
-                });
-
-                logger.info('[WhatsAppSocket] Broadcasting QR to all clients');
-                this.broadcast('qr', {
-                    qrCode: this.qrImageCache,
-                    timestamp: new Date().toISOString()
-                });
-            } catch (error) {
-                logger.error('[WhatsAppSocket] Error converting QR to image', { error });
-            }
+        // QR generado
+        client.on('qr', (qr: string, qrBase64: string) => {
+            this.broadcast('qr', { qrCode: qrBase64 });
         });
 
-        // Autenticado
-        client.on('authenticated', () => {
-            this.qrImageCache = null; // Limpiar cache de QR
-            logger.info('[WhatsAppSocket] Broadcasting authenticated event');
-            this.broadcast('authenticated', {
-                message: 'WhatsApp autenticado correctamente',
-                timestamp: new Date().toISOString()
-            });
-        });
-
-        // Listo para usar
-        client.on('ready', (phoneNumber?: string) => {
-            this.qrImageCache = null;
-            logger.info('[WhatsAppSocket] Broadcasting ready event');
-            this.broadcast('ready', {
-                message: 'WhatsApp está listo',
-                phoneNumber,
-                timestamp: new Date().toISOString()
-            });
+        // Conectado
+        client.on('connected', (phone: string) => {
+            this.broadcast('connected', { phoneNumber: phone });
+            this.broadcast('status', { isConnected: true, phoneNumber: phone });
         });
 
         // Desconectado
-        client.on('disconnected', (reason: string) => {
-            logger.info('[WhatsAppSocket] Broadcasting disconnected event');
-            this.broadcast('disconnected', {
-                reason,
-                timestamp: new Date().toISOString()
-            });
+        client.on('disconnected', () => {
+            this.broadcast('disconnected', {});
+            this.broadcast('status', { isConnected: false });
         });
 
-        // Error de autenticación
-        client.on('auth_failure', (message: string) => {
-            this.qrImageCache = null;
-            logger.info('[WhatsAppSocket] Broadcasting auth_failure event');
-            this.broadcast('auth_failure', {
-                message,
-                timestamp: new Date().toISOString()
-            });
+        // Sesión cerrada
+        client.on('logged_out', () => {
+            this.broadcast('logged_out', {});
         });
     }
 
-    /**
-     * Envía el estado actual a un socket específico
-     */
-    private async sendCurrentStatus(socket: Socket): Promise<void> {
+    private sendStatus(socket: Socket): void {
         const client = getWhatsAppClient();
 
         if (!client) {
-            socket.emit('status', {
-                isEnabled: false,
-                message: 'WhatsApp no está habilitado'
-            });
+            socket.emit('status', { isConnected: false });
             return;
         }
 
         const status = client.getStatus();
-
-        // Enviar estado
         socket.emit('status', {
-            isEnabled: true,
-            isReady: status.isReady,
-            isAuthenticated: status.isAuthenticated,
+            isConnected: status.isConnected,
             phoneNumber: status.phoneNumber,
-            lastActivity: status.lastActivity,
-            hasQR: !!status.qrCode || !!this.qrImageCache
+            hasQR: !!status.qrCode
         });
 
-        // Si hay QR disponible y no está autenticado, enviarlo
-        if (!status.isAuthenticated && (status.qrCode || this.qrImageCache)) {
-            if (this.qrImageCache) {
-                socket.emit('qr', {
-                    qrCode: this.qrImageCache,
-                    timestamp: new Date().toISOString()
-                });
-            } else if (status.qrCode) {
-                // Generar imagen si no está cacheada
-                try {
-                    this.qrImageCache = await QRCode.toDataURL(status.qrCode, {
-                        width: 300,
-                        margin: 2
-                    });
-                    socket.emit('qr', {
-                        qrCode: this.qrImageCache,
-                        timestamp: new Date().toISOString()
-                    });
-                } catch (error) {
-                    logger.error('[WhatsAppSocket] Error generating QR image', { error });
-                }
-            }
+        if (status.qrCodeBase64 && !status.isConnected) {
+            socket.emit('qr', { qrCode: status.qrCodeBase64 });
         }
     }
 
-    /**
-     * Envía un evento a todos los clientes conectados
-     */
     public broadcast(event: string, data: any): void {
         if (this.io) {
             this.io.emit(event, data);
-            logger.debug(`[WhatsAppSocket] Broadcast: ${event}`, { clientCount: this.io.engine.clientsCount });
         }
     }
 
-    /**
-     * Notifica al panel de admin que un cliente solicitó hablar con persona
-     */
-    public notifyHumanSupportRequested(phone: string, customerName?: string): void {
-        logger.info('[WhatsAppSocket] Notifying admin: human support requested', { phone, customerName });
-        this.broadcast('human_support_requested', {
-            phone,
-            customerName: customerName || 'Cliente',
-            timestamp: new Date().toISOString(),
-            message: `El cliente ${customerName || phone} solicita hablar con una persona`
-        });
-    }
-
-    /**
-     * Notifica al panel cuando se libera una conversación del modo manual
-     */
-    public notifyConversationReleased(phone: string): void {
-        logger.info('[WhatsAppSocket] Notifying admin: conversation released', { phone });
-        this.broadcast('conversation_released', {
-            phone,
-            timestamp: new Date().toISOString()
-        });
-    }
-
-    /**
-     * Obtiene la instancia de Socket.IO
-     */
-    public getIO(): SocketIOServer | null {
-        return this.io;
-    }
-
-    /**
-     * Cierra el servidor WebSocket
-     */
     public async close(): Promise<void> {
         if (this.io) {
             await this.io.close();
             this.io = null;
-            logger.info('[WhatsAppSocket] WebSocket server closed');
         }
     }
 }

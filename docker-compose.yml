@@ -1,14 +1,12 @@
 # ============================================
-# Docker Compose para Restaurant PM
-# Ambiente completo: Backend + Frontend + MongoDB
+# Docker Compose - Restaurant PM
+# WhatsApp con Baileys (ligero, sin Chromium)
 # ============================================
 
 version: '3.8'
 
 services:
-  # ============================================
-  # MongoDB Database
-  # ============================================
+  # MongoDB
   mongodb:
     image: mongo:7
     container_name: restaurant-pm-db
@@ -30,9 +28,7 @@ services:
       retries: 5
       start_period: 40s
 
-  # ============================================
-  # Backend API (Node.js/Express)
-  # ============================================
+  # Backend
   backend:
     build:
       context: ./restaurant-backend
@@ -65,15 +61,11 @@ services:
       - SMTP_FROM=${SMTP_FROM}
       - TEST_EMAIL=${TEST_EMAIL}
       - BUSINESS_LOGO_URL=${BUSINESS_LOGO_URL}
-      # WhatsApp - IMPORTANTE
+      # WhatsApp (Baileys - ligero)
       - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-true}
       - WHATSAPP_SESSION_PATH=/app/whatsapp-session
-      - WHATSAPP_CACHE_PATH=/app/.wwebjs_cache
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
     volumes:
-      # Persistir sesion de WhatsApp entre reinicios
       - whatsapp_session:/app/whatsapp-session
-      - whatsapp_cache:/app/.wwebjs_cache
     ports:
       - "3000:3000"
     networks:
@@ -83,16 +75,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
-    # Mas memoria para Chromium
-    deploy:
-      resources:
-        limits:
-          memory: 1G
+      start_period: 30s
 
-  # ============================================
-  # Frontend (React/Vite + Nginx)
-  # ============================================
+  # Frontend
   frontend:
     build:
       context: ./restaurant-pm
@@ -115,20 +100,12 @@ services:
       retries: 3
       start_period: 10s
 
-# ============================================
-# Volumenes persistentes
-# ============================================
 volumes:
   mongodb_data:
     driver: local
   whatsapp_session:
     driver: local
-  whatsapp_cache:
-    driver: local
 
-# ============================================
-# Red interna
-# ============================================
 networks:
   restaurant-network:
     driver: bridge

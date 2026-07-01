@@ -39,7 +39,7 @@ import categoryRoutes from './infrastructure/web/routes/categoryRoutes';
 
 import { cacheService } from './infrastructure/utils/CacheService';
 import { container } from './infrastructure/di/DIContainer';
-import { getWhatsAppChatbot, getWhatsAppClient, initWhatsAppClient, isWhatsAppEnabled } from './infrastructure/services/whatsapp';
+import { getWhatsAppChatbot, getWhatsAppClient, isWhatsAppEnabled } from './infrastructure/services/whatsapp';
 import { whatsAppSocketManager } from './infrastructure/websocket/WhatsAppSocketManager';
 import { OrderStatus } from './domain/entities/Order';
 
@@ -206,57 +206,46 @@ const startServer = async () => {
         // Start background tasks (Cron Jobs)
         container.getCronService().init();
 
-        // Initialize WhatsApp only if enabled
+        // Initialize WhatsApp (Baileys - sin Chromium)
         if (isWhatsAppEnabled()) {
-            logger.info('📱 WhatsApp is ENABLED - initializing...');
+            logger.info('📱 WhatsApp ENABLED (Baileys)');
 
             const chatbot = getWhatsAppChatbot();
             const whatsappClient = getWhatsAppClient();
 
             if (whatsappClient) {
-                // Configurar repositorio de menú para mostrar productos disponibles
                 chatbot.setMenuRepository(container.getMenuRepository());
 
-                // Conectar mensajes de WhatsApp al chatbot
+                // Escuchar mensajes entrantes
                 whatsappClient.on('message', async (message: any) => {
                     try {
-                        const incomingMessage = {
+                        await chatbot.processMessage({
                             from: message.from,
-                            text: message.body,
-                            type: message.type === 'chat' ? 'text' : message.type
-                        };
-
-                        logger.info('[WhatsApp] Message received', {
-                            from: message.from,
-                            text: message.body?.substring(0, 30)
+                            text: message.text
                         });
-
-                        await chatbot.processMessage(incomingMessage);
                     } catch (error) {
                         logger.error('[WhatsApp] Error processing message', { error });
                     }
                 });
 
-                logger.info('📱 WhatsApp Chatbot initialized (simple menu mode)');
+                // Conectar automáticamente si hay sesión guardada
+                whatsappClient.connect().catch(err => {
+                    logger.info('[WhatsApp] No saved session, waiting for QR scan');
+                });
+
+                logger.info('📱 WhatsApp Chatbot ready');
             }
         } else {
-            logger.info('📱 WhatsApp is DISABLED (set WHATSAPP_ENABLED=true to enable)');
+            logger.info('📱 WhatsApp DISABLED');
         }
 
-        // Crear servidor HTTP (necesario para WebSocket)
+        // Crear servidor HTTP
         const server = http.createServer(app);
 
-        // Inicializar WebSocket para WhatsApp
+        // WebSocket para QR en tiempo real
         if (isWhatsAppEnabled()) {
             whatsAppSocketManager.initialize(server);
-            logger.info('🔌 WhatsApp WebSocket initialized on /ws/whatsapp');
-
-            // Pre-inicializar Chromium en background (warmup)
-            const whatsappClient = getWhatsAppClient();
-            if (whatsappClient) {
-                whatsappClient.warmup();
-                logger.info('🔥 WhatsApp warmup started in background');
-            }
+            logger.info('🔌 WhatsApp WebSocket on /ws/whatsapp');
         }
 
         // Start listening

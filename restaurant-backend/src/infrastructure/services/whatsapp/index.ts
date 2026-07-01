@@ -1,7 +1,6 @@
 /**
- * @file index.ts
- * @description Exportaciones del módulo de WhatsApp (whatsapp-web.js)
+ * WhatsApp Module - Usando Baileys
  */
 
-export * from './WhatsAppWebClient';
+export * from './WhatsAppClient';
 export * from './WhatsAppChatbot';

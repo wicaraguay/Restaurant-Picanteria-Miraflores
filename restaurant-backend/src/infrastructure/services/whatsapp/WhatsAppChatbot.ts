@@ -1,18 +1,11 @@
 /**
- * WhatsApp Chatbot - Simple y Directo
- * Solo envía el menú del día cuando alguien escribe
+ * WhatsApp Chatbot - Simple
+ * Envía el menú del día cuando alguien escribe
  */
 
 import { logger } from '../../utils/Logger';
-import { getWhatsAppClient } from './WhatsAppWebClient';
+import { getWhatsAppClient } from './WhatsAppClient';
 import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepository';
-
-interface MenuItem {
-    name: string;
-    price: number;
-    category?: string;
-    available: boolean;
-}
 
 interface ScheduleDay {
     dayOfWeek: number;
@@ -28,21 +21,18 @@ interface ChatbotConfig {
         enabled: boolean;
         timezone: string;
         days: ScheduleDay[];
-        closedMessage?: string;
     };
 }
 
 export class WhatsAppChatbot {
     private menuRepository: any = null;
     private config: ChatbotConfig | null = null;
-    private configLoaded: boolean = false;
-
-    // Cache del menú
     private menuCache: string | null = null;
     private menuCacheExpiry: number = 0;
 
     constructor() {
-        logger.info('[Chatbot] Created');
+        this.loadConfig();
+        logger.info('[Chatbot] Initialized');
     }
 
     public setMenuRepository(repo: any): void {
@@ -50,115 +40,60 @@ export class WhatsAppChatbot {
         logger.info('[Chatbot] Menu repository set');
     }
 
-    /**
-     * Carga la configuración del chatbot
-     */
-    private async ensureConfig(): Promise<void> {
-        if (this.configLoaded && this.config) return;
-
+    private async loadConfig(): Promise<void> {
         try {
             const repo = getChatbotConfigRepository();
             const fullConfig = await repo.get();
-
             this.config = {
                 businessName: fullConfig.businessName || 'Restaurante',
                 schedule: fullConfig.schedule
             };
-
-            this.configLoaded = true;
-            logger.info('[Chatbot] Config loaded', { businessName: this.config.businessName });
+            logger.info('[Chatbot] Config loaded', { name: this.config.businessName });
         } catch (error) {
-            logger.error('[Chatbot] Failed to load config', { error });
-            // Config por defecto
+            logger.error('[Chatbot] Error loading config', { error });
             this.config = { businessName: 'Restaurante' };
-            this.configLoaded = true;
         }
     }
 
     /**
-     * Procesa un mensaje entrante
+     * Procesa mensaje entrante
      */
     public async processMessage(message: { from: string; text?: string }): Promise<void> {
         const { from, text } = message;
 
-        // Ignorar broadcast, status y grupos
-        if (from.includes('broadcast') || from.includes('status') || from.includes('@g.us')) {
-            return;
+        logger.info('[Chatbot] Processing', { from, text: text?.substring(0, 30) });
+
+        // Cargar config si no existe
+        if (!this.config) {
+            await this.loadConfig();
         }
-
-        logger.info('[Chatbot] Message received', { from, text: text?.substring(0, 30) });
-
-        // Asegurar que tenemos config
-        await this.ensureConfig();
-
-        // Normalizar teléfono
-        const phone = this.normalizePhone(from);
 
         // Verificar horario
         if (this.config?.schedule?.enabled) {
             const hours = this.checkBusinessHours();
             if (!hours.isOpen) {
-                await this.send(phone, hours.message);
+                await this.send(from, hours.message);
                 return;
             }
         }
 
         // Enviar menú
         const menu = await this.getMenu();
-        await this.send(phone, menu);
+        await this.send(from, menu);
     }
 
-    /**
-     * Envía mensaje usando el cliente de WhatsApp
-     */
     private async send(to: string, text: string): Promise<boolean> {
         const client = getWhatsAppClient();
 
-        if (!client) {
-            logger.error('[Chatbot] No WhatsApp client available');
+        if (!client || !client.isConnected()) {
+            logger.error('[Chatbot] Client not connected');
             return false;
         }
 
-        if (!client.isEnabled()) {
-            logger.error('[Chatbot] WhatsApp client not ready');
-            return false;
-        }
-
-        try {
-            const result = await client.sendText(to, text);
-
-            if (result.success) {
-                logger.info('[Chatbot] Message sent', { to });
-            } else {
-                logger.error('[Chatbot] Failed to send', { to, error: result.error });
-            }
-
-            return result.success;
-        } catch (error) {
-            logger.error('[Chatbot] Send error', { to, error });
-            return false;
-        }
+        const result = await client.sendText(to, text);
+        return result.success;
     }
 
-    /**
-     * Normaliza número de teléfono
-     */
-    private normalizePhone(phone: string): string {
-        let cleaned = phone.replace(/@(lid|c\.us|s\.whatsapp\.net|g\.us)$/i, '');
-        cleaned = cleaned.replace(/[\s\-\(\)\+]/g, '');
-
-        if (cleaned.startsWith('09') && cleaned.length === 10) {
-            cleaned = '593' + cleaned.substring(1);
-        } else if (cleaned.startsWith('9') && cleaned.length === 9) {
-            cleaned = '593' + cleaned;
-        }
-
-        return cleaned + '@c.us';
-    }
-
-    /**
-     * Verifica horario de atención
-     */
     private checkBusinessHours(): { isOpen: boolean; message: string } {
         const schedule = this.config?.schedule;
         if (!schedule?.enabled || !schedule.days) {
@@ -193,9 +128,6 @@ export class WhatsAppChatbot {
         return { isOpen: true, message: '' };
     }
 
-    /**
-     * Genera mensaje de cerrado
-     */
     private closedMessage(): string {
         const name = this.config?.businessName || 'el negocio';
         const days = this.config?.schedule?.days || [];
@@ -215,38 +147,32 @@ export class WhatsAppChatbot {
         return msg;
     }
 
-    /**
-     * Obtiene el menú (con cache de 3 minutos)
-     */
     private async getMenu(): Promise<string> {
         const now = Date.now();
 
-        // Usar cache si es válido
+        // Cache de 3 minutos
         if (this.menuCache && now < this.menuCacheExpiry) {
             return this.menuCache;
         }
 
-        // Obtener de la base de datos
         try {
             if (!this.menuRepository) {
-                logger.warn('[Chatbot] No menu repository');
                 return 'Menu no disponible. Contactanos por telefono.';
             }
 
-            const items: MenuItem[] = await this.menuRepository.findAvailable();
+            const items = await this.menuRepository.findAvailable();
 
             if (!items || items.length === 0) {
                 return 'No hay productos disponibles en este momento.';
             }
 
-            // Construir menú
             const name = this.config?.businessName || 'Restaurante';
             let menu = `*${name}*\n\n`;
             menu += `*MENU DEL DIA*\n`;
             menu += `━━━━━━━━━━━━━━━━\n\n`;
 
             // Agrupar por categoría
-            const cats: Record<string, MenuItem[]> = {};
+            const cats: Record<string, any[]> = {};
             for (const item of items) {
                 const cat = item.category || 'General';
                 if (!cats[cat]) cats[cat] = [];
@@ -264,11 +190,10 @@ export class WhatsAppChatbot {
             menu += `━━━━━━━━━━━━━━━━\n`;
             menu += `Para pedidos responde este mensaje!`;
 
-            // Guardar en cache (3 minutos)
             this.menuCache = menu;
             this.menuCacheExpiry = now + 180000;
 
-            logger.info('[Chatbot] Menu loaded', { items: items.length });
+            logger.info('[Chatbot] Menu cached', { items: items.length });
             return menu;
 
         } catch (error) {
@@ -277,10 +202,20 @@ export class WhatsAppChatbot {
         }
     }
 
-    // Métodos de compatibilidad (no usados)
+    // Compatibilidad
     public getActiveConversations(): any[] { return []; }
     public getConversation(id: string): any { return null; }
     public async setManualMode(phone: string, enabled: boolean): Promise<boolean> { return false; }
     public getManualModeConversations(): any[] { return []; }
     public async loadMenuFromDatabase(): Promise<number> { return 0; }
+}
+
+// Singleton
+let chatbotInstance: WhatsAppChatbot | null = null;
+
+export function getWhatsAppChatbot(): WhatsAppChatbot {
+    if (!chatbotInstance) {
+        chatbotInstance = new WhatsAppChatbot();
+    }
+    return chatbotInstance;
 }

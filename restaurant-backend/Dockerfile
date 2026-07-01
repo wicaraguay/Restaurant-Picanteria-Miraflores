@@ -1,14 +1,12 @@
 # ============================================
-# Dockerfile para Restaurant PM Backend
-# Con soporte para WhatsApp (Chromium)
+# Dockerfile - Restaurant PM Backend
+# WhatsApp con Baileys (SIN Chromium)
 # ============================================
 
-# Etapa 1: Build
+# Build
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 COPY package*.json ./
 RUN npm ci
@@ -17,50 +15,32 @@ COPY . .
 RUN npm run build
 
 # ============================================
-# Etapa 2: Produccion
+# Produccion - Muy ligero sin Chromium
 FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Instalar Chromium para WhatsApp
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    dumb-init \
-    && rm -rf /var/cache/apk/*
+# Solo dependencias mínimas
+RUN apk add --no-cache dumb-init && rm -rf /var/cache/apk/*
 
-# Variables de Puppeteer
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# Dependencias de produccion
+# Dependencias de producción
 COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
-# Codigo compilado
+# Código compilado
 COPY --from=builder /app/dist ./dist
 
-# Crear directorios para WhatsApp con permisos correctos
-RUN mkdir -p /app/whatsapp-session /app/.wwebjs_cache \
-    && chmod 777 /app/whatsapp-session /app/.wwebjs_cache
+# Directorio para sesión de WhatsApp
+RUN mkdir -p /app/whatsapp-session && chmod 777 /app/whatsapp-session
 
-# Exponer puerto
 EXPOSE 3000
 
-# Variables de entorno
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV WHATSAPP_SESSION_PATH=/app/whatsapp-session
-ENV WHATSAPP_CACHE_PATH=/app/.wwebjs_cache
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
-# Usar dumb-init para manejo correcto de señales
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/main.js"]
