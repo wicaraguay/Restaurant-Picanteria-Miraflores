@@ -1,18 +1,20 @@
 /**
- * WhatsApp Chatbot - Versión Simplificada y Optimizada
+ * WhatsApp Chatbot - Simple y Directo
+ * Solo envía el menú del día cuando alguien escribe
  */
 
-import { WhatsAppWebClient } from './WhatsAppWebClient';
 import { logger } from '../../utils/Logger';
+import { getWhatsAppClient } from './WhatsAppWebClient';
 import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepository';
 
-export interface IncomingMessage {
-    from: string;
-    text?: string;
-    type?: string;
+interface MenuItem {
+    name: string;
+    price: number;
+    category?: string;
+    available: boolean;
 }
 
-export interface DaySchedule {
+interface ScheduleDay {
     dayOfWeek: number;
     dayName: string;
     isOpen: boolean;
@@ -20,77 +22,127 @@ export interface DaySchedule {
     closeTime: string;
 }
 
-export interface ChatbotConfig {
-    businessName?: string;
-    businessPhone?: string;
-    businessAddress?: string;
+interface ChatbotConfig {
+    businessName: string;
     schedule?: {
         enabled: boolean;
         timezone: string;
-        days: DaySchedule[];
+        days: ScheduleDay[];
         closedMessage?: string;
     };
 }
 
 export class WhatsAppChatbot {
-    private client: WhatsAppWebClient | null = null;
-    private config: ChatbotConfig | null = null;
     private menuRepository: any = null;
+    private config: ChatbotConfig | null = null;
+    private configLoaded: boolean = false;
 
-    // Cache del menú para no consultar DB cada mensaje
+    // Cache del menú
     private menuCache: string | null = null;
-    private menuCacheTime: number = 0;
-    private readonly MENU_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+    private menuCacheExpiry: number = 0;
 
-    constructor(client?: WhatsAppWebClient) {
-        if (client) {
-            this.client = client;
-        }
-        // Cargar config automáticamente
-        this.loadConfig();
-    }
-
-    public setClient(client: WhatsAppWebClient): void {
-        this.client = client;
+    constructor() {
+        logger.info('[Chatbot] Created');
     }
 
     public setMenuRepository(repo: any): void {
         this.menuRepository = repo;
-        logger.info('[WhatsAppChatbot] Menu repository set');
+        logger.info('[Chatbot] Menu repository set');
     }
 
     /**
-     * Carga configuración desde el repositorio
+     * Carga la configuración del chatbot
      */
-    private async loadConfig(): Promise<void> {
+    private async ensureConfig(): Promise<void> {
+        if (this.configLoaded && this.config) return;
+
         try {
-            const configRepo = getChatbotConfigRepository();
-            const fullConfig = await configRepo.get();
+            const repo = getChatbotConfigRepository();
+            const fullConfig = await repo.get();
+
             this.config = {
-                businessName: fullConfig.businessName,
-                businessPhone: fullConfig.paymentInfo?.banks?.[0]?.accountNumber || '',
+                businessName: fullConfig.businessName || 'Restaurante',
                 schedule: fullConfig.schedule
             };
-            logger.info('[WhatsAppChatbot] Config loaded', { businessName: this.config.businessName });
+
+            this.configLoaded = true;
+            logger.info('[Chatbot] Config loaded', { businessName: this.config.businessName });
         } catch (error) {
-            logger.error('[WhatsAppChatbot] Failed to load config', { error });
+            logger.error('[Chatbot] Failed to load config', { error });
+            // Config por defecto
+            this.config = { businessName: 'Restaurante' };
+            this.configLoaded = true;
         }
     }
 
-    public async reloadConfig(): Promise<void> {
-        await this.loadConfig();
-        this.clearMenuCache();
+    /**
+     * Procesa un mensaje entrante
+     */
+    public async processMessage(message: { from: string; text?: string }): Promise<void> {
+        const { from, text } = message;
+
+        // Ignorar broadcast, status y grupos
+        if (from.includes('broadcast') || from.includes('status') || from.includes('@g.us')) {
+            return;
+        }
+
+        logger.info('[Chatbot] Message received', { from, text: text?.substring(0, 30) });
+
+        // Asegurar que tenemos config
+        await this.ensureConfig();
+
+        // Normalizar teléfono
+        const phone = this.normalizePhone(from);
+
+        // Verificar horario
+        if (this.config?.schedule?.enabled) {
+            const hours = this.checkBusinessHours();
+            if (!hours.isOpen) {
+                await this.send(phone, hours.message);
+                return;
+            }
+        }
+
+        // Enviar menú
+        const menu = await this.getMenu();
+        await this.send(phone, menu);
     }
 
-    public setConfig(config: ChatbotConfig): void {
-        this.config = config;
+    /**
+     * Envía mensaje usando el cliente de WhatsApp
+     */
+    private async send(to: string, text: string): Promise<boolean> {
+        const client = getWhatsAppClient();
+
+        if (!client) {
+            logger.error('[Chatbot] No WhatsApp client available');
+            return false;
+        }
+
+        if (!client.isEnabled()) {
+            logger.error('[Chatbot] WhatsApp client not ready');
+            return false;
+        }
+
+        try {
+            const result = await client.sendText(to, text);
+
+            if (result.success) {
+                logger.info('[Chatbot] Message sent', { to });
+            } else {
+                logger.error('[Chatbot] Failed to send', { to, error: result.error });
+            }
+
+            return result.success;
+        } catch (error) {
+            logger.error('[Chatbot] Send error', { to, error });
+            return false;
+        }
     }
 
-    private clearMenuCache(): void {
-        this.menuCache = null;
-        this.menuCacheTime = 0;
-    }
-
+    /**
+     * Normaliza número de teléfono
+     */
     private normalizePhone(phone: string): string {
         let cleaned = phone.replace(/@(lid|c\.us|s\.whatsapp\.net|g\.us)$/i, '');
         cleaned = cleaned.replace(/[\s\-\(\)\+]/g, '');
@@ -104,6 +156,9 @@ export class WhatsAppChatbot {
         return cleaned + '@c.us';
     }
 
+    /**
+     * Verifica horario de atención
+     */
     private checkBusinessHours(): { isOpen: boolean; message: string } {
         const schedule = this.config?.schedule;
         if (!schedule?.enabled || !schedule.days) {
@@ -112,171 +167,117 @@ export class WhatsAppChatbot {
 
         const now = new Date();
         const dayOfWeek = now.getDay();
-        const currentTime = now.toLocaleTimeString('en-US', {
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: schedule.timezone || 'America/Guayaquil'
-        });
 
-        const todaySchedule = schedule.days.find(d => d.dayOfWeek === dayOfWeek);
-
-        if (!todaySchedule || !todaySchedule.isOpen) {
-            return {
-                isOpen: false,
-                message: this.buildClosedMessage(schedule.days)
-            };
+        let currentTime: string;
+        try {
+            currentTime = now.toLocaleTimeString('en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: schedule.timezone || 'America/Guayaquil'
+            });
+        } catch {
+            currentTime = now.toTimeString().substring(0, 5);
         }
 
-        if (currentTime < todaySchedule.openTime || currentTime > todaySchedule.closeTime) {
-            return {
-                isOpen: false,
-                message: this.buildClosedMessage(schedule.days)
-            };
+        const today = schedule.days.find(d => d.dayOfWeek === dayOfWeek);
+
+        if (!today || !today.isOpen) {
+            return { isOpen: false, message: this.closedMessage() };
+        }
+
+        if (currentTime < today.openTime || currentTime > today.closeTime) {
+            return { isOpen: false, message: this.closedMessage() };
         }
 
         return { isOpen: true, message: '' };
     }
 
-    private buildClosedMessage(days: DaySchedule[]): string {
-        const businessName = this.config?.businessName || 'el negocio';
-        let message = `Hola! Gracias por escribirnos.\n\n`;
-        message += `En este momento ${businessName} esta cerrado.\n\n`;
-        message += `*HORARIOS DE ATENCION:*\n`;
+    /**
+     * Genera mensaje de cerrado
+     */
+    private closedMessage(): string {
+        const name = this.config?.businessName || 'el negocio';
+        const days = this.config?.schedule?.days || [];
 
-        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
+        let msg = `Hola! Gracias por escribirnos.\n\n`;
+        msg += `${name} esta cerrado en este momento.\n\n`;
+        msg += `*HORARIOS:*\n`;
 
+        const dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
         for (const day of days) {
             if (day.isOpen) {
-                message += `${dayNames[day.dayOfWeek]}: ${day.openTime} - ${day.closeTime}\n`;
+                msg += `${dayNames[day.dayOfWeek]}: ${day.openTime} - ${day.closeTime}\n`;
             }
         }
 
-        message += `\nTe esperamos pronto!`;
-        return message;
+        msg += `\nTe esperamos!`;
+        return msg;
     }
 
     /**
-     * Obtiene el menú del día (con cache)
+     * Obtiene el menú (con cache de 3 minutos)
      */
-    private async getDailyMenu(): Promise<string> {
-        // Verificar cache
+    private async getMenu(): Promise<string> {
         const now = Date.now();
-        if (this.menuCache && (now - this.menuCacheTime) < this.MENU_CACHE_TTL) {
-            logger.debug('[WhatsAppChatbot] Using cached menu');
+
+        // Usar cache si es válido
+        if (this.menuCache && now < this.menuCacheExpiry) {
             return this.menuCache;
         }
 
+        // Obtener de la base de datos
         try {
             if (!this.menuRepository) {
-                logger.warn('[WhatsAppChatbot] Menu repository not set');
-                return 'Menu no disponible en este momento.';
+                logger.warn('[Chatbot] No menu repository');
+                return 'Menu no disponible. Contactanos por telefono.';
             }
 
-            const items = await this.menuRepository.findAvailable();
+            const items: MenuItem[] = await this.menuRepository.findAvailable();
 
             if (!items || items.length === 0) {
-                logger.warn('[WhatsAppChatbot] No available items found');
                 return 'No hay productos disponibles en este momento.';
             }
 
-            const businessName = this.config?.businessName || 'Nuestro Restaurante';
-
-            let menu = `*${businessName}*\n\n`;
+            // Construir menú
+            const name = this.config?.businessName || 'Restaurante';
+            let menu = `*${name}*\n\n`;
             menu += `*MENU DEL DIA*\n`;
-            menu += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+            menu += `━━━━━━━━━━━━━━━━\n\n`;
 
             // Agrupar por categoría
-            const categories: { [key: string]: any[] } = {};
+            const cats: Record<string, MenuItem[]> = {};
             for (const item of items) {
-                const cat = item.category || 'Otros';
-                if (!categories[cat]) categories[cat] = [];
-                categories[cat].push(item);
+                const cat = item.category || 'General';
+                if (!cats[cat]) cats[cat] = [];
+                cats[cat].push(item);
             }
 
-            for (const [category, categoryItems] of Object.entries(categories)) {
-                menu += `*${category}*\n`;
-                for (const item of categoryItems) {
-                    menu += `  • ${item.name} - $${item.price.toFixed(2)}\n`;
+            for (const [cat, catItems] of Object.entries(cats)) {
+                menu += `*${cat}*\n`;
+                for (const item of catItems) {
+                    menu += `• ${item.name} - $${item.price.toFixed(2)}\n`;
                 }
                 menu += `\n`;
             }
 
-            menu += `━━━━━━━━━━━━━━━━━━━━\n`;
-            menu += `\nPara pedidos, responde a este mensaje o llama!`;
+            menu += `━━━━━━━━━━━━━━━━\n`;
+            menu += `Para pedidos responde este mensaje!`;
 
-            // Guardar en cache
+            // Guardar en cache (3 minutos)
             this.menuCache = menu;
-            this.menuCacheTime = now;
-            logger.info('[WhatsAppChatbot] Menu cached', { itemCount: items.length });
+            this.menuCacheExpiry = now + 180000;
 
+            logger.info('[Chatbot] Menu loaded', { items: items.length });
             return menu;
+
         } catch (error) {
-            logger.error('[WhatsAppChatbot] Error getting menu', { error });
-            return 'Error al cargar el menu. Intenta mas tarde.';
+            logger.error('[Chatbot] Error loading menu', { error });
+            return 'Error cargando el menu. Intenta mas tarde.';
         }
     }
 
-    /**
-     * Procesa un mensaje entrante
-     */
-    public async processMessage(message: IncomingMessage): Promise<void> {
-        let { from } = message;
-        const { text } = message;
-
-        // Ignorar mensajes de broadcast/status/grupos
-        if (from.includes('broadcast') || from.includes('status') || from.includes('@g.us')) {
-            return;
-        }
-
-        // Normalizar teléfono
-        from = this.normalizePhone(from);
-
-        logger.info('[WhatsAppChatbot] Processing message', { from, text: text?.substring(0, 50) });
-
-        // Cargar config si no existe
-        if (!this.config) {
-            await this.loadConfig();
-        }
-
-        // Verificar horario
-        const businessHours = this.checkBusinessHours();
-
-        if (!businessHours.isOpen) {
-            logger.info('[WhatsAppChatbot] Outside business hours, sending closed message');
-            await this.sendMessage(from, businessHours.message);
-            return;
-        }
-
-        // Enviar menú del día
-        const menu = await this.getDailyMenu();
-        await this.sendMessage(from, menu);
-    }
-
-    private async sendMessage(to: string, text: string): Promise<void> {
-        if (!this.client) {
-            logger.error('[WhatsAppChatbot] Client not set - cannot send message');
-            return;
-        }
-
-        if (!this.client.isEnabled()) {
-            logger.error('[WhatsAppChatbot] Client not ready - cannot send message');
-            return;
-        }
-
-        try {
-            const result = await this.client.sendText(to, text);
-            if (result.success) {
-                logger.info('[WhatsAppChatbot] Message sent successfully', { to });
-            } else {
-                logger.error('[WhatsAppChatbot] Failed to send message', { to, error: result.error });
-            }
-        } catch (error) {
-            logger.error('[WhatsAppChatbot] Error sending message', { to, error });
-        }
-    }
-
-    // Métodos de compatibilidad
+    // Métodos de compatibilidad (no usados)
     public getActiveConversations(): any[] { return []; }
     public getConversation(id: string): any { return null; }
     public async setManualMode(phone: string, enabled: boolean): Promise<boolean> { return false; }
