@@ -94,7 +94,7 @@ class WhatsAppClient extends EventEmitter {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, silentLogger)
                 },
-                printQRInTerminal: true,
+                printQRInTerminal: false,
                 logger: silentLogger,
                 browser: ['WhatsApp Web', 'Chrome', '120.0.0'],
                 connectTimeoutMs: 60000,
