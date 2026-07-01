@@ -104,7 +104,7 @@ router.get('/history/:collection/:documentId', jwtAuthMiddleware, adminOnly, asy
  *         schema:
  *           type: string
  *           format: date-time
- *         description: Fecha desde la cual buscar (default: últimas 24 horas)
+ *         description: Fecha desde la cual buscar (por defecto ultimas 24 horas)
  *       - in: query
  *         name: collection
  *         schema:
