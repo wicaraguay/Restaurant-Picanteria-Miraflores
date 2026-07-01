@@ -30,6 +30,10 @@ export class WhatsAppChatbot {
     private menuCache: string | null = null;
     private menuCacheExpiry: number = 0;
 
+    // Registro de usuarios que ya recibieron mensaje de cerrado (expira en 12 horas)
+    private closedMessageSent: Map<string, number> = new Map();
+    private readonly CLOSED_MESSAGE_COOLDOWN = 12 * 60 * 60 * 1000; // 12 horas
+
     constructor() {
         this.loadConfig();
         logger.info('[Chatbot] Initialized');
@@ -72,7 +76,15 @@ export class WhatsAppChatbot {
         if (this.config?.schedule?.enabled) {
             const hours = this.checkBusinessHours();
             if (!hours.isOpen) {
-                await this.send(from, hours.message);
+                // Solo enviar mensaje de cerrado si no se le envió recientemente
+                const lastSent = this.closedMessageSent.get(from);
+                const now = Date.now();
+
+                if (!lastSent || (now - lastSent) > this.CLOSED_MESSAGE_COOLDOWN) {
+                    await this.send(from, hours.message);
+                    this.closedMessageSent.set(from, now);
+                    this.cleanExpiredClosedMessages();
+                }
                 return;
             }
         }
@@ -200,6 +212,18 @@ export class WhatsAppChatbot {
         } catch (error) {
             logger.error('[Chatbot] Error loading menu', { error });
             return 'Error cargando el menu. Intenta mas tarde.';
+        }
+    }
+
+    /**
+     * Limpia registros expirados de mensajes de cerrado
+     */
+    private cleanExpiredClosedMessages(): void {
+        const now = Date.now();
+        for (const [phone, timestamp] of this.closedMessageSent) {
+            if (now - timestamp > this.CLOSED_MESSAGE_COOLDOWN) {
+                this.closedMessageSent.delete(phone);
+            }
         }
     }
 
