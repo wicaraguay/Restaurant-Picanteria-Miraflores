@@ -49,6 +49,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION=${JWT_EXPIRATION:-24h}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost}
+      # SRI
       - SRI_ENV=${SRI_ENV:-1}
       - SRI_SIGNATURE_BASE64=${SRI_SIGNATURE_BASE64}
       - SRI_SIGNATURE_PASSWORD=${SRI_SIGNATURE_PASSWORD}
@@ -59,10 +60,20 @@ services:
       - DIR_ESTABLECIMIENTO=${DIR_ESTABLECIMIENTO}
       - ESTAB=${ESTAB:-001}
       - PTO_EMI=${PTO_EMI:-001}
+      # Email
       - RESEND_API_KEY=${RESEND_API_KEY}
       - SMTP_FROM=${SMTP_FROM}
       - TEST_EMAIL=${TEST_EMAIL}
       - BUSINESS_LOGO_URL=${BUSINESS_LOGO_URL}
+      # WhatsApp - IMPORTANTE
+      - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-true}
+      - WHATSAPP_SESSION_PATH=/app/whatsapp-session
+      - WHATSAPP_CACHE_PATH=/app/.wwebjs_cache
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    volumes:
+      # Persistir sesion de WhatsApp entre reinicios
+      - whatsapp_session:/app/whatsapp-session
+      - whatsapp_cache:/app/.wwebjs_cache
     ports:
       - "3000:3000"
     networks:
@@ -72,7 +83,12 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
+    # Mas memoria para Chromium
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
   # ============================================
   # Frontend (React/Vite + Nginx)
@@ -100,10 +116,14 @@ services:
       start_period: 10s
 
 # ============================================
-# Volúmenes persistentes
+# Volumenes persistentes
 # ============================================
 volumes:
   mongodb_data:
+    driver: local
+  whatsapp_session:
+    driver: local
+  whatsapp_cache:
     driver: local
 
 # ============================================
