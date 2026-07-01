@@ -34,6 +34,10 @@ export class WhatsAppChatbot {
     private closedMessageSent: Map<string, number> = new Map();
     private readonly CLOSED_MESSAGE_COOLDOWN = 12 * 60 * 60 * 1000; // 12 horas
 
+    // Registro de usuarios que ya recibieron el menu (expira en 3 horas)
+    private menuSent: Map<string, number> = new Map();
+    private readonly MENU_COOLDOWN = 3 * 60 * 60 * 1000; // 3 horas
+
     constructor() {
         this.loadConfig();
         logger.info('[Chatbot] Initialized');
@@ -89,9 +93,17 @@ export class WhatsAppChatbot {
             }
         }
 
-        // Enviar menú
-        const menu = await this.getMenu();
-        await this.send(from, menu);
+        // Enviar menú solo una vez por usuario
+        const lastMenuSent = this.menuSent.get(from);
+        const now = Date.now();
+
+        if (!lastMenuSent || (now - lastMenuSent) > this.MENU_COOLDOWN) {
+            const menu = await this.getMenu();
+            await this.send(from, menu);
+            this.menuSent.set(from, now);
+            this.cleanExpiredMenuMessages();
+        }
+        // Si ya recibió el menú, no hacer nada - el cliente atiende manualmente
     }
 
     private async send(to: string, text: string): Promise<boolean> {
@@ -223,6 +235,18 @@ export class WhatsAppChatbot {
         for (const [phone, timestamp] of this.closedMessageSent) {
             if (now - timestamp > this.CLOSED_MESSAGE_COOLDOWN) {
                 this.closedMessageSent.delete(phone);
+            }
+        }
+    }
+
+    /**
+     * Limpia registros expirados de menus enviados
+     */
+    private cleanExpiredMenuMessages(): void {
+        const now = Date.now();
+        for (const [phone, timestamp] of this.menuSent) {
+            if (now - timestamp > this.MENU_COOLDOWN) {
+                this.menuSent.delete(phone);
             }
         }
     }
