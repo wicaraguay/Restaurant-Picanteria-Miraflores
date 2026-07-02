@@ -41,7 +41,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const result = await authService.restoreSession();
 
             if (result.success && result.user) {
-                console.log('Session user object:', result.user);
                 setCurrentUser(result.user);
                 setToken(authService.loadSession()?.token || null);
                 logger.info('Session restored successfully');

@@ -77,11 +77,13 @@ services:
       - SMTP_FROM=${SMTP_FROM}
       - TEST_EMAIL=${TEST_EMAIL}
       - BUSINESS_LOGO_URL=${BUSINESS_LOGO_URL}
+      - BACKUP_PATH=/app/backups
     ports:
       - "3000:3000"
     volumes:
       - ./whatsapp-data/session:/app/whatsapp-session
       - ./whatsapp-data/cache:/app/.wwebjs_cache
+      - ./backups:/app/backups
     networks:
       - restaurant-network
     healthcheck:
