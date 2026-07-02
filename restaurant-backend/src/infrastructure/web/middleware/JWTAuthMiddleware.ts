@@ -43,8 +43,8 @@ export const jwtAuthMiddleware = (req: Request, res: Response, next: NextFunctio
         // Establecer contexto de auditoría con datos del usuario autenticado
         const auditContext = {
             userId: payload.userId,
-            userEmail: payload.email,
-            userRole: payload.roleName,
+            userEmail: payload.username,
+            userRole: payload.roleId,
             ip: req.ip || req.socket?.remoteAddress || req.headers['x-forwarded-for'] as string,
             userAgent: req.headers['user-agent']
         };
