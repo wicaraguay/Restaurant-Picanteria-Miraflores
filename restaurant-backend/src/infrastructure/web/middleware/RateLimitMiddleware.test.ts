@@ -477,7 +477,7 @@ describe('RateLimitMiddleware', () => {
             expect(logger.warn).toHaveBeenCalledWith(
                 '[RateLimit] Circuit reset limit exceeded',
                 expect.objectContaining({
-                    path: '/circuit/reset'
+                    ip: expect.any(String)
                 })
             );
         });

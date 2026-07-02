@@ -19,10 +19,14 @@ import { Employee } from '../entities/Employee';
 
 export interface IEmployeeRepository {
     findByUsername(username: string): Promise<Employee | null>;
+    findByEmail(email: string): Promise<Employee | null>;
     findById(id: string): Promise<Employee | null>;
     findAll(): Promise<Employee[]>;
     create(employee: Employee): Promise<Employee>;
     update(id: string, employee: Partial<Employee>): Promise<Employee | null>;
     delete(id: string): Promise<boolean>;
     updateSession(id: string, sessionId: string, lastLoginAt: Date): Promise<void>;
+    setResetPasswordToken(id: string, token: string, expires: Date): Promise<void>;
+    findByResetToken(token: string): Promise<Employee | null>;
+    updatePassword(id: string, hashedPassword: string): Promise<void>;
 }

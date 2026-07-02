@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenerateInvoice } from '../../../src/application/use-cases/GenerateInvoice';
-import { OrderStatus } from '../../../src/domain/entities/Order';
 import { BillingService } from '../../../src/application/services/BillingService';
+
+vi.mock('../../../src/infrastructure/database/DatabaseConnection', () => ({
+    dbConnection: {
+        withTransaction: vi.fn((callback: any) => callback(null))
+    }
+}));
 
 describe('GenerateInvoice Customer Learning Repro', () => {
     let generateInvoice: GenerateInvoice;
@@ -19,7 +24,7 @@ describe('GenerateInvoice Customer Learning Repro', () => {
             get: vi.fn().mockResolvedValue({ businessName: 'Test', ruc: '123' }),
             getNextSequential: vi.fn().mockResolvedValue(1)
         };
-        mockBillRepo = { upsert: vi.fn().mockResolvedValue({}) };
+        mockBillRepo = { upsert: vi.fn().mockResolvedValue({ id: 'bill-123' }), findById: vi.fn().mockResolvedValue(null) };
         mockOrderRepo = { update: vi.fn().mockResolvedValue({}) };
         mockSRIService = {
             generateInvoiceXML: vi.fn().mockReturnValue('<xml></xml>'),

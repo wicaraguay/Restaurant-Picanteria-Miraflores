@@ -296,6 +296,24 @@ export class ApiService {
                 this.token = originalToken;
             }
         },
+        me: async (): Promise<any> => {
+            return this.get('/auth/me');
+        },
+        changePassword: async (currentPassword: string, newPassword: string): Promise<any> => {
+            return this.put('/auth/change-password', { currentPassword, newPassword });
+        },
+        updateProfile: async (data: { name?: string; email?: string; phone?: string }): Promise<any> => {
+            return this.put('/auth/profile', data);
+        },
+        forgotPassword: async (email: string): Promise<any> => {
+            return this.post('/auth/forgot-password', { email });
+        },
+        resetPassword: async (token: string, newPassword: string): Promise<any> => {
+            return this.post('/auth/reset-password', { token, newPassword });
+        },
+        verifyResetToken: async (token: string): Promise<any> => {
+            return this.get(`/auth/verify-reset-token?token=${token}`);
+        },
     };
 
     /**

@@ -80,8 +80,8 @@ describe('BillingService', () => {
 
     describe('validateEmail', () => {
         it('should not throw for valid emails', () => {
-            expect(() => billingService.validateEmail('test@example.com')).not.toThrow();
-            expect(() => billingService.validateEmail('user.name+tag@domain.co.uk')).not.toThrow();
+            expect(() => billingService.validateEmail('cliente@gmail.com')).not.toThrow();
+            expect(() => billingService.validateEmail('user.name+tag@empresa.ec')).not.toThrow();
         });
 
         it('should throw ValidationError for invalid emails', () => {

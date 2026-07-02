@@ -37,6 +37,7 @@ export const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, on
             } else {
                 setFormData({
                     name: '',
+                    email: '',
                     identification: '',
                     username: '',
                     password: '',
@@ -100,6 +101,7 @@ export const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, on
 
         const dataToSave: any = {
             name: formData.name,
+            email: formData.email || '',
             identification: formData.identification,
             username: formData.username,
             roleId: formData.roleId || roles[0].id,
@@ -155,6 +157,10 @@ export const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, on
                                 <input type="tel" name="phone" value={formData.phone || ''} onChange={handleChange} placeholder="Ej: 0999999999" className={`${inputClass} pl-11 ${errors.phone ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10' : ''}`} />
                             </div>
                             {errors.phone && <p className={errorClass} data-testid="error-phone">{errors.phone}</p>}
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className={labelClass}>Email (para recuperar contraseña)</label>
+                            <input type="email" name="email" value={formData.email || ''} onChange={handleChange} placeholder="empleado@email.com" className={inputClass} />
                         </div>
                     </div>
                 </div>

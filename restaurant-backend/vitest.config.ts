@@ -5,6 +5,10 @@ export default defineConfig({
     test: {
         globals: true,
         environment: 'node',
+        exclude: ['node_modules', 'dist', '**/*.spec.js', 'dist/**/*.test.js'],
+        env: {
+            MASTER_ENCRYPTION_KEY: 'test-master-key-for-testing-only-32chars!'
+        },
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json', 'html', 'lcov'],

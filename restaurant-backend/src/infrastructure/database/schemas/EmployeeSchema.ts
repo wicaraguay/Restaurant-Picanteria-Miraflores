@@ -19,6 +19,7 @@ import { Employee } from '../../../domain/entities/Employee';
 
 export interface EmployeeDocument extends Document {
     name: string;
+    email: string;
     identification: string;
     username: string;
     password?: string;
@@ -29,10 +30,13 @@ export interface EmployeeDocument extends Document {
     equipment: { uniform: boolean; epp: boolean };
     activeSessionId?: string;
     lastLoginAt?: Date;
+    resetPasswordToken?: string;
+    resetPasswordExpires?: Date;
 }
 
 const EmployeeSchema: Schema = new Schema({
     name: { type: String, required: true },
+    email: { type: String, sparse: true },
     identification: { type: String },
     username: { type: String, required: true, unique: true },
     // SECURITY: password excluded from queries by default with select: false
@@ -47,7 +51,9 @@ const EmployeeSchema: Schema = new Schema({
         epp: { type: Boolean, default: false }
     },
     activeSessionId: { type: String },
-    lastLoginAt: { type: Date }
+    lastLoginAt: { type: Date },
+    resetPasswordToken: { type: String, select: false },
+    resetPasswordExpires: { type: Date, select: false }
 }, { timestamps: true });
 
 // ==================== INDEXES FOR PERFORMANCE ====================
@@ -57,5 +63,7 @@ EmployeeSchema.index({ identification: 1 }, { sparse: true }); // For employee l
 EmployeeSchema.index({ activeSessionId: 1 }, { sparse: true }); // For session validation
 EmployeeSchema.index({ name: 1 }); // For searching employees by name
 EmployeeSchema.index({ lastLoginAt: -1 }); // For sorting by last login
+EmployeeSchema.index({ email: 1 }, { sparse: true }); // For password recovery
+EmployeeSchema.index({ resetPasswordToken: 1 }, { sparse: true }); // For token lookup
 
 export const EmployeeModel = mongoose.models.Employee || mongoose.model<EmployeeDocument>('Employee', EmployeeSchema);

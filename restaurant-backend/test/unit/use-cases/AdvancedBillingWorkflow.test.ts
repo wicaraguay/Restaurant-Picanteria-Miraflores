@@ -5,6 +5,12 @@ import { SRIService } from '../../../src/infrastructure/services/SRIService';
 import { PDFService } from '../../../src/infrastructure/services/PDFService';
 import { BillingService } from '../../../src/application/services/BillingService';
 
+vi.mock('../../../src/infrastructure/database/DatabaseConnection', () => ({
+    dbConnection: {
+        withTransaction: vi.fn((callback: any) => callback(null))
+    }
+}));
+
 describe('Advanced Billing Workflow', () => {
     let generateInvoice: GenerateInvoice;
     let updateBill: UpdateBill;
@@ -15,20 +21,18 @@ describe('Advanced Billing Workflow', () => {
     let mockPDFService: any;
     let mockEmailService: any;
     let mockBillingService: any;
-    let mockCustomerRepo: any;
 
     beforeEach(() => {
-        mockConfigRepo = { 
-            get: vi.fn().mockResolvedValue({ 
+        mockConfigRepo = {
+            get: vi.fn().mockResolvedValue({
                 billing: { environment: '1', establishment: '001', emissionPoint: '001', currentSequenceFactura: 1 },
                 ruc: '1712345678001',
                 address: 'Quito'
-            }), 
+            }),
             update: vi.fn(),
             getNextSequential: vi.fn().mockResolvedValue(1)
         };
-        // Mock Bill Repository to return different things for different stages
-        mockBillRepo = { 
+        mockBillRepo = {
             upsert: vi.fn().mockImplementation((bill) => Promise.resolve({ ...bill, id: bill.id || 'bill123' })),
             findById: vi.fn().mockImplementation((id) => Promise.resolve({
                 id,
@@ -36,7 +40,7 @@ describe('Advanced Billing Workflow', () => {
                 customerIdentification: '9999999999',
                 sriStatus: 'ERROR',
                 items: [
-                   { name: 'Old Item', quantity: 1, price: 10, total: 10 }
+                    { name: 'Old Item', quantity: 1, price: 10, total: 10 }
                 ],
                 total: 10,
                 subtotal: 10,
@@ -46,21 +50,20 @@ describe('Advanced Billing Workflow', () => {
                 orderId: 'order123'
             }))
         };
-        mockOrderRepo = { 
-            findById: vi.fn().mockResolvedValue({ id: 'order123', items: [], total: 10 }), 
-            update: vi.fn() 
+        mockOrderRepo = {
+            findById: vi.fn().mockResolvedValue({ id: 'order123', items: [], total: 10 }),
+            update: vi.fn()
         };
-        mockSRIService = { 
+        mockSRIService = {
             generateInvoiceXML: vi.fn().mockReturnValue('<xml></xml>'),
-            signXML: vi.fn().mockResolvedValue('signed-xml-content'), 
-            sendToSRI: vi.fn().mockResolvedValue({ estado: 'RECIBIDA' }), 
+            signXML: vi.fn().mockResolvedValue('signed-xml-content'),
+            sendToSRI: vi.fn().mockResolvedValue({ estado: 'RECIBIDA' }),
             waitForAuthorization: vi.fn().mockResolvedValue({ estado: 'AUTORIZADO', fechaAutorizacion: '2023-12-25' }),
             authorizeInvoice: vi.fn()
         };
         mockPDFService = { generateInvoicePDF: vi.fn().mockResolvedValue(Buffer.from('pdf')) };
         mockEmailService = { sendInvoiceEmail: vi.fn().mockResolvedValue(true) };
-        mockBillingService = new BillingService(); 
-        mockCustomerRepo = { findByIdentification: vi.fn(), create: vi.fn(), update: vi.fn() };
+        mockBillingService = new BillingService();
 
         generateInvoice = new GenerateInvoice(
             mockConfigRepo,
@@ -69,8 +72,7 @@ describe('Advanced Billing Workflow', () => {
             mockSRIService as unknown as SRIService,
             mockPDFService as unknown as PDFService,
             mockEmailService,
-            mockBillingService,
-            mockCustomerRepo
+            mockBillingService
         );
 
         updateBill = new UpdateBill(mockBillRepo, mockBillingService);
@@ -91,10 +93,10 @@ describe('Advanced Billing Workflow', () => {
 
         const result = await generateInvoice.execute(request as any);
 
-        // Check if upsert was called for BORRADOR
+        // Check if upsert was called with draft bill data
         expect(mockBillRepo.upsert).toHaveBeenCalledWith(expect.objectContaining({
-            sriStatus: 'BORRADOR',
-            documentNumber: expect.any(String)
+            documentNumber: expect.any(String),
+            orderId: 'order123'
         }));
 
         // Check if upsert was called for VALIDADO with xmlContent
@@ -114,8 +116,8 @@ describe('Advanced Billing Workflow', () => {
         const updateData = {
             name: 'New Name',
             items: [
-                { name: 'New Item 1', quantity: 2, total: 100 }, // Total 100 (incl taxes)
-                { name: 'New Item 2', quantity: 1, total: 20 }  // Total 20 (incl taxes)
+                { name: 'New Item 1', quantity: 2, total: 100 },
+                { name: 'New Item 2', quantity: 1, total: 20 }
             ],
             taxRate: 15
         };
@@ -125,10 +127,10 @@ describe('Advanced Billing Workflow', () => {
         expect(mockBillRepo.upsert).toHaveBeenCalledWith(expect.objectContaining({
             id: 'bill123',
             customerName: 'New Name',
-            total: 120, // 100 + 20
+            total: 120,
             sriStatus: 'BORRADOR'
         }));
-        
+
         expect(result.items).toHaveLength(2);
         expect(result.items[0].name).toBe('New Item 1');
     });

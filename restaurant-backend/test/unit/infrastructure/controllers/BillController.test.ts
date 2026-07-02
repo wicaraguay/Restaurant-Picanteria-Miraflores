@@ -18,6 +18,7 @@ describe('BillController - generateXml', () => {
     let mockGetBills: any;
     let mockDeleteBill: any;
     let mockResetBillingSystem: any;
+    let mockResetFullSystem: any;
     let mockBillingService: any;
     let mockSRIService: any;
 
@@ -29,12 +30,16 @@ describe('BillController - generateXml', () => {
         };
         mockDeleteBill = {};
         mockResetBillingSystem = {};
+        mockResetFullSystem = {};
         mockSRIService = {
             generateInvoiceXML: vi.fn().mockReturnValue('<xml>raw</xml>'),
             signXML: vi.fn().mockResolvedValue('<xml>signed</xml>')
         };
         mockBillingService = {
-            getLogoUrl: vi.fn().mockReturnValue('logo.png')
+            getLogoUrl: vi.fn().mockReturnValue('logo.png'),
+            getTaxCode: vi.fn().mockReturnValue('4'),
+            getIdentificacionType: vi.fn().mockReturnValue('05'),
+            getPaymentMethodCode: vi.fn().mockReturnValue('01')
         };
 
         billController = new BillController(
@@ -42,6 +47,7 @@ describe('BillController - generateXml', () => {
             mockGetBills,
             mockDeleteBill,
             mockResetBillingSystem,
+            mockResetFullSystem,
             mockBillingService,
             mockSRIService
         );
@@ -54,7 +60,8 @@ describe('BillController - generateXml', () => {
             documentNumber: '001-001-000000001',
             accessKey: '1234567890123456789012345678901234567890123456789',
             customerName: 'Test Client',
-            items: [],
+            customerIdentification: '1712345678',
+            items: [{ name: 'Item 1', quantity: 1, price: 10, total: 10 }],
             total: 10,
             subtotal: 9,
             tax: 1,
@@ -78,8 +85,11 @@ describe('BillController - generateXml', () => {
         await billController.generateXml(req, res, next);
 
         expect(mockGetBills.executeById).toHaveBeenCalledWith(billId);
-        expect(mockSRIService.generateInvoiceXML).toHaveBeenCalled();
-        expect(mockSRIService.signXML).toHaveBeenCalledWith('<xml>raw</xml>');
+        expect(mockSRIService.generateInvoiceXML).toHaveBeenCalledWith(
+            expect.any(Object),
+            mockBill.accessKey
+        );
+        expect(mockSRIService.signXML).toHaveBeenCalledWith('<xml>raw</xml>', expect.any(Object));
         expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/xml');
         expect(res.send).toHaveBeenCalledWith('<xml>signed</xml>');
     });

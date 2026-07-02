@@ -7,12 +7,16 @@
  */
 
 import express from 'express';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { container } from '../../di/DIContainer';
 import { ErrorHandler } from '../../utils/ErrorHandler';
 import { ResponseFormatter } from '../../utils/ResponseFormatter';
 import { logger } from '../../utils/Logger';
-import { AuthenticationError } from '../../../domain/errors/CustomErrors';
+import { AuthenticationError, ValidationError } from '../../../domain/errors/CustomErrors';
 import { JWTService } from '../../utils/JWTService';
+import { jwtAuthMiddleware } from '../middleware/JWTAuthMiddleware';
+import { ResendEmailService } from '../../services/ResendEmailService';
 
 const router = express.Router();
 
@@ -196,6 +200,185 @@ router.post('/register', ErrorHandler.asyncHandler(async (req, res) => {
 
     logger.info('Employee registered successfully', { id: newEmployee.id });
     res.status(201).json(ResponseFormatter.success(newEmployee));
+}));
+
+/**
+ * PUT /api/auth/change-password
+ * Cambiar contraseña (usuario autenticado)
+ */
+router.put('/change-password', jwtAuthMiddleware, ErrorHandler.asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const userId = (req as any).user?.userId;
+
+    if (!currentPassword || !newPassword) {
+        throw new ValidationError('Se requiere contraseña actual y nueva');
+    }
+
+    if (newPassword.length < 6) {
+        throw new ValidationError('La nueva contraseña debe tener al menos 6 caracteres');
+    }
+
+    const employeeRepo = container.getEmployeeRepository();
+    const employee = await employeeRepo.findByUsername((req as any).user?.username);
+
+    if (!employee || !employee.password) {
+        throw new AuthenticationError('Usuario no encontrado');
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, employee.password);
+    if (!isValid) {
+        throw new AuthenticationError('Contraseña actual incorrecta');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await employeeRepo.updatePassword(userId, hashedPassword);
+
+    logger.info('Password changed successfully', { userId });
+    res.json(ResponseFormatter.success({ message: 'Contraseña actualizada correctamente' }));
+}));
+
+/**
+ * PUT /api/auth/profile
+ * Actualizar perfil del usuario autenticado
+ */
+router.put('/profile', jwtAuthMiddleware, ErrorHandler.asyncHandler(async (req, res) => {
+    const userId = (req as any).user?.userId;
+    const { name, email, phone } = req.body;
+
+    const employeeRepo = container.getEmployeeRepository();
+
+    // Verificar si el email ya existe en otro usuario
+    if (email) {
+        const existingWithEmail = await employeeRepo.findByEmail(email);
+        if (existingWithEmail && existingWithEmail.id !== userId) {
+            throw new ValidationError('Este email ya está en uso');
+        }
+    }
+
+    const updated = await employeeRepo.update(userId, { name, email, phone });
+
+    if (!updated) {
+        throw new AuthenticationError('Usuario no encontrado');
+    }
+
+    logger.info('Profile updated', { userId });
+    res.json(ResponseFormatter.success(updated));
+}));
+
+/**
+ * GET /api/auth/me
+ * Obtener datos del usuario autenticado
+ */
+router.get('/me', jwtAuthMiddleware, ErrorHandler.asyncHandler(async (req, res) => {
+    const userId = (req as any).user?.userId;
+
+    const employeeRepo = container.getEmployeeRepository();
+    const employee = await employeeRepo.findById(userId);
+
+    if (!employee) {
+        throw new AuthenticationError('Usuario no encontrado');
+    }
+
+    // No enviar password
+    const { password, resetPasswordToken, resetPasswordExpires, ...safeEmployee } = employee;
+
+    res.json(ResponseFormatter.success(safeEmployee));
+}));
+
+/**
+ * POST /api/auth/forgot-password
+ * Solicitar recuperación de contraseña
+ */
+router.post('/forgot-password', ErrorHandler.asyncHandler(async (req, res) => {
+    const { email } = req.body;
+
+    if (!email) {
+        throw new ValidationError('Se requiere el email');
+    }
+
+    const employeeRepo = container.getEmployeeRepository();
+    const employee = await employeeRepo.findByEmail(email.toLowerCase());
+
+    // Siempre responder igual para no revelar si el email existe
+    if (!employee) {
+        logger.warn('Password reset requested for non-existent email', { email });
+        res.json(ResponseFormatter.success({
+            message: 'Si el email existe, recibirás instrucciones para recuperar tu contraseña'
+        }));
+        return;
+    }
+
+    // Generar token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+    await employeeRepo.setResetPasswordToken(employee.id, resetToken, resetExpires);
+
+    // Enviar email
+    try {
+        const emailService = new ResendEmailService();
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+        await emailService.sendPasswordResetEmail(email, employee.name, resetUrl);
+        logger.info('Password reset email sent', { email });
+    } catch (error) {
+        logger.error('Failed to send password reset email', error);
+    }
+
+    res.json(ResponseFormatter.success({
+        message: 'Si el email existe, recibirás instrucciones para recuperar tu contraseña'
+    }));
+}));
+
+/**
+ * POST /api/auth/reset-password
+ * Resetear contraseña con token
+ */
+router.post('/reset-password', ErrorHandler.asyncHandler(async (req, res) => {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+        throw new ValidationError('Se requiere token y nueva contraseña');
+    }
+
+    if (newPassword.length < 6) {
+        throw new ValidationError('La contraseña debe tener al menos 6 caracteres');
+    }
+
+    const employeeRepo = container.getEmployeeRepository();
+    const employee = await employeeRepo.findByResetToken(token);
+
+    if (!employee) {
+        throw new AuthenticationError('Token inválido o expirado');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await employeeRepo.updatePassword(employee.id, hashedPassword);
+
+    logger.info('Password reset successful', { userId: employee.id });
+    res.json(ResponseFormatter.success({ message: 'Contraseña actualizada correctamente' }));
+}));
+
+/**
+ * GET /api/auth/verify-reset-token
+ * Verificar si un token de reset es válido
+ */
+router.get('/verify-reset-token', ErrorHandler.asyncHandler(async (req, res) => {
+    const { token } = req.query;
+
+    if (!token) {
+        throw new ValidationError('Se requiere token');
+    }
+
+    const employeeRepo = container.getEmployeeRepository();
+    const employee = await employeeRepo.findByResetToken(token as string);
+
+    if (!employee) {
+        throw new AuthenticationError('Token inválido o expirado');
+    }
+
+    res.json(ResponseFormatter.success({ valid: true, name: employee.name }));
 }));
 
 export default router;

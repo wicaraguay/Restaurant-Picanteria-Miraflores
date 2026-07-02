@@ -4,6 +4,12 @@ import { GenerateInvoice } from '../../../src/application/use-cases/GenerateInvo
 import { BillingService } from '../../../src/application/services/BillingService';
 import { ValidationError } from '../../../src/domain/errors/CustomErrors';
 
+vi.mock('../../../src/infrastructure/database/DatabaseConnection', () => ({
+    dbConnection: {
+        withTransaction: vi.fn((callback: any) => callback(null))
+    }
+}));
+
 describe('GenerateInvoice - Consumidor Final (SRI 2026)', () => {
     let generateInvoice: GenerateInvoice;
     let mockConfigRepo: any;
@@ -13,29 +19,30 @@ describe('GenerateInvoice - Consumidor Final (SRI 2026)', () => {
     let mockPDFService: any;
     let mockEmailService: any;
     let mockBillingService: BillingService;
-    let mockCustomerRepo: any;
 
     beforeEach(() => {
-        mockConfigRepo = { 
-            get: vi.fn().mockResolvedValue({ 
+        mockConfigRepo = {
+            get: vi.fn().mockResolvedValue({
                 billing: { environment: '1', establishment: '001', emissionPoint: '001' },
                 ruc: '1712345678001',
                 address: 'Quito'
-            }), 
+            }),
             getNextSequential: vi.fn().mockResolvedValue(1)
         };
-        mockBillRepo = { upsert: vi.fn().mockResolvedValue({}) };
+        mockBillRepo = {
+            upsert: vi.fn().mockResolvedValue({ id: 'bill-123' }),
+            findById: vi.fn().mockResolvedValue(null)
+        };
         mockOrderRepo = { update: vi.fn() };
-        mockSRIService = { 
+        mockSRIService = {
             generateInvoiceXML: vi.fn().mockReturnValue('<xml></xml>'),
-            signXML: vi.fn().mockResolvedValue('signed-xml'), 
-            sendToSRI: vi.fn().mockResolvedValue({ estado: 'RECIBIDA' }), 
-            waitForAuthorization: vi.fn().mockResolvedValue({ estado: 'AUTORIZADO' }) 
+            signXML: vi.fn().mockResolvedValue('signed-xml'),
+            sendToSRI: vi.fn().mockResolvedValue({ estado: 'RECIBIDA' }),
+            waitForAuthorization: vi.fn().mockResolvedValue({ estado: 'AUTORIZADO' })
         };
         mockPDFService = { generateInvoicePDF: vi.fn() };
         mockEmailService = { sendInvoiceEmail: vi.fn() };
         mockBillingService = new BillingService();
-        mockCustomerRepo = { findByIdentification: vi.fn(), create: vi.fn(), update: vi.fn() };
 
         generateInvoice = new GenerateInvoice(
             mockConfigRepo,
@@ -44,8 +51,7 @@ describe('GenerateInvoice - Consumidor Final (SRI 2026)', () => {
             mockSRIService,
             mockPDFService,
             mockEmailService,
-            mockBillingService,
-            mockCustomerRepo
+            mockBillingService
         );
     });
 

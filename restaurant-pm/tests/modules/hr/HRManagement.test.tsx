@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import HRManagement from '@/modules/hr/components/HRManagement';
 import { Employee, Role } from '../../../src/modules/hr/types/hr.types';
 import { api } from '../../../src/api';
+import { AuthProvider } from '../../../src/modules/auth/contexts/AuthContext';
 
 // Mock simple de la API
 vi.mock('../../../src/api', () => ({
@@ -18,9 +19,16 @@ vi.mock('../../../src/api', () => ({
             create: vi.fn(),
             update: vi.fn(),
             delete: vi.fn(),
+        },
+        auth: {
+            validate: vi.fn().mockResolvedValue({ user: { id: '1', name: 'Test', roleId: 'r1' } }),
         }
     }
 }));
+
+const Wrapper = ({ children }: { children: React.ReactNode }) => (
+    <AuthProvider>{children}</AuthProvider>
+);
 
 const mockEmployees: Employee[] = [
     {
@@ -51,37 +59,37 @@ describe('HRManagement Component', () => {
     });
 
     it('debe renderizar el título y el botón de añadir', async () => {
-        render(<HRManagement employees={mockEmployees} setEmployees={setEmployees} roles={mockRoles} setRoles={setRoles} />);
-        
+        render(<HRManagement employees={mockEmployees} setEmployees={setEmployees} roles={mockRoles} setRoles={setRoles} />, { wrapper: Wrapper });
+
         expect(screen.getByText('Recursos Humanos')).toBeDefined();
         expect(screen.getByText('Añadir Empleado')).toBeDefined();
     });
 
     it('debe mostrar el equipo de trabajo y los roles', async () => {
-        render(<HRManagement employees={mockEmployees} setEmployees={setEmployees} roles={mockRoles} setRoles={setRoles} />);
-        
+        render(<HRManagement employees={mockEmployees} setEmployees={setEmployees} roles={mockRoles} setRoles={setRoles} />, { wrapper: Wrapper });
+
         // Verificamos que no estemos en estado vacío
         expect(screen.queryByText(/No hay empleados registrados/i)).toBeNull();
-        
+
         expect(screen.getByText(/Equipo de Trabajo/i)).toBeDefined();
         expect(screen.getByText(/Roles y Permisos/i)).toBeDefined();
-        
+
         // Usamos waitFor para buscar el nombre
         await waitFor(() => {
             const names = screen.queryAllByText(/JUAN/i);
             expect(names.length).toBeGreaterThan(0);
-            
+
             const roles = screen.queryAllByText(/ADMINISTRADOR/i);
             expect(roles.length).toBeGreaterThan(0);
         }, { timeout: 3000 });
     });
 
     it('debe abrir el modal de empleado al hacer clic en añadir', async () => {
-        render(<HRManagement employees={mockEmployees} setEmployees={setEmployees} roles={mockRoles} setRoles={setRoles} />);
-        
+        render(<HRManagement employees={mockEmployees} setEmployees={setEmployees} roles={mockRoles} setRoles={setRoles} />, { wrapper: Wrapper });
+
         const addBtn = await screen.findByText(/añadir empleado/i);
         fireEvent.click(addBtn);
-        
+
         expect(await screen.findByText(/AÑADIR EMPLEADO/i, { selector: 'h2' })).toBeDefined();
     });
 });

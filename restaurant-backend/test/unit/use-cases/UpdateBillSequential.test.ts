@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { UpdateBill } from '../../../src/application/use-cases/UpdateBill';
 import { GenerateInvoice } from '../../../src/application/use-cases/GenerateInvoice';
-import { ValidationError } from '../../../src/domain/errors/CustomErrors';
+
+vi.mock('../../../src/infrastructure/database/DatabaseConnection', () => ({
+    dbConnection: {
+        withTransaction: vi.fn((callback: any) => callback(null))
+    }
+}));
 
 describe('UpdateBill and GenerateInvoice Sequential Preservation', () => {
     let mockBillRepo: any;
@@ -30,7 +35,8 @@ describe('UpdateBill and GenerateInvoice Sequential Preservation', () => {
             getCurrentDateEcuador: vi.fn().mockReturnValue('22/03/2026'),
             getIdentificacionType: vi.fn().mockReturnValue('05'),
             getLogoUrl: vi.fn().mockReturnValue('http://logo.com'),
-            validateRealTimeTransmission: vi.fn()
+            validateRealTimeTransmission: vi.fn(),
+            getPaymentMethodCode: vi.fn().mockReturnValue('01')
         };
         mockConfigRepo = {
             get: vi.fn().mockResolvedValue({

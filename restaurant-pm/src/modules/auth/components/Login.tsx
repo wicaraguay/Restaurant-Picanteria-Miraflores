@@ -10,6 +10,7 @@
  */
 
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon, UserIcon, LockIcon } from '../../../components/ui/Icons';
 import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -123,13 +124,20 @@ const Login: React.FC = () => {
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow-lg shadow-blue-500/30 transition-all duration-200 transform hover:scale-[1.01]"
+              disabled={isLoading}
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-lg text-white bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow-lg shadow-blue-500/30 transition-all duration-200 transform hover:scale-[1.01] disabled:opacity-50"
             >
-              Iniciar Sesión
+              {isLoading ? 'Ingresando...' : 'Iniciar Sesion'}
             </button>
           </div>
 
-          <div className="mt-6 text-center">
+          <div className="text-center">
+            <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
+              Olvide mi contrasena
+            </Link>
+          </div>
+
+          <div className="mt-4 text-center">
             <p className="text-xs text-gray-400 dark:text-gray-500">
               &copy; {new Date().getFullYear()} {config.name}. Todos los derechos reservados.
             </p>

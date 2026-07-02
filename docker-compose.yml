@@ -66,6 +66,7 @@ services:
       - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-true}
       - WHATSAPP_SESSION_PATH=/app/whatsapp-session
       - BACKUP_PATH=/app/backups
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
     volumes:
       - whatsapp_session:/app/whatsapp-session
       - backups_data:/app/backups

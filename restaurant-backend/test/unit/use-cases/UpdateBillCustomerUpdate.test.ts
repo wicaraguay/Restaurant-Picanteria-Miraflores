@@ -47,7 +47,7 @@ describe('UpdateBill Customer Update', () => {
 
         // VERIFY: Did it call billingService.autoLearnCustomer (via mockCustomerRepo.update)?
         expect(mockCustomerRepo.update).toHaveBeenCalledWith('cust-1', expect.objectContaining({
-            name: 'New Name',
+            name: 'NEW NAME', // Names are stored in uppercase
             email: 'new@email.com'
         }));
     });

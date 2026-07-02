@@ -1,14 +1,16 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenerateInvoice } from '../../../src/application/use-cases/GenerateInvoice';
-import { IRestaurantConfigRepository } from '../../../src/domain/repositories/IRestaurantConfigRepository';
-import { IBillRepository } from '../../../src/domain/repositories/IBillRepository';
-import { IOrderRepository } from '../../../src/domain/repositories/IOrderRepository';
 import { ICustomerRepository } from '../../../src/domain/repositories/ICustomerRepository';
 import { SRIService } from '../../../src/infrastructure/services/SRIService';
 import { PDFService } from '../../../src/infrastructure/services/PDFService';
-import { IEmailService } from '../../../src/application/interfaces/IEmailService';
 import { BillingService } from '../../../src/application/services/BillingService';
+
+vi.mock('../../../src/infrastructure/database/DatabaseConnection', () => ({
+    dbConnection: {
+        withTransaction: vi.fn((callback: any) => callback(null))
+    }
+}));
 
 describe('GenerateInvoice Auto-Learning', () => {
     let generateInvoice: GenerateInvoice;
@@ -31,7 +33,7 @@ describe('GenerateInvoice Auto-Learning', () => {
             update: vi.fn(),
             getNextSequential: vi.fn().mockResolvedValue(2)
         };
-        mockBillRepo = { upsert: vi.fn().mockResolvedValue({ id: 'bill123' }) };
+        mockBillRepo = { upsert: vi.fn().mockResolvedValue({ id: 'bill123' }), findById: vi.fn().mockResolvedValue(null) };
         mockOrderRepo = { findById: vi.fn().mockResolvedValue({ id: 'order123', items: [], total: 100 }), update: vi.fn() };
         mockSRIService = { 
             generateInvoiceXML: vi.fn().mockReturnValue('<xml></xml>'),
@@ -73,18 +75,18 @@ describe('GenerateInvoice Auto-Learning', () => {
 
         expect(mockCustomerRepo.create).toHaveBeenCalledWith(expect.objectContaining({
             identification: '1712345678',
-            name: 'Willy Tech'
+            name: 'WILLY TECH' // Names are stored in uppercase
         }));
         expect(mockCustomerRepo.update).not.toHaveBeenCalled();
     });
 
     it('should UPDATE existing customer if they already exist', async () => {
-        mockCustomerRepo.findByIdentification.mockResolvedValue({ id: 'cust123', identification: '1712345678' });
+        mockCustomerRepo.findByIdentification.mockResolvedValue({ id: 'cust123', identification: '1712345678', name: 'OLD NAME' });
 
         await generateInvoice.execute(validRequest as any);
 
         expect(mockCustomerRepo.update).toHaveBeenCalledWith('cust123', expect.objectContaining({
-            name: 'Willy Tech'
+            name: 'WILLY TECH' // Names are stored in uppercase
         }));
         expect(mockCustomerRepo.create).not.toHaveBeenCalled();
     });

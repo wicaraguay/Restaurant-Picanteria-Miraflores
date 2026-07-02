@@ -83,14 +83,66 @@ export class MongoEmployeeRepository extends BaseRepository<Employee> implements
         }
     }
 
+    async findByEmail(email: string): Promise<Employee | null> {
+        try {
+            logger.debug('Finding employee by email', { email });
+            const found = await EmployeeModel.findOne({ email: email.toLowerCase() });
+            if (!found) return null;
+            return this.mapToEntity(found);
+        } catch (error) {
+            logger.error('Failed to find employee by email', error);
+            throw error;
+        }
+    }
+
+    async setResetPasswordToken(id: string, token: string, expires: Date): Promise<void> {
+        try {
+            await EmployeeModel.findByIdAndUpdate(id, {
+                resetPasswordToken: token,
+                resetPasswordExpires: expires
+            });
+            logger.info('Reset password token set', { id });
+        } catch (error) {
+            logger.error('Failed to set reset password token', error);
+            throw error;
+        }
+    }
+
+    async findByResetToken(token: string): Promise<Employee | null> {
+        try {
+            const found = await EmployeeModel.findOne({
+                resetPasswordToken: token,
+                resetPasswordExpires: { $gt: new Date() }
+            }).select('+resetPasswordToken +resetPasswordExpires');
+            if (!found) return null;
+            return this.mapToEntity(found);
+        } catch (error) {
+            logger.error('Failed to find by reset token', error);
+            throw error;
+        }
+    }
+
+    async updatePassword(id: string, hashedPassword: string): Promise<void> {
+        try {
+            await EmployeeModel.findByIdAndUpdate(id, {
+                password: hashedPassword,
+                resetPasswordToken: null,
+                resetPasswordExpires: null
+            });
+            logger.info('Password updated', { id });
+        } catch (error) {
+            logger.error('Failed to update password', error);
+            throw error;
+        }
+    }
+
     protected mapToEntity(doc: any): Employee {
         return {
             id: doc.id || doc._id.toString(),
             name: doc.name,
+            email: doc.email || '',
             identification: doc.identification,
             username: doc.username,
-            // SECURITY: Only include password if it was explicitly selected
-            // password is excluded by default (select: false in schema)
             password: doc.password,
             roleId: doc.roleId,
             phone: doc.phone,
@@ -98,7 +150,9 @@ export class MongoEmployeeRepository extends BaseRepository<Employee> implements
             shifts: doc.shifts instanceof Map ? Object.fromEntries(doc.shifts) : doc.shifts,
             equipment: doc.equipment,
             activeSessionId: doc.activeSessionId,
-            lastLoginAt: doc.lastLoginAt
+            lastLoginAt: doc.lastLoginAt,
+            resetPasswordToken: doc.resetPasswordToken,
+            resetPasswordExpires: doc.resetPasswordExpires
         };
     }
 }

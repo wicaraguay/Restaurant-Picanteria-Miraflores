@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { NAV_ITEMS } from '../../constants';
 import { ViewType } from '../../types';
-import { SunIcon, MoonIcon, LogOutIcon } from '../ui/Icons';
+import { SunIcon, MoonIcon, LogOutIcon, LockIcon } from '../ui/Icons';
 import { useRestaurantConfig } from '../../contexts/RestaurantConfigContext';
 import { useAuth } from '../../modules/auth/contexts/AuthContext';
+import ChangePasswordModal from '../../modules/auth/components/ChangePasswordModal';
 
 interface SidebarProps {
   currentView: ViewType;
@@ -36,6 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, theme, set
   const { config } = useRestaurantConfig();
   const { currentUser } = useAuth();
   const currentYear = new Date().getFullYear();
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   return (
     <aside className="fixed top-0 left-0 h-full w-64 bg-gray-800 text-white flex-col z-30 hidden lg:flex dark:bg-dark-900 border-r dark:border-dark-700">
@@ -86,13 +88,26 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, theme, set
         )}
 
         <button
+          onClick={() => setShowChangePassword(true)}
+          className="w-full flex items-center p-3 my-1 rounded-md text-left transition-colors text-gray-300 hover:bg-gray-700 dark:hover:bg-dark-700"
+          aria-label="Cambiar contrasena"
+        >
+          <LockIcon className="w-5 h-5 mr-3" />
+          <span>Cambiar Contrasena</span>
+        </button>
+        <button
           onClick={onLogout}
           className="w-full flex items-center p-3 my-1 rounded-md text-left transition-colors text-gray-300 hover:bg-red-500 hover:text-white dark:hover:bg-red-600"
-          aria-label="Cerrar sesión"
+          aria-label="Cerrar sesion"
         >
           <LogOutIcon className="w-5 h-5 mr-3" />
-          <span>Cerrar Sesión</span>
+          <span>Cerrar Sesion</span>
         </button>
+
+        <ChangePasswordModal
+          isOpen={showChangePassword}
+          onClose={() => setShowChangePassword(false)}
+        />
       </div>
       <div className="p-4 border-t border-gray-700 dark:border-dark-700 flex justify-between items-center">
         <p className="text-sm">© {currentYear} {config.name}</p>

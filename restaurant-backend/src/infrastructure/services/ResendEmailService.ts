@@ -160,6 +160,61 @@ export class ResendEmailService implements IEmailService {
         `;
     }
 
+    public async sendPasswordResetEmail(to: string, userName: string, resetUrl: string): Promise<EmailSendResult> {
+        try {
+            logger.info(`[ResendEmailService] Sending password reset email to ${to}`);
+
+            const businessName = process.env.BUSINESS_NAME || 'Sistema';
+
+            const htmlContent = `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #1a1a1a;">${businessName}</h1>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 30px;">
+                        <h2 style="margin: 0 0 15px; font-size: 20px; color: #1a1a1a;">Hola, ${userName}</h2>
+                        <p style="margin: 0 0 20px; color: #666; line-height: 1.6;">
+                            Recibimos una solicitud para restablecer tu contrasena. Haz clic en el boton de abajo para crear una nueva:
+                        </p>
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="${resetUrl}"
+                               style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                                Restablecer Contrasena
+                            </a>
+                        </div>
+                        <p style="margin: 0; color: #999; font-size: 13px; line-height: 1.5;">
+                            Este enlace expirara en 1 hora. Si no solicitaste este cambio, ignora este correo.
+                        </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <p style="margin: 0; color: #999; font-size: 12px;">
+                            ${businessName} - Sistema de Gestion
+                        </p>
+                    </div>
+                </div>
+            `;
+
+            const { data, error } = await this.resend.emails.send({
+                from: this.fromEmail,
+                to: [to],
+                subject: `Restablecer contrasena - ${businessName}`,
+                html: htmlContent,
+            });
+
+            if (error) {
+                logger.error('[ResendEmailService] Error sending password reset email:', error);
+                return { success: false, error: error.message };
+            }
+
+            logger.info(`[ResendEmailService] Password reset email sent. ID: ${data?.id}`);
+            return { success: true, messageId: data?.id };
+
+        } catch (error: any) {
+            logger.error('[ResendEmailService] Unexpected error sending password reset email:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     private generateCreditNoteHtml(creditNote: CreditNote): string {
         let logoUrl = creditNote.info.logoUrl || '';
         const publicLogo = process.env.BUSINESS_LOGO_URL;

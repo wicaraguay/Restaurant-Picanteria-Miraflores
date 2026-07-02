@@ -22,6 +22,7 @@ import { Role } from './Role';
 export interface Employee {
     id: string;
     name: string;
+    email: string;
     identification: string;
     username: string;
     password?: string;
@@ -33,4 +34,6 @@ export interface Employee {
     equipment: { uniform: boolean; epp: boolean };
     activeSessionId?: string;  // Para tracking de sesión única
     lastLoginAt?: Date;        // Última fecha de login
+    resetPasswordToken?: string;
+    resetPasswordExpires?: Date;
 }

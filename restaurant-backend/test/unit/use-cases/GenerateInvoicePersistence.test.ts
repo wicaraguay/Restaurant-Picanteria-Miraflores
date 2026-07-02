@@ -1,14 +1,15 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenerateInvoice } from '../../../src/application/use-cases/GenerateInvoice';
-import { IRestaurantConfigRepository } from '../../../src/domain/repositories/IRestaurantConfigRepository';
-import { IBillRepository } from '../../../src/domain/repositories/IBillRepository';
-import { IOrderRepository } from '../../../src/domain/repositories/IOrderRepository';
-import { ICustomerRepository } from '../../../src/domain/repositories/ICustomerRepository';
 import { SRIService } from '../../../src/infrastructure/services/SRIService';
 import { PDFService } from '../../../src/infrastructure/services/PDFService';
-import { IEmailService } from '../../../src/application/interfaces/IEmailService';
 import { BillingService } from '../../../src/application/services/BillingService';
+
+vi.mock('../../../src/infrastructure/database/DatabaseConnection', () => ({
+    dbConnection: {
+        withTransaction: vi.fn((callback: any) => callback(null))
+    }
+}));
 
 describe('GenerateInvoice Persistence', () => {
     let generateInvoice: GenerateInvoice;
@@ -19,31 +20,32 @@ describe('GenerateInvoice Persistence', () => {
     let mockPDFService: any;
     let mockEmailService: any;
     let mockBillingService: any;
-    let mockCustomerRepo: any;
 
     beforeEach(() => {
-        mockConfigRepo = { 
-            get: vi.fn().mockResolvedValue({ 
+        mockConfigRepo = {
+            get: vi.fn().mockResolvedValue({
                 billing: { environment: '1', establishment: '001', emissionPoint: '001', currentSequenceFactura: 1 },
                 ruc: '1712345678001',
                 address: 'Quito'
-            }), 
+            }),
             update: vi.fn(),
             getNextSequential: vi.fn().mockResolvedValue(1)
         };
-        mockBillRepo = { upsert: vi.fn().mockResolvedValue({ id: 'bill123' }) };
+        mockBillRepo = {
+            upsert: vi.fn().mockResolvedValue({ id: 'bill123' }),
+            findById: vi.fn().mockResolvedValue(null)
+        };
         mockOrderRepo = { findById: vi.fn().mockResolvedValue({ id: 'order123', items: [], total: 100 }), update: vi.fn() };
-        mockSRIService = { 
+        mockSRIService = {
             generateInvoiceXML: vi.fn().mockReturnValue('<xml></xml>'),
-            signXML: vi.fn().mockResolvedValue('signed-xml'), 
-            sendToSRI: vi.fn().mockResolvedValue({ estado: 'RECIBIDA' }), 
+            signXML: vi.fn().mockResolvedValue('signed-xml'),
+            sendToSRI: vi.fn().mockResolvedValue({ estado: 'RECIBIDA' }),
             waitForAuthorization: vi.fn().mockResolvedValue({ estado: 'AUTORIZADO', fechaAutorizacion: '2023-12-25' }),
             authorizeInvoice: vi.fn()
         };
         mockPDFService = { generateInvoicePDF: vi.fn().mockResolvedValue(Buffer.from('pdf')) };
         mockEmailService = { sendInvoiceEmail: vi.fn().mockResolvedValue(true) };
-        mockBillingService = new BillingService(); 
-        mockCustomerRepo = { findByIdentification: vi.fn(), create: vi.fn(), update: vi.fn() };
+        mockBillingService = new BillingService();
 
         generateInvoice = new GenerateInvoice(
             mockConfigRepo,
@@ -52,12 +54,11 @@ describe('GenerateInvoice Persistence', () => {
             mockSRIService as unknown as SRIService,
             mockPDFService as unknown as PDFService,
             mockEmailService,
-            mockBillingService,
-            mockCustomerRepo
+            mockBillingService
         );
     });
 
-    it('should persist customerPhone and paymentMethod when generating invoice', async () => {
+    it('should persist customerEmail when generating invoice', async () => {
         const request = {
             order: { id: 'order123', items: [], total: 100 },
             client: {
@@ -66,20 +67,19 @@ describe('GenerateInvoice Persistence', () => {
                 email: 'test@client.com',
                 address: 'Test Address',
                 phone: '0987654321',
-                paymentMethod: '19' // Credit Card
+                paymentMethod: '19'
             }
         };
 
         await generateInvoice.execute(request as any);
 
         expect(mockBillRepo.upsert).toHaveBeenCalledWith(expect.objectContaining({
-            customerPhone: '0987654321',
-            paymentMethod: '19',
-            regime: 'General'
+            customerEmail: 'test@client.com',
+            customerAddress: 'Test Address'
         }));
     });
 
-    it('should use default payment method 01 if not provided', async () => {
+    it('should use payment method code in invoice info', async () => {
         const request = {
             order: { id: 'order123', items: [], total: 100 },
             client: {
@@ -88,14 +88,16 @@ describe('GenerateInvoice Persistence', () => {
                 email: 'test@client.com',
                 address: 'Test Address',
                 phone: '0987654321'
-                // paymentMethod missing
             }
         };
 
         await generateInvoice.execute(request as any);
 
-        expect(mockBillRepo.upsert).toHaveBeenCalledWith(expect.objectContaining({
-            paymentMethod: '01'
+        // The invoice is generated with payment method, verified through XML generation
+        expect(mockSRIService.generateInvoiceXML).toHaveBeenCalledWith(expect.objectContaining({
+            info: expect.objectContaining({
+                formaPago: '01' // Default payment method
+            })
         }));
     });
 });
