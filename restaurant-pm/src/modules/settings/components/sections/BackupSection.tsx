@@ -27,9 +27,9 @@ const BackupSection: React.FC = () => {
     const loadBackups = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await api.get('/backups');
-            if (response.data?.success) {
-                setBackups(response.data.data || []);
+            const response = await api.backup.list();
+            if (response?.success) {
+                setBackups(response.data || []);
             }
         } catch (error) {
             toast.error('Error al cargar backups', 'Error');
@@ -45,15 +45,15 @@ const BackupSection: React.FC = () => {
     const createBackup = async () => {
         setCreating(true);
         try {
-            const response = await api.post('/backups');
-            if (response.data?.success) {
+            const response = await api.backup.create();
+            if (response?.success) {
                 toast.success('Backup creado exitosamente', 'Backup');
                 loadBackups();
             } else {
-                toast.error(response.data?.error?.message || 'Error al crear backup', 'Error');
+                toast.error(response?.error?.message || 'Error al crear backup', 'Error');
             }
         } catch (error: any) {
-            toast.error(error.response?.data?.error?.message || 'Error al crear backup', 'Error');
+            toast.error(error.message || 'Error al crear backup', 'Error');
         } finally {
             setCreating(false);
         }
@@ -61,11 +61,8 @@ const BackupSection: React.FC = () => {
 
     const downloadBackup = async (backup: BackupInfo) => {
         try {
-            const response = await api.get(`/backups/${backup.id}/download`, {
-                responseType: 'blob'
-            });
-
-            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const blob = await api.backup.download(backup.id);
+            const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.setAttribute('download', backup.filename);
@@ -87,8 +84,8 @@ const BackupSection: React.FC = () => {
 
         setDeletingId(backup.id);
         try {
-            const response = await api.delete(`/backups/${backup.id}`);
-            if (response.data?.success) {
+            const response = await api.backup.delete(backup.id);
+            if (response?.success) {
                 toast.success('Backup eliminado', 'Backup');
                 loadBackups();
             } else {

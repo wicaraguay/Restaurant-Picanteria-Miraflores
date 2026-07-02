@@ -639,6 +639,34 @@ export class ApiService {
             return this.patch(API_ENDPOINTS.CATEGORIES.REORDER, { items });
         },
     };
+
+    /**
+     * Backups de base de datos
+     */
+    public backup = {
+        list: async (): Promise<any> => {
+            return this.get('/backups');
+        },
+        create: async (): Promise<any> => {
+            return this.post('/backups', {});
+        },
+        download: async (id: string): Promise<Blob> => {
+            const response = await fetch(
+                `${this.baseURL}/backups/${id}/download`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${this.getToken()}`,
+                    },
+                }
+            );
+            if (!response.ok) throw new Error('Error al descargar backup');
+            return response.blob();
+        },
+        delete: async (id: string): Promise<any> => {
+            return this.delete(`/backups/${id}`);
+        },
+    };
 }
 
 // Exportar instancia singleton
@@ -658,6 +686,7 @@ export const api = {
     categories: apiService.categories,
     export: apiService.export,
     audit: apiService.audit,
+    backup: apiService.backup,
     getToken: () => apiService.getToken(),
     setToken: (token: string | null) => apiService.setToken(token),
 };
