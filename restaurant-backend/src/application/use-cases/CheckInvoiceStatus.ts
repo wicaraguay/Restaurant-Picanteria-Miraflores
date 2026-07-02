@@ -122,8 +122,8 @@ export class CheckInvoiceStatus {
                             estab: estab,
                             ptoEmi: ptoEmi,
                             secuencial: secuencial,
-                            dirMatriz: info.address,
-                            dirEstablecimiento: info.address,
+                            dirMatriz: info.fiscalAddress || info.address,
+                            dirEstablecimiento: info.fiscalAddress || info.address,
                             // CRITICAL: Use original invoice date, NOT current date
                             // SRI requires emission date to match the original transaction date
                             fechaEmision: fullBill.date ? this.billingService.formatDateToSRI(fullBill.date) : this.billingService.getCurrentDateEcuador(),
@@ -304,8 +304,8 @@ export class CheckInvoiceStatus {
                         estab: estab,
                         ptoEmi: ptoEmi,
                         secuencial: secuencial,
-                        dirMatriz: info.address || process.env.DIR_MATRIZ,
-                        dirEstablecimiento: info.address || process.env.DIR_ESTABLECIMIENTO,
+                        dirMatriz: info.fiscalAddress || info.address || process.env.DIR_MATRIZ,
+                        dirEstablecimiento: info.fiscalAddress || info.address || process.env.DIR_ESTABLECIMIENTO,
                         fechaEmision: this.billingService.formatDateToSRI(bill.date),
                         obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
                         tipoIdentificacionComprador: this.billingService.getIdentificacionType(bill.customerIdentification),
