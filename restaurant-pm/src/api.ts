@@ -577,24 +577,6 @@ export class ApiService {
     };
 
     /**
-     * Mantenimiento y operaciones peligrosas
-     */
-    public maintenance = {
-        deleteOldOrders: async (monthsOld: number): Promise<any> => {
-            return this.post('/maintenance/delete-old-orders', { monthsOld });
-        },
-        deleteInactiveClients: async (monthsInactive: number): Promise<any> => {
-            return this.post('/maintenance/delete-inactive-clients', { monthsInactive });
-        },
-        deleteDisabledProducts: async (): Promise<any> => {
-            return this.post('/maintenance/delete-disabled-products', {});
-        },
-        fiscalYearClose: async (year: number): Promise<any> => {
-            return this.post('/maintenance/fiscal-year-close', { year });
-        }
-    };
-
-    /**
      * Auditoría del sistema (solo admin)
      */
     public audit = {
@@ -675,7 +657,6 @@ export const api = {
     roles: apiService.roles,
     categories: apiService.categories,
     export: apiService.export,
-    maintenance: apiService.maintenance,
     audit: apiService.audit,
     getToken: () => apiService.getToken(),
     setToken: (token: string | null) => apiService.setToken(token),

@@ -65,8 +65,10 @@ services:
       # WhatsApp (Baileys - ligero)
       - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-true}
       - WHATSAPP_SESSION_PATH=/app/whatsapp-session
+      - BACKUP_PATH=/app/backups
     volumes:
       - whatsapp_session:/app/whatsapp-session
+      - backups_data:/app/backups
     ports:
       - "3000:3000"
     networks:
@@ -105,6 +107,8 @@ volumes:
   mongodb_data:
     driver: local
   whatsapp_session:
+    driver: local
+  backups_data:
     driver: local
 
 networks:
