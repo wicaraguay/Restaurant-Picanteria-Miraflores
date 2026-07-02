@@ -144,8 +144,8 @@ app.use(auditContextMiddleware);
 import billingRoutes from './infrastructure/web/routes/billingRoutes';
 import whatsappApiRoutes from './infrastructure/web/routes/whatsappApiRoutes';
 import exportRoutes from './interfaces/http/routes/exportRoutes';
-import maintenanceRoutes from './interfaces/http/routes/maintenanceRoutes';
 import auditRoutes from './infrastructure/web/routes/auditRoutes';
+import backupRoutes from './infrastructure/web/routes/backupRoutes';
 import { setupSwagger } from './infrastructure/http/swagger';
 
 // Setup Swagger/OpenAPI Documentation
@@ -166,8 +166,8 @@ app.use('/api/credit-notes', creditNoteRoutes); // Notas de crédito SRI
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/whatsapp', whatsappApiRoutes); // WhatsApp API para frontend
 app.use('/api/export', exportRoutes); // Exportación de datos (Excel/CSV)
-app.use('/api/maintenance', maintenanceRoutes); // Operaciones de mantenimiento y limpieza
 app.use('/api/audit', auditRoutes); // Logs de auditoría (solo admin)
+app.use('/api/backups', backupRoutes); // Sistema de respaldos de base de datos
 
 // Metrics endpoint (Prometheus)
 app.use('/metrics', metricsRoutes);

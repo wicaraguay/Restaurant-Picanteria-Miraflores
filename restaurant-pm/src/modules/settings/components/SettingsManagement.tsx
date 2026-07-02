@@ -6,11 +6,9 @@
  * - UX mejorada basada en Gestión de Pedidos (Tabbed navigation, Pulsing status)
  * - Calidad de código y mantenibilidad incrementada
  *
- * @changes v2.1
- * - Separada sección "Avanzado" en 2 pestañas: "Mantenimiento" y "Zona de Peligro"
- * - Eliminada "Purga Nuclear" (incompatible con arquitectura multi-tenant)
- * - Agregada funcionalidad de exportación de datos
- * - Mejorada seguridad con validación por contraseña
+ * @changes v2.2
+ * - Reemplazadas secciones "Mantenimiento" y "Zona de Peligro" por "Respaldos"
+ * - Sistema de backup de base de datos (máx 20, auto-limpieza)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -26,7 +24,6 @@ import {
     SettingsIcon,
     LayoutIcon,
     ChefHatIcon,
-    AlertCircleIcon,
     CheckCircleIcon
 } from '../../../components/ui/Icons';
 
@@ -35,13 +32,12 @@ import BusinessInfoSection from './sections/BusinessInfoSection';
 import BrandCustomizationSection from './sections/BrandCustomizationSection';
 import BillingSRISection from './sections/BillingSRISection';
 import CertificateSection from './sections/CertificateSection';
-import MaintenanceSection from './sections/MaintenanceSection';
-import DangerZoneSection from './sections/DangerZoneSection';
+import BackupSection from './sections/BackupSection';
 import AuditSection from './sections/AuditSection';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
 import { toast } from '../../../components/ui/AlertProvider';
 
-type SettingsTab = 'general' | 'brand' | 'billing' | 'certificate' | 'maintenance' | 'danger' | 'audit';
+type SettingsTab = 'general' | 'brand' | 'billing' | 'certificate' | 'backup' | 'audit';
 
 interface Employee {
     id: string;
@@ -50,13 +46,13 @@ interface Employee {
 }
 
 const SettingsManagement: React.FC = () => {
-    const { config, updateConfig, resetConfig, refreshConfig } = useRestaurantConfig();
+    const { config, updateConfig, refreshConfig } = useRestaurantConfig();
     const navigate = useNavigate();
     const { tab } = useParams<{ tab?: string }>();
 
     // Determinar tab activo desde URL o default
     const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
-        const validTabs: SettingsTab[] = ['general', 'brand', 'billing', 'certificate', 'maintenance', 'danger', 'audit'];
+        const validTabs: SettingsTab[] = ['general', 'brand', 'billing', 'certificate', 'backup', 'audit'];
         return validTabs.includes(tab as SettingsTab) ? (tab as SettingsTab) : 'general';
     });
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -68,7 +64,7 @@ const SettingsManagement: React.FC = () => {
 
     // Sincronizar tab con URL
     useEffect(() => {
-        const validTabs: SettingsTab[] = ['general', 'brand', 'billing', 'certificate', 'maintenance', 'danger', 'audit'];
+        const validTabs: SettingsTab[] = ['general', 'brand', 'billing', 'certificate', 'backup', 'audit'];
         if (tab && validTabs.includes(tab as SettingsTab)) {
             setActiveTab(tab as SettingsTab);
         }
@@ -250,135 +246,12 @@ const SettingsManagement: React.FC = () => {
         toast.success('Logo fiscal eliminado correctamente', 'Éxito');
     };
 
-    // Handlers de Mantenimiento (NUEVOS)
-    const handleExportMenu = async () => {
-        try {
-            const blob = await api.export.menu();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `menu-${Date.now()}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            toast.success('Menú exportado correctamente', 'Éxito');
-        } catch (error) {
-            toast.error('Error al exportar el menú', 'Error');
-        }
-    };
-
-    const handleExportClients = async () => {
-        try {
-            const blob = await api.export.clients();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `clientes-${Date.now()}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            toast.success('Clientes exportados correctamente', 'Éxito');
-        } catch (error) {
-            toast.error('Error al exportar clientes', 'Error');
-        }
-    };
-
-    const handleExportBills = async () => {
-        try {
-            const blob = await api.export.bills();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `facturas-${Date.now()}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            toast.success('Facturas exportadas correctamente', 'Éxito');
-        } catch (error) {
-            toast.error('Error al exportar facturas', 'Error');
-        }
-    };
-
-    const handleExportOrders = async () => {
-        try {
-            const blob = await api.export.orders();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `ordenes-${Date.now()}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            toast.success('Órdenes exportadas correctamente', 'Éxito');
-        } catch (error) {
-            toast.error('Error al exportar órdenes', 'Error');
-        }
-    };
-
-    const handleFiscalYearClose = async () => {
-        const currentYear = new Date().getFullYear();
-        const year = prompt(`¿Qué año fiscal deseas cerrar? (Ej: ${currentYear - 1})`, (currentYear - 1).toString());
-
-        if (!year) return;
-
-        const yearNum = parseInt(year);
-        if (isNaN(yearNum) || yearNum < 2020 || yearNum > currentYear) {
-            toast.error(`El año debe estar entre 2020 y ${currentYear}`, 'Error');
-            return;
-        }
-
-        try {
-            const result = await api.maintenance.fiscalYearClose(yearNum);
-            toast.success(result.message || 'Cierre fiscal completado correctamente', 'Éxito');
-        } catch (error: any) {
-            toast.error(error.message || 'Error al cerrar el año fiscal', 'Error');
-        }
-    };
-
-    // Handlers de Zona de Peligro (REFACTORIZADOS)
-    const handleResetAppearance = async () => {
-        await resetConfig();
-        toast.success('Apariencia visual restaurada a valores por defecto', 'Éxito');
-    };
-
-    const handleDeleteOldOrders = async (monthsOld: number) => {
-        try {
-            const result = await api.maintenance.deleteOldOrders(monthsOld);
-            toast.success(result.message || 'Órdenes antiguas eliminadas correctamente', 'Éxito');
-        } catch (error: any) {
-            toast.error(error.message || 'Error al eliminar órdenes antiguas', 'Error');
-        }
-    };
-
-    const handleDeleteInactiveClients = async (monthsInactive: number) => {
-        try {
-            const result = await api.maintenance.deleteInactiveClients(monthsInactive);
-            toast.success(result.message || 'Clientes inactivos eliminados correctamente', 'Éxito');
-        } catch (error: any) {
-            toast.error(error.message || 'Error al eliminar clientes inactivos', 'Error');
-        }
-    };
-
-    const handleDeleteDisabledProducts = async () => {
-        try {
-            const result = await api.maintenance.deleteDisabledProducts();
-            toast.success(result.message || 'Productos deshabilitados eliminados correctamente', 'Éxito');
-        } catch (error: any) {
-            toast.error(error.message || 'Error al eliminar productos deshabilitados', 'Error');
-        }
-    };
-
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
         { id: 'general', label: 'General', icon: <LayoutIcon className="w-4 h-4" /> },
         { id: 'brand', label: 'Marca', icon: <ChefHatIcon className="w-4 h-4" /> },
         { id: 'billing', label: 'Facturación / SRI', icon: <SettingsIcon className="w-4 h-4" /> },
         { id: 'certificate', label: 'Certificado Digital', icon: <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> },
-        { id: 'maintenance', label: 'Mantenimiento', icon: <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
-        { id: 'danger', label: 'Zona de Peligro', icon: <AlertCircleIcon className="w-4 h-4" /> },
+        { id: 'backup', label: 'Respaldos', icon: <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg> },
         { id: 'audit', label: 'Auditoría', icon: <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
     ];
 
@@ -452,22 +325,8 @@ const SettingsManagement: React.FC = () => {
                         onChangeEnvironment={handleChangeCertificateEnvironment}
                     />
                 )}
-                {activeTab === 'maintenance' && (
-                    <MaintenanceSection
-                        onExportMenu={handleExportMenu}
-                        onExportClients={handleExportClients}
-                        onExportBills={handleExportBills}
-                        onExportOrders={handleExportOrders}
-                        onFiscalYearClose={handleFiscalYearClose}
-                    />
-                )}
-                {activeTab === 'danger' && (
-                    <DangerZoneSection
-                        onResetAppearance={handleResetAppearance}
-                        onDeleteOldOrders={handleDeleteOldOrders}
-                        onDeleteInactiveClients={handleDeleteInactiveClients}
-                        onDeleteDisabledProducts={handleDeleteDisabledProducts}
-                    />
+                {activeTab === 'backup' && (
+                    <BackupSection />
                 )}
                 {activeTab === 'audit' && (
                     <AuditSection employees={employees} />
