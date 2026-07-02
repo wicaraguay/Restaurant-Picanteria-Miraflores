@@ -68,8 +68,8 @@ const AuditSection: React.FC<AuditSectionProps> = ({ employees }) => {
 
         setLoading(true);
         try {
-            const response = await api.audit.getUserActivity(userId, 100);
-            setAuditLogs(response.data || []);
+            const logs = await api.audit.getUserActivity(userId, 100);
+            setAuditLogs(logs || []);
         } catch (error) {
             toast.error('Error al cargar actividad del usuario', 'Error');
             setAuditLogs([]);
@@ -84,8 +84,8 @@ const AuditSection: React.FC<AuditSectionProps> = ({ employees }) => {
         try {
             // Últimos 7 días
             const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-            const response = await api.audit.getDeletedDocuments(since);
-            setAuditLogs(response.data || []);
+            const logs = await api.audit.getDeletedDocuments(since);
+            setAuditLogs(logs || []);
         } catch (error) {
             toast.error('Error al cargar documentos eliminados', 'Error');
             setAuditLogs([]);

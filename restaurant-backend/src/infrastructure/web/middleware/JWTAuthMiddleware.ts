@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { JWTService, JWTPayload } from '../../utils/JWTService';
 import { AuthenticationError } from '../../../domain/errors/CustomErrors';
 import { logger } from '../../utils/Logger';
+import { requestContextStorage } from '../../services/AuditService';
 
 /**
  * Extensión de la interfaz Request para incluir los datos del usuario autenticado
@@ -36,10 +37,22 @@ export const jwtAuthMiddleware = (req: Request, res: Response, next: NextFunctio
 
         // Adjuntar el payload del usuario a la request
         req.user = payload;
-        
+
         logger.debug('User authenticated', { userId: payload.userId, roleId: payload.roleId });
-        
-        next();
+
+        // Establecer contexto de auditoría con datos del usuario autenticado
+        const auditContext = {
+            userId: payload.userId,
+            userEmail: payload.email,
+            userRole: payload.roleName,
+            ip: req.ip || req.socket?.remoteAddress || req.headers['x-forwarded-for'] as string,
+            userAgent: req.headers['user-agent']
+        };
+
+        // Ejecutar el resto del request dentro del contexto de auditoría
+        requestContextStorage.run(auditContext, () => {
+            next();
+        });
     } catch (error) {
         next(error);
     }

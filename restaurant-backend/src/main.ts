@@ -22,7 +22,6 @@ import { sentryService } from './infrastructure/monitoring/SentryService';
 import { metricsService } from './infrastructure/monitoring/MetricsService';
 import { SentryMiddleware } from './infrastructure/web/middleware/SentryMiddleware';
 import { requestIdMiddleware } from './infrastructure/web/middleware/requestId';
-import { auditContextMiddleware } from './infrastructure/http/middleware/AuditContextMiddleware';
 
 import customerRoutes from './infrastructure/web/routes/customerRoutes';
 import orderRoutes from './infrastructure/web/routes/orderRoutes';
@@ -137,9 +136,6 @@ app.use((req, res, next) => {
     });
     next();
 });
-
-// Audit context middleware (captures user info for audit logs)
-app.use(auditContextMiddleware);
 
 import billingRoutes from './infrastructure/web/routes/billingRoutes';
 import whatsappApiRoutes from './infrastructure/web/routes/whatsappApiRoutes';
