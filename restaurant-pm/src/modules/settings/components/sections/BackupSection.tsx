@@ -27,10 +27,8 @@ const BackupSection: React.FC = () => {
     const loadBackups = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await api.backup.list();
-            if (response?.success) {
-                setBackups(response.data || []);
-            }
+            const backups = await api.backup.list();
+            setBackups(backups || []);
         } catch (error) {
             toast.error('Error al cargar backups', 'Error');
         } finally {
@@ -45,13 +43,9 @@ const BackupSection: React.FC = () => {
     const createBackup = async () => {
         setCreating(true);
         try {
-            const response = await api.backup.create();
-            if (response?.success) {
-                toast.success('Backup creado exitosamente', 'Backup');
-                loadBackups();
-            } else {
-                toast.error(response?.error?.message || 'Error al crear backup', 'Error');
-            }
+            await api.backup.create();
+            toast.success('Backup creado exitosamente', 'Backup');
+            loadBackups();
         } catch (error: any) {
             toast.error(error.message || 'Error al crear backup', 'Error');
         } finally {
@@ -84,13 +78,9 @@ const BackupSection: React.FC = () => {
 
         setDeletingId(backup.id);
         try {
-            const response = await api.backup.delete(backup.id);
-            if (response?.success) {
-                toast.success('Backup eliminado', 'Backup');
-                loadBackups();
-            } else {
-                toast.error('Error al eliminar backup', 'Error');
-            }
+            await api.backup.delete(backup.id);
+            toast.success('Backup eliminado', 'Backup');
+            loadBackups();
         } catch (error) {
             toast.error('Error al eliminar backup', 'Error');
         } finally {
