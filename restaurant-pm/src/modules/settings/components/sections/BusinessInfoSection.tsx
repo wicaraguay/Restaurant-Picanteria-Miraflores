@@ -94,7 +94,7 @@ const BusinessInfoSection: React.FC<BusinessInfoSectionProps> = ({ businessInfo,
                                 />
                             </div>
                             <div className="md:col-span-2 space-y-1.5">
-                                <label htmlFor="address" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Dirección *</label>
+                                <label htmlFor="address" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Dirección (Sitio Web / Contacto)</label>
                                 <input
                                     type="text"
                                     id="address"
