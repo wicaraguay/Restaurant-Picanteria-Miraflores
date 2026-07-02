@@ -41,7 +41,8 @@ class BackupService {
         const filepath = path.join(this.backupDir, filename);
 
         try {
-            const db = dbConnection.getConnection();
+            const connection = dbConnection.getConnection();
+            const db = connection.db;
             if (!db) {
                 throw new Error('Database not connected');
             }
