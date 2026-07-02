@@ -23,6 +23,7 @@ jobs:
             cd /opt/app
             git pull origin main
             docker-compose -f docker-compose.prod.yml down
+            docker builder prune -af
             docker-compose -f docker-compose.prod.yml up -d --build
             sleep 10
             curl -f http://localhost:3000/health || exit 1
