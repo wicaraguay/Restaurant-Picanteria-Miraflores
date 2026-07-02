@@ -209,7 +209,7 @@ export class CheckCreditNoteStatus {
                 estab,
                 ptoEmi,
                 secuencial,
-                dirMatriz: config.dirMatriz,
+                dirMatriz: config.fiscalAddress || config.address || process.env.DIR_MATRIZ,
                 fechaEmision: entity.date.split('T')[0].split('-').reverse().join('/'),
                 codDocModificado: '01',
                 numDocModificado: originalBill.documentNumber,
