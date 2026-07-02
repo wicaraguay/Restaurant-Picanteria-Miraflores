@@ -149,7 +149,7 @@ const BillingSRISection: React.FC<BillingSRISectionProps> = ({
                                     />
                                 </div>
                                 <div className="md:col-span-2 space-y-1.5">
-                                    <label htmlFor="fiscalAddress" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Dirección Fiscal (Aparece en la Factura)</label>
+                                    <label htmlFor="fiscalAddress" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Dirección Fiscal * (Aparece en la Factura)</label>
                                     <input
                                         type="text"
                                         id="fiscalAddress"
