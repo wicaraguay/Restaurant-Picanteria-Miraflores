@@ -39,18 +39,20 @@ interface AppState {
 /**
  * Tipo del contexto
  */
+type Updater<T> = T | ((prev: T) => T);
+
 interface AppStateContextType {
     // Estado
     state: AppState;
 
-    // Setters individuales
-    setCustomers: (customers: Customer[]) => void;
-    setOrders: (orders: Order[]) => void;
-    setMenuItems: (menuItems: MenuItem[]) => void;
-    setBills: (bills: Bill[]) => void;
-    setReservations: (reservations: Reservation[]) => void;
-    setEmployees: (employees: Employee[]) => void;
-    setRoles: (roles: Role[]) => void;
+    // Setters individuales (aceptan valor directo o función updater para evitar stale closures)
+    setCustomers: (customers: Updater<Customer[]>) => void;
+    setOrders: (orders: Updater<Order[]>) => void;
+    setMenuItems: (menuItems: Updater<MenuItem[]>) => void;
+    setBills: (bills: Updater<Bill[]>) => void;
+    setReservations: (reservations: Updater<Reservation[]>) => void;
+    setEmployees: (employees: Updater<Employee[]>) => void;
+    setRoles: (roles: Updater<Role[]>) => void;
 
     // Helpers
     addCustomer: (customer: Customer) => void;
@@ -94,33 +96,38 @@ const getInitialState = (): AppState => {
 export const AppStateProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [state, setState] = useState<AppState>(getInitialState());
 
+    // Resuelve un Updater<T> (valor directo o función) contra el estado previo REAL.
+    // Esto evita stale closures: la función updater siempre recibe el estado más reciente.
+    const resolve = <T,>(value: Updater<T>, prev: T): T =>
+        typeof value === 'function' ? (value as (prev: T) => T)(prev) : value;
+
     // Setters individuales
-    const setCustomers = useCallback((customers: Customer[]) => {
-        setState(prev => ({ ...prev, customers }));
+    const setCustomers = useCallback((customers: Updater<Customer[]>) => {
+        setState(prev => ({ ...prev, customers: resolve(customers, prev.customers) }));
     }, []);
 
-    const setOrders = useCallback((orders: Order[]) => {
-        setState(prev => ({ ...prev, orders }));
+    const setOrders = useCallback((orders: Updater<Order[]>) => {
+        setState(prev => ({ ...prev, orders: resolve(orders, prev.orders) }));
     }, []);
 
-    const setMenuItems = useCallback((menuItems: MenuItem[]) => {
-        setState(prev => ({ ...prev, menuItems }));
+    const setMenuItems = useCallback((menuItems: Updater<MenuItem[]>) => {
+        setState(prev => ({ ...prev, menuItems: resolve(menuItems, prev.menuItems) }));
     }, []);
 
-    const setBills = useCallback((bills: Bill[]) => {
-        setState(prev => ({ ...prev, bills }));
+    const setBills = useCallback((bills: Updater<Bill[]>) => {
+        setState(prev => ({ ...prev, bills: resolve(bills, prev.bills) }));
     }, []);
 
-    const setReservations = useCallback((reservations: Reservation[]) => {
-        setState(prev => ({ ...prev, reservations }));
+    const setReservations = useCallback((reservations: Updater<Reservation[]>) => {
+        setState(prev => ({ ...prev, reservations: resolve(reservations, prev.reservations) }));
     }, []);
 
-    const setEmployees = useCallback((employees: Employee[]) => {
-        setState(prev => ({ ...prev, employees }));
+    const setEmployees = useCallback((employees: Updater<Employee[]>) => {
+        setState(prev => ({ ...prev, employees: resolve(employees, prev.employees) }));
     }, []);
 
-    const setRoles = useCallback((roles: Role[]) => {
-        setState(prev => ({ ...prev, roles }));
+    const setRoles = useCallback((roles: Updater<Role[]>) => {
+        setState(prev => ({ ...prev, roles: resolve(roles, prev.roles) }));
     }, []);
 
     // Helpers para customers

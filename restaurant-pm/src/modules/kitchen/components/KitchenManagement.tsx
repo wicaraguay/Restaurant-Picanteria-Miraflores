@@ -70,6 +70,15 @@ const KitchenOrderCard: React.FC<{
     const customerInfo = useMemo(() => parseCustomerInfo(order.customerName), [order.customerName]);
     const displayOrderNumber = useMemo(() => formatOrderNumber(order.orderNumber, order.id.slice(-6)), [order.orderNumber, order.id]);
     const minutesSinceEstimate = useTimer(order.estimateSetAt || order.createdAt);
+    const [customEstimate, setCustomEstimate] = useState('');
+    const [confirmDispatch, setConfirmDispatch] = useState(false);
+
+    // Auto-cancelar la confirmación de despacho después de 3 segundos
+    useEffect(() => {
+        if (!confirmDispatch) return;
+        const timeout = setTimeout(() => setConfirmDispatch(false), 3000);
+        return () => clearTimeout(timeout);
+    }, [confirmDispatch]);
 
     // Calculate remaining time relative to when the estimate was set
     const remainingTime = (order.estimatedMinutes && order.estimateSetAt)
@@ -94,7 +103,18 @@ const KitchenOrderCard: React.FC<{
         return "border-blue-500/40 shadow-blue-500/10";
     };
 
-    const allReady = order.items.every(i => i.prepared);
+    const preparedCount = order.items.filter(i => i.prepared).length;
+    const totalItems = order.items.length;
+    const progressPct = totalItems > 0 ? Math.round((preparedCount / totalItems) * 100) : 0;
+    const allReady = preparedCount === totalItems;
+
+    const handleCustomEstimate = () => {
+        const minutes = parseInt(customEstimate, 10);
+        if (!isNaN(minutes) && minutes > 0 && minutes <= 240) {
+            onSetEstimate(order.id, minutes);
+            setCustomEstimate('');
+        }
+    };
 
     return (
         <div className={`glass-panel flex flex-col h-full border-t-4 transition-all duration-500 ${getUrgencyClasses()} animate-slide-up`}>
@@ -157,8 +177,8 @@ const KitchenOrderCard: React.FC<{
                         )
                     ) : (
                         <>
-                            <span className="text-2xl font-black leading-none text-gray-300 dark:text-gray-700">0</span>
-                            <span className="text-[10px] font-black uppercase tracking-tighter text-gray-300 dark:text-gray-700">min</span>
+                            <span className={`text-2xl font-black leading-none ${minutesElapsed >= 15 ? 'text-orange-500' : 'text-gray-400 dark:text-gray-500'}`}>{minutesElapsed}</span>
+                            <span className={`text-[8px] font-black uppercase tracking-tighter ${minutesElapsed >= 15 ? 'text-orange-500' : 'text-gray-400 dark:text-gray-500'}`}>ESPERA</span>
                         </>
                     )}
                 </div>
@@ -191,58 +211,103 @@ const KitchenOrderCard: React.FC<{
                         </button>
                     ))}
                 </div>
+                {/* Estimado personalizado */}
+                <div className="flex gap-2 items-center">
+                    <input
+                        type="number"
+                        min={1}
+                        max={240}
+                        value={customEstimate}
+                        onChange={e => setCustomEstimate(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleCustomEstimate(); }}
+                        placeholder="Otro tiempo..."
+                        className="flex-1 py-2 px-3 rounded-xl text-xs font-bold border-2 bg-white dark:bg-dark-900 border-gray-100 dark:border-dark-700 text-gray-700 dark:text-gray-200 focus:border-blue-500 focus:outline-none transition-all placeholder:font-bold placeholder:text-gray-300"
+                    />
+                    <button
+                        onClick={handleCustomEstimate}
+                        disabled={!customEstimate || parseInt(customEstimate, 10) <= 0}
+                        className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-tight bg-blue-600 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-700 transition-all active:scale-95"
+                    >
+                        Fijar
+                    </button>
+                </div>
             </div>
 
-            {/* Listado de platos (Solo los que faltan por preparar) */}
-            <div className="flex-1 p-4 space-y-2 overflow-y-auto max-h-[300px] custom-scroll">
-                {order.items.filter(item => !item.prepared).map((item, originalIdx) => {
-                    // We need the original index for update
-                    const actualIdx = order.items.findIndex((i, idx) => i === item);
+            {/* Barra de progreso de preparación */}
+            <div className="px-4 pt-3">
+                <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Avance</span>
+                    <span className={`text-[10px] font-black tracking-widest ${allReady ? 'text-green-600' : 'text-gray-500 dark:text-gray-400'}`}>
+                        {preparedCount}/{totalItems} PLATOS
+                    </span>
+                </div>
+                <div className="h-2 bg-gray-100 dark:bg-dark-700 rounded-full overflow-hidden">
+                    <div
+                        className={`h-full rounded-full transition-all duration-500 ${allReady ? 'bg-green-500' : 'bg-blue-500'}`}
+                        style={{ width: `${progressPct}%` }}
+                    />
+                </div>
+            </div>
 
-                    return (
-                        <button
-                            key={actualIdx}
-                            onClick={() => onUpdateItem(order.id, actualIdx)}
-                            className="w-full text-left p-3 rounded-2xl border-2 transition-all flex items-center justify-between group bg-white dark:bg-dark-900 border-gray-100 dark:border-dark-700 hover:border-blue-500"
-                        >
-                            <div className="flex items-center gap-3">
-                                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black bg-blue-100 text-blue-600">
-                                    {item.quantity}
-                                </span>
-                                <span className="font-bold text-sm text-gray-800 dark:text-gray-100">
-                                    {item.name}
-                                </span>
-                            </div>
-                            <div className="w-5 h-5 rounded-full border-2 border-gray-200 group-hover:border-blue-500 transition-colors" />
-                        </button>
-                    );
-                })}
-                {/* Opcional: Mostrar contador de items listos si hay alguno */}
-                {order.items.some(i => i.prepared) && (
-                    <div className="pt-2 text-[10px] font-bold text-gray-400 text-center uppercase tracking-widest">
-                        {order.items.filter(i => i.prepared).length} platos ya despachados
-                    </div>
-                )}
+            {/* Listado de platos (pendientes y preparados, toque para marcar/desmarcar) */}
+            <div className="flex-1 p-4 space-y-2 overflow-y-auto max-h-[300px] custom-scroll">
+                {order.items.map((item, idx) => (
+                    <button
+                        key={idx}
+                        onClick={() => onUpdateItem(order.id, idx)}
+                        className={`w-full text-left p-3 rounded-2xl border-2 transition-all flex items-center justify-between group ${item.prepared
+                                ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40 hover:border-green-400'
+                                : 'bg-white dark:bg-dark-900 border-gray-100 dark:border-dark-700 hover:border-blue-500'
+                            }`}
+                        title={item.prepared ? 'Toca para desmarcar' : 'Toca cuando esté listo'}
+                    >
+                        <div className="flex items-center gap-3">
+                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${item.prepared ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                                }`}>
+                                {item.quantity}
+                            </span>
+                            <span className={`font-bold text-sm ${item.prepared
+                                    ? 'text-gray-400 dark:text-gray-500 line-through'
+                                    : 'text-gray-800 dark:text-gray-100'
+                                }`}>
+                                {item.name}
+                            </span>
+                        </div>
+                        {item.prepared ? (
+                            <CheckCircleIcon className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        ) : (
+                            <div className="w-5 h-5 rounded-full border-2 border-gray-200 group-hover:border-blue-500 transition-colors flex-shrink-0" />
+                        )}
+                    </button>
+                ))}
             </div>
 
             {/* Acciones principales */}
             <div className="p-4 mt-auto">
                 <button
-                    onClick={() => onMarkAllReady(order)}
-                    disabled={!allReady}
+                    onClick={() => {
+                        if (allReady) {
+                            onMarkAllReady(order);
+                        } else if (confirmDispatch) {
+                            setConfirmDispatch(false);
+                            onMarkAllReady(order);
+                        } else {
+                            setConfirmDispatch(true);
+                        }
+                    }}
                     className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${allReady
                             ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-600/20'
-                            : 'bg-gray-100 dark:bg-dark-800 text-gray-400 dark:text-gray-600 border-2 border-dashed border-gray-200 dark:border-dark-700 shadow-none'
+                            : confirmDispatch
+                                ? 'bg-orange-500 text-white border-2 border-orange-500 animate-pulse'
+                                : 'bg-white dark:bg-dark-900 text-orange-600 border-2 border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/10 shadow-none'
                         }`}
                 >
-                    {allReady ? (
-                        <>
-                            <CheckCircleIcon className="w-5 h-5" />
-                            PEDIDO LISTO
-                        </>
-                    ) : (
-                        'FALTAN PLATOS'
-                    )}
+                    <CheckCircleIcon className="w-5 h-5" />
+                    {allReady
+                        ? 'PEDIDO LISTO'
+                        : confirmDispatch
+                            ? 'TOCA DE NUEVO PARA CONFIRMAR'
+                            : `DESPACHAR TODO (${totalItems - preparedCount} PENDIENTES)`}
                 </button>
             </div>
         </div>

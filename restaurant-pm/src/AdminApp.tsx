@@ -16,7 +16,7 @@
  * - Reducido de 321 líneas a ~150 líneas (-53%)
  */
 
-import React, { lazy, Suspense, useCallback, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ViewType } from './types';
 import { Customer, Reservation } from './modules/customers/types/customer.types';
@@ -103,7 +103,19 @@ const AdminContent: React.FC = () => {
                     return;
                 }
 
-                setOrdersContext(orders);
+                // Merge-guard: si un pedido se creó localmente mientras este fetch estaba
+                // en vuelo, la respuesta del servidor aún no lo incluye. Sin este guard,
+                // el reemplazo total del array haría "desaparecer" el pedido recién creado.
+                setOrdersContext(prev => {
+                    const serverIds = new Set(orders.map(o => o.id));
+                    const now = Date.now();
+                    const recentLocalOnly = prev.filter(o =>
+                        !serverIds.has(o.id) &&
+                        o.createdAt &&
+                        now - new Date(o.createdAt).getTime() < 15000
+                    );
+                    return recentLocalOnly.length > 0 ? [...orders, ...recentLocalOnly] : orders;
+                });
             } catch (error) {
                 console.error("Error sincronizando pedidos:", error);
             }
@@ -140,61 +152,16 @@ const AdminContent: React.FC = () => {
         return () => clearInterval(intervalId);
     }, [setCustomersContext, isLoading]);
 
-    // Wrapper para setMenuItems que acepta funciones updater
-    const setMenuItems = useCallback((value: MenuItem[] | ((prev: MenuItem[]) => MenuItem[])) => {
-        if (typeof value === 'function') {
-            // Si es una función, la ejecutamos con el estado actual
-            setMenuItemsContext(value(state.menuItems));
-        } else {
-            // Si es un valor directo, lo pasamos tal cual
-            setMenuItemsContext(value);
-        }
-    }, [state.menuItems, setMenuItemsContext]);
-
-    // Wrapper para setEmployees
-    const updateEmployees = useCallback((value: Employee[] | ((prev: Employee[]) => Employee[])) => {
-        if (typeof value === 'function') {
-            setEmployeesContext(value(state.employees));
-        } else {
-            setEmployeesContext(value);
-        }
-    }, [state.employees, setEmployeesContext]);
-
-    // Wrapper para setRoles
-    const updateRoles = useCallback((value: Role[] | ((prev: Role[]) => Role[])) => {
-        if (typeof value === 'function') {
-            setRolesContext(value(state.roles));
-        } else {
-            setRolesContext(value);
-        }
-    }, [state.roles, setRolesContext]);
-
-    // Wrapper para setOrders
-    const updateOrders = useCallback((value: Order[] | ((prev: Order[]) => Order[])) => {
-        if (typeof value === 'function') {
-            setOrdersContext(value(state.orders));
-        } else {
-            setOrdersContext(value);
-        }
-    }, [state.orders, setOrdersContext]);
-
-    // Wrapper para setCustomers
-    const updateCustomers = useCallback((value: Customer[] | ((prev: Customer[]) => Customer[])) => {
-        if (typeof value === 'function') {
-            setCustomersContext(value(state.customers));
-        } else {
-            setCustomersContext(value);
-        }
-    }, [state.customers, setCustomersContext]);
-
-    // Wrapper para setReservations
-    const updateReservations = useCallback((value: Reservation[] | ((prev: Reservation[]) => Reservation[])) => {
-        if (typeof value === 'function') {
-            setReservationsContext(value(state.reservations));
-        } else {
-            setReservationsContext(value);
-        }
-    }, [state.reservations, setReservationsContext]);
+    // Los setters del contexto ahora aceptan funciones updater de forma nativa
+    // (resueltas contra el estado real, sin stale closures), así que los wrappers
+    // solo delegan. Antes ejecutaban value(state.X) con un snapshot viejo del render,
+    // lo que causaba que pedidos recién creados se perdieran al competir con el polling.
+    const setMenuItems = setMenuItemsContext;
+    const updateEmployees = setEmployeesContext;
+    const updateRoles = setRolesContext;
+    const updateOrders = setOrdersContext;
+    const updateCustomers = setCustomersContext;
+    const updateReservations = setReservationsContext;
 
 
     if (isLoading) {
