@@ -14,6 +14,7 @@ import { whatsappSocket } from '../../modules/whatsapp/services/whatsappSocket';
 import { whatsappAlertService, WhatsAppAlert } from '../../modules/whatsapp/services/whatsappAlertService';
 import { notificationService } from '../../services/NotificationService';
 import { toast } from '../ui/AlertProvider';
+import { useAuth } from '../../modules/auth/contexts/AuthContext';
 
 function timeAgo(iso: string): string {
     const diffMs = Date.now() - new Date(iso).getTime();
@@ -27,10 +28,16 @@ function timeAgo(iso: string): string {
 }
 
 const WhatsAppAlertCenter: React.FC = () => {
+    const { currentUser } = useAuth();
     const [alerts, setAlerts] = useState<WhatsAppAlert[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const isOpenRef = useRef(isOpen);
     isOpenRef.current = isOpen;
+
+    // Solo ven las alertas los roles con permiso a la sección WhatsApp
+    // (ej. el Contador no lo tiene → no recibe alertas ni sonidos).
+    // Se administra desde Roles y Permisos, sin hardcodear nombres de rol.
+    const canSeeAlerts = currentUser?.role?.permissions?.['whatsapp'] === true;
 
     const fetchAlerts = useCallback(async () => {
         try {
@@ -43,6 +50,8 @@ const WhatsAppAlertCenter: React.FC = () => {
 
     // Carga inicial + socket en vivo + polling de respaldo
     useEffect(() => {
+        if (!canSeeAlerts) return;
+
         fetchAlerts();
 
         whatsappSocket.connect();
@@ -60,7 +69,7 @@ const WhatsAppAlertCenter: React.FC = () => {
             unsubscribe();
             clearInterval(interval);
         };
-    }, [fetchAlerts]);
+    }, [canSeeAlerts, fetchAlerts]);
 
     const handleAttend = async (id: string) => {
         // Optimista: quitar de la lista de inmediato
@@ -82,6 +91,7 @@ const WhatsAppAlertCenter: React.FC = () => {
         }
     };
 
+    if (!canSeeAlerts) return null;
     if (alerts.length === 0 && !isOpen) return null;
 
     return (
