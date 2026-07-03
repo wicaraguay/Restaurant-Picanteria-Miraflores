@@ -211,12 +211,17 @@ export class MongoRestaurantConfigRepository implements IRestaurantConfigReposit
 
 
     /**
-     * Obtiene el ambiente actual del certificado SRI.
-     * Prioridad: sriCertificate.environment > process.env.SRI_ENV > '1' (Pruebas)
+     * Obtiene el ambiente SRI activo — FUENTE ÚNICA DE VERDAD.
+     * Prioridad: sriCertificate.environment (BD, configurable desde la UI) > process.env.SRI_ENV > '1' (Pruebas)
      */
-    private async getCurrentEnvironment(): Promise<'1' | '2'> {
+    public async getEnvironment(): Promise<'1' | '2'> {
         const config = await this.get();
         return (config?.sriCertificate?.environment as '1' | '2') || (process.env.SRI_ENV as '1' | '2') || '1';
+    }
+
+    /** @deprecated Alias interno — usar getEnvironment() */
+    private async getCurrentEnvironment(): Promise<'1' | '2'> {
+        return this.getEnvironment();
     }
 
     /**

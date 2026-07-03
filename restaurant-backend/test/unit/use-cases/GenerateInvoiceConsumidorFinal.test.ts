@@ -27,6 +27,7 @@ describe('GenerateInvoice - Consumidor Final (SRI 2026)', () => {
                 ruc: '1712345678001',
                 address: 'Quito'
             }),
+            getEnvironment: vi.fn().mockResolvedValue("1"),
             getNextSequential: vi.fn().mockResolvedValue(1)
         };
         mockBillRepo = {

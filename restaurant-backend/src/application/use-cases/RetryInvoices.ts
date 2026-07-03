@@ -59,12 +59,12 @@ export class RetryInvoices {
                 return results;
             }
 
-            const isProd = process.env.SRI_ENV === '2';
+            const fallbackIsProd = process.env.SRI_ENV === '2';
 
             // 2. Process each bill
             for (const bill of pendingBills.data) {
                 results.processed++;
-                
+
                 // Skip if no access key (CheckInvoiceStatus requires it)
                 if (!bill.accessKey) {
                     logger.warn(`[RetryInvoices] Bill ${bill.documentNumber} (${bill.id}) has no accessKey. Skipping.`);
@@ -75,7 +75,9 @@ export class RetryInvoices {
                 try {
                     // FIX S-02: Mask access key in logs
                     logger.info(`[RetryInvoices] Retrying Bill ${bill.documentNumber} (Key: ${maskAccessKey(bill.accessKey)})...`);
-                    
+
+                    // Reintentar contra el ambiente en que se EMITIÓ el documento (persistido en la factura)
+                    const isProd = bill.environment ? bill.environment === '2' : fallbackIsProd;
                     const result = await this.checkInvoiceStatus.execute(bill.accessKey, isProd);
                     
                     if (result.success && result.authorization?.estado === 'AUTORIZADO') {

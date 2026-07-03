@@ -29,4 +29,14 @@ export interface IRestaurantConfigRepository {
      */
     getNextSequential(): Promise<number>;
     getNextCreditNoteSequential(): Promise<number>;
+
+    /**
+     * Devuelve el ambiente SRI activo — FUENTE ÚNICA DE VERDAD.
+     * Prioridad: sriCertificate.environment (BD, configurable desde la UI)
+     *          > process.env.SRI_ENV > '1' (Pruebas).
+     * Todos los flujos de emisión/verificación deben usar este método, nunca
+     * leer process.env.SRI_ENV directamente.
+     * @returns '1' (Pruebas) | '2' (Producción)
+     */
+    getEnvironment(): Promise<'1' | '2'>;
 }

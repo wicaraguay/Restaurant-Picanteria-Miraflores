@@ -88,6 +88,8 @@ export class GenerateCreditNote {
         // 3. Get Config
         const config = await this.configRepository.get();
         const info = config || {} as any;
+        // Ambiente desde la BD (configurable en la UI) — fuente única de verdad
+        const environment = await this.configRepository.getEnvironment();
 
         // 4. Get Sequential for Credit Note
         // CRITICAL: If a PENDING credit note already exists for this bill (e.g. SRI was down),
@@ -128,7 +130,7 @@ export class GenerateCreditNote {
             creationDate: now,
             detalles: details,
             info: {
-                ambiente: (process.env.SRI_ENV as '1' | '2') || '1',
+                ambiente: environment,
                 tipoEmision: '1',
                 razonSocial: info.businessName || process.env.BUSINESS_NAME || 'RESTAURANTE DEMO',
                 nombreComercial: info.name || process.env.COMMERCIAL_NAME,
@@ -169,7 +171,7 @@ export class GenerateCreditNote {
 
         // 6. Generate XML and Send to SRI with Auto-Retry for Duplicate Sequential
         logger.info('[GenerateCreditNote] Generating XML...');
-        const isProd = process.env.SRI_ENV === '2';
+        const isProd = environment === '2';
 
         // FIX I-06: Save DRAFT before sending to SRI to prevent duplicates on network errors
         // This ensures we can reuse the same sequential/accessKey on retry

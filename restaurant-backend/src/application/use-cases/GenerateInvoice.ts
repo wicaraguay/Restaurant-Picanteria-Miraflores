@@ -73,12 +73,14 @@ export class GenerateInvoice {
         const { details, subtotal, totalImpuestos, total } = this.calculateTotals(order.items, taxRate);
         this.billingService.validateConsumidorFinal(client.identification, total);
 
-        // Step 2: Get configuration and sequential
+        // Step 2: Get configuration, environment and sequential
         const config = await this.configRepository.get();
+        // Ambiente desde la BD (configurable en la UI) — fuente única de verdad
+        const environment = await this.configRepository.getEnvironment();
         const secuencial = await this.resolveSequential(params.id);
 
         // Step 3: Build invoice object
-        const invoice = this.buildInvoice(order, client, details, subtotal, total, config, secuencial, logoUrl, taxRate);
+        const invoice = this.buildInvoice(order, client, details, subtotal, total, config, secuencial, logoUrl, taxRate, environment);
 
         // Step 4: Validate real-time transmission (SRI 2026 compliance)
         this.billingService.validateRealTimeTransmission(invoice.info.fechaEmision);
@@ -87,11 +89,11 @@ export class GenerateInvoice {
         const autoLearnResult = await this.tryAutoLearnCustomer(client);
 
         // Step 6: Create draft bill in database
-        const draftBill = await this.createDraftBill(params.id, invoice, details, totalImpuestos);
+        const draftBill = await this.createDraftBill(params.id, invoice, details, totalImpuestos, environment);
 
         // Step 7: Generate, sign, and send XML to SRI
         const { xml, signedXml, result, authResult, updatedInvoice } = await this.processWithSRI(
-            invoice, config, draftBill.id
+            invoice, config, draftBill.id, environment
         );
 
         // Determine if consumidor final (needed for order status and email)
@@ -211,12 +213,13 @@ export class GenerateInvoice {
         config: RestaurantConfig | null,
         secuencial: string,
         logoUrl: string | undefined,
-        taxRate: number
+        taxRate: number,
+        environment: '1' | '2'
     ): Invoice {
         const info = config || {} as any;
         const now = new Date();
 
-        logger.info(`[GenerateInvoice] Config from DB: ${!!config}, Logo: ${info.logo ? 'EXISTS' : 'MISSING'}`);
+        logger.info(`[GenerateInvoice] Config from DB: ${!!config}, Logo: ${info.logo ? 'EXISTS' : 'MISSING'}, Ambiente: ${environment === '2' ? 'PRODUCCIÓN' : 'PRUEBAS'}`);
 
         return {
             orderId: order.id,
@@ -224,7 +227,7 @@ export class GenerateInvoice {
             creationDate: now,
             detalles: details,
             info: {
-                ambiente: (process.env.SRI_ENV as '1' | '2') || '1',
+                ambiente: environment,
                 tipoEmision: '1',
                 razonSocial: info.businessName || process.env.BUSINESS_NAME || 'RESTAURANTE DEMO',
                 nombreComercial: info.name || process.env.COMMERCIAL_NAME,
@@ -280,10 +283,12 @@ export class GenerateInvoice {
         existingId: string | undefined,
         invoice: Invoice,
         details: InvoiceDetail[],
-        totalImpuestos: number
+        totalImpuestos: number,
+        environment: '1' | '2'
     ): Promise<any> {
         const billData: any = {
             id: existingId,
+            environment, // Persistir el ambiente de emisión — el badge PRUEBAS/PRODUCCIÓN del historial lo lee de aquí
             accessKey: undefined,
             documentNumber: `${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}`,
             orderId: invoice.orderId,
@@ -316,7 +321,8 @@ export class GenerateInvoice {
     private async processWithSRI(
         invoice: Invoice,
         config: RestaurantConfig | null,
-        billId: string
+        billId: string,
+        environment: '1' | '2'
     ): Promise<{
         xml: string;
         signedXml: string;
@@ -324,7 +330,7 @@ export class GenerateInvoice {
         authResult: any;
         updatedInvoice: Invoice | null;
     }> {
-        const isProd = process.env.SRI_ENV === '2';
+        const isProd = environment === '2';
 
         // Generate and sign XML
         const xml = this.sriService.generateInvoiceXML(invoice);

@@ -22,6 +22,7 @@ describe('GenerateInvoice Customer Learning Repro', () => {
     beforeEach(() => {
         mockConfigRepo = {
             get: vi.fn().mockResolvedValue({ businessName: 'Test', ruc: '123' }),
+            getEnvironment: vi.fn().mockResolvedValue("1"),
             getNextSequential: vi.fn().mockResolvedValue(1)
         };
         mockBillRepo = { upsert: vi.fn().mockResolvedValue({ id: 'bill-123' }), findById: vi.fn().mockResolvedValue(null) };

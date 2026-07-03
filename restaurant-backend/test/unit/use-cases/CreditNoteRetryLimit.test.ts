@@ -19,7 +19,8 @@ describe('Credit Note Retry Limit Logic (CheckCreditNoteStatus)', () => {
                 businessName: 'Test Biz',
                 ruc: '1712345678001',
                 address: 'Quito'
-            })
+            }),
+            getEnvironment: vi.fn().mockResolvedValue('1')
         };
         
         mockCreditNoteRepo = {

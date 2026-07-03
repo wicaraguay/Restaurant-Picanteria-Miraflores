@@ -29,6 +29,7 @@ describe('GenerateInvoice Persistence', () => {
                 address: 'Quito'
             }),
             update: vi.fn(),
+            getEnvironment: vi.fn().mockResolvedValue("1"),
             getNextSequential: vi.fn().mockResolvedValue(1)
         };
         mockBillRepo = {

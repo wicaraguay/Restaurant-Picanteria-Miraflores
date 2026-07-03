@@ -30,6 +30,7 @@ describe('Advanced Billing Workflow', () => {
                 address: 'Quito'
             }),
             update: vi.fn(),
+            getEnvironment: vi.fn().mockResolvedValue("1"),
             getNextSequential: vi.fn().mockResolvedValue(1)
         };
         mockBillRepo = {

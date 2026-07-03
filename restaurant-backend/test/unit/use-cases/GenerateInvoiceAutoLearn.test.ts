@@ -31,6 +31,7 @@ describe('GenerateInvoice Auto-Learning', () => {
                 address: 'Quito'
             }), 
             update: vi.fn(),
+            getEnvironment: vi.fn().mockResolvedValue("1"),
             getNextSequential: vi.fn().mockResolvedValue(2)
         };
         mockBillRepo = { upsert: vi.fn().mockResolvedValue({ id: 'bill123' }), findById: vi.fn().mockResolvedValue(null) };

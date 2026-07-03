@@ -44,6 +44,7 @@ describe('UpdateBill and GenerateInvoice Sequential Preservation', () => {
                 ruc: '1234567890001',
                 billing: { establishment: '001', emissionPoint: '001' }
             }),
+            getEnvironment: vi.fn().mockResolvedValue("1"),
             getNextSequential: vi.fn().mockResolvedValue(200)
         };
         mockSRIService = {

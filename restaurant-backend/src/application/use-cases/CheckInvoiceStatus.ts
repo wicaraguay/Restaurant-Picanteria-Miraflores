@@ -112,7 +112,9 @@ export class CheckInvoiceStatus {
 
                     const invoiceToResend: any = {
                         info: {
-                            ambiente: fullBill.environment || '1',
+                            // Ambiente del documento; para legacy sin environment persistido,
+                            // derivar de isProd para que XML y endpoint SRI sean coherentes
+                            ambiente: fullBill.environment || (isProd ? '2' : '1'),
                             tipoEmision: '1',
                             razonSocial: info.businessName || process.env.BUSINESS_NAME,
                             nombreComercial: info.name || process.env.COMMERCIAL_NAME,

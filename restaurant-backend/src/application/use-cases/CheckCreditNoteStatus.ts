@@ -57,7 +57,11 @@ export class CheckCreditNoteStatus {
             }
             // -----------------------------------------------------
 
-            const isProd = process.env.SRI_ENV === '2';
+            // Ambiente del documento (persistido al emitir); fallback al ambiente activo en BD.
+            // Un documento emitido en pruebas debe verificarse contra pruebas aunque el
+            // sistema haya cambiado a producción después.
+            const environment = creditNote.environment || await this.configRepository.getEnvironment();
+            const isProd = environment === '2';
             let authResult;
 
             if (shouldGenerateNewKey) {

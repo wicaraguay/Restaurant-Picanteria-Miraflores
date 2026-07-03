@@ -71,6 +71,8 @@ export class BillingController {
             const config = await this.configRepository.get();
             const taxRate: number = config?.billing?.taxRate ?? 15;
             const info = config || {} as any;
+            // Ambiente desde la BD (configurable en la UI) — fuente única de verdad
+            const environment = await this.configRepository.getEnvironment();
 
             // Calculate details
             const details = this.billingService.calculateDetails(order.items, taxRate);
@@ -85,7 +87,7 @@ export class BillingController {
                 creationDate: new Date(),
                 detalles: details,
                 info: {
-                    ambiente: (process.env.SRI_ENV as '1' | '2') || '1',
+                    ambiente: environment,
                     tipoEmision: '1',
                     razonSocial: info.businessName || process.env.BUSINESS_NAME || 'RESTAURANTE DEMO',
                     nombreComercial: info.name || process.env.COMMERCIAL_NAME,
@@ -154,7 +156,8 @@ export class BillingController {
     public checkStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { accessKey } = req.params;
-            const isProd = process.env.SRI_ENV === '2';
+            // Ambiente desde la BD (configurable en la UI) — fuente única de verdad
+            const isProd = (await this.configRepository.getEnvironment()) === '2';
 
             if (!accessKey) {
                 throw new ValidationError('Access Key is required');

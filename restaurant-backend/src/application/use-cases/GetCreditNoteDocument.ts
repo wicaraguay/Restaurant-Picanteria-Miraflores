@@ -98,7 +98,7 @@ export class GetCreditNoteDocument {
             authorizationDate: entity.authorizationDate,
             detalles: details,
             info: {
-                ambiente: (entity.environment as '1' | '2') || (process.env.SRI_ENV === '2' ? '2' : '1'),
+                ambiente: (entity.environment as '1' | '2') || await this.configRepository.getEnvironment(),
                 tipoEmision: '1',
                 razonSocial: info.businessName || process.env.BUSINESS_NAME || 'RESTAURANTE DEMO',
                 nombreComercial: info.name || process.env.COMMERCIAL_NAME,
