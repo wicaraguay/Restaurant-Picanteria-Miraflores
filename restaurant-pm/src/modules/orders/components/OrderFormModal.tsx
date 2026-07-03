@@ -4,6 +4,7 @@
  * Este archivo pertenece al módulo de órdenes (orders).
  */
 import React, { useState, useEffect } from 'react';
+import { optimizeImage } from '../../../utils/cloudinary';
 import { MenuItem } from '../../menu/types/menu.types';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
 import Modal from '../../../components/ui/Modal';
@@ -219,7 +220,7 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
                                 >
                                     <div className="w-full aspect-square bg-gray-100 dark:bg-dark-700 rounded-lg mb-2 overflow-hidden relative">
                                         {item.imageUrl ? (
-                                            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                            <img src={optimizeImage(item.imageUrl, 300)} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-4xl">ðŸ½ï¸</div>
                                         )}

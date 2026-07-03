@@ -3,6 +3,7 @@ import { MenuItem } from '../../menu/types/menu.types';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
 import { SearchIcon, PlusIcon, MinusIcon, TrashIcon, ClipboardListIcon, ChevronLeftIcon } from '../../../components/ui/Icons';
 import { toast } from '../../../components/ui/AlertProvider';
+import { optimizeImage } from '../../../utils/cloudinary';
 import '../styles/posStyles.css';
 
 interface POSViewProps {
@@ -199,7 +200,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                                 >
                                     <div className="w-full aspect-[4/3] md:aspect-square rounded-lg md:rounded-2xl overflow-hidden mb-1.5 md:mb-2 bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
                                         {item.imageUrl ? (
-                                            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                            <img src={optimizeImage(item.imageUrl, 300)} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                                         ) : (
                                             <span className="text-2xl md:text-4xl group-hover:scale-125 transition-transform duration-300">🍽️</span>
                                         )}

@@ -13,6 +13,7 @@ import { api } from '../api';
 import { logger } from '../utils/logger';
 import { useRestaurantConfig } from '../contexts/RestaurantConfigContext';
 import { defaultWebsiteConfig } from '../utils/defaultConfig';
+import { optimizeImage } from '../utils/cloudinary';
 
 const MenuPage: React.FC = () => {
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -53,7 +54,7 @@ const MenuPage: React.FC = () => {
     const carouselSlides = useMemo(() => {
         const slides = hero.slides || defaultWebsiteConfig.hero.slides;
         return slides.map(slide => ({
-            url: slide.imageUrl,
+            url: optimizeImage(slide.imageUrl, 1600), // hero a ancho completo
             title: slide.title,
             subtitle: slide.subtitle
         }));
@@ -387,8 +388,10 @@ const MenuPage: React.FC = () => {
                             {/* Imagen del plato */}
                             <div className="relative h-56 overflow-hidden">
                                 <img
-                                    src={item.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&h=400&fit=crop'}
+                                    src={optimizeImage(item.imageUrl, 600) || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&h=400&fit=crop'}
                                     alt={item.name}
+                                    loading="lazy"
+                                    decoding="async"
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                 />
 

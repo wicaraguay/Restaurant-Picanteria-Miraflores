@@ -5,6 +5,7 @@
  * Este archivo pertenece al módulo de menú (menu).
  */
 import React from 'react';
+import { optimizeImage } from '../../../utils/cloudinary';
 import { MenuItem } from '../types/menu.types';
 import { EditIcon, TrashIcon } from '../../../components/ui/Icons';
 import ToggleSwitch from '../../../components/ui/ToggleSwitch';
@@ -22,7 +23,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onEdit, onDele
             {/* Imagen del Plato */}
             <div className="relative h-48 sm:h-56 overflow-hidden">
                 <img
-                    src={item.imageUrl || 'https://via.placeholder.com/300x200?text=Sin+Imagen'}
+                    src={optimizeImage(item.imageUrl, 400) || 'https://via.placeholder.com/300x200?text=Sin+Imagen'}
                     alt={item.name}
                     loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"

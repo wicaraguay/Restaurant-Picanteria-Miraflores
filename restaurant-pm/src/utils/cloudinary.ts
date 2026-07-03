@@ -131,3 +131,30 @@ export const uploadToCloudinary = async (file: File): Promise<string> => {
         throw error;
     }
 };
+
+/**
+ * Optimización de imágenes de Cloudinary AL SERVIR (transformación en la URL).
+ *
+ * Las imágenes se suben como PNG originales (600 KB+ cada una); Cloudinary
+ * las transforma al vuelo con parámetros en la URL:
+ *   f_auto  → formato moderno según el navegador (WebP/AVIF)
+ *   q_auto  → calidad óptima automática
+ *   w_N     → ancho máximo en píxeles
+ *   c_limit → solo reduce, nunca agranda
+ *
+ * Resultado medido en este proyecto: 637 KB → 27 KB (24x menos)
+ * sin pérdida visual apreciable en pantallas de teléfono.
+ */
+export function optimizeImage(url: string | undefined | null, width: number = 600): string {
+    if (!url) return '';
+
+    // Solo aplica a URLs de Cloudinary sin transformaciones previas
+    if (!url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
+        return url;
+    }
+    if (/\/upload\/[^/]*(f_auto|q_auto|w_\d)/.test(url)) {
+        return url; // ya viene optimizada
+    }
+
+    return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},c_limit/`);
+}

@@ -13,6 +13,7 @@ import { toast } from '../../../components/ui/AlertProvider';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
 import Card from '../../../components/ui/Card';
 import { CategoryFormModal } from './CategoryFormModal';
+import { optimizeImage } from '../../../utils/cloudinary';
 
 type FilterType = ProductType | 'all';
 
@@ -278,7 +279,7 @@ const CategoryManagement: React.FC = () => {
                             <div className="space-y-4">
                                 {category.imageUrl && (
                                     <img
-                                        src={category.imageUrl}
+                                        src={optimizeImage(category.imageUrl, 400)}
                                         alt={category.name}
                                         className="w-full h-40 object-cover rounded-xl shadow-md"
                                     />
