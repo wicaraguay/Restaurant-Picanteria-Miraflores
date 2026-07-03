@@ -612,6 +612,18 @@ const MenuPage: React.FC = () => {
                         <p className="text-sm" style={{ color: '#FFE0B2', fontFamily: 'Nunito, sans-serif' }}>
                             &copy; {new Date().getFullYear()} {config.name}. Hecho con ❤️ y sazón.
                         </p>
+                        <p className="text-sm" style={{ color: '#FFE0B2', fontFamily: 'Nunito, sans-serif' }}>
+                            Desarrollado por{' '}
+                            <a
+                                href="https://willytech.dev/"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-bold hover:text-white transition-colors"
+                                style={{ color: '#FFB74D', fontFamily: 'Fredoka, sans-serif' }}
+                            >
+                                WillyTech
+                            </a>
+                        </p>
                         <div className="flex gap-6 text-xs font-bold uppercase tracking-wider" style={{ color: '#FFB74D', fontFamily: 'Fredoka, sans-serif' }}>
                             <span className="hover:text-white cursor-pointer transition-colors">Privacidad</span>
                             <span className="hover:text-white cursor-pointer transition-colors">Términos</span>

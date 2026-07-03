@@ -199,7 +199,7 @@ const AdminContent: React.FC = () => {
                     </button>
                 </header>
 
-                <main className="p-4 sm:p-6 pb-24 lg:pb-8 max-w-7xl mx-auto">
+                <main className="p-4 sm:p-6 pb-24 lg:pb-8 max-w-7xl mx-auto flex flex-col lg:min-h-screen">
                     <ErrorBoundary>
                         <Suspense fallback={<LoadingFallback />}>
                             <Routes>
@@ -256,6 +256,21 @@ const AdminContent: React.FC = () => {
                             </Routes>
                         </Suspense>
                     </ErrorBoundary>
+
+                    {/* Crédito del desarrollador */}
+                    <footer className="mt-auto pt-10 pb-2 text-center">
+                        <p className="text-[11px] font-bold text-gray-400 dark:text-gray-600 tracking-wide">
+                            Sistema desarrollado por{' '}
+                            <a
+                                href="https://willytech.dev/"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-gray-500 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-black"
+                            >
+                                WillyTech
+                            </a>
+                        </p>
+                    </footer>
                 </main>
             </div>
 
