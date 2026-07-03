@@ -3,6 +3,7 @@ import { GenerateCreditNote } from '../../application/use-cases/GenerateCreditNo
 import { GetCreditNotes } from '../../application/use-cases/GetCreditNotes';
 import { CheckCreditNoteStatus } from '../../application/use-cases/CheckCreditNoteStatus';
 import { DeleteCreditNote } from '../../application/use-cases/DeleteCreditNote';
+import { GetCreditNoteDocument } from '../../application/use-cases/GetCreditNoteDocument';
 import { IRestaurantConfigRepository } from '../../domain/repositories/IRestaurantConfigRepository';
 import { ResponseFormatter } from '../utils/ResponseFormatter';
 import { logger, maskAccessKey } from '../utils/Logger';
@@ -15,8 +16,47 @@ export class CreditNoteController {
         private getCreditNotes: GetCreditNotes,
         private checkCreditNoteStatus: CheckCreditNoteStatus,
         private deleteCreditNoteUseCase: DeleteCreditNote,
-        private configRepository: IRestaurantConfigRepository
+        private configRepository: IRestaurantConfigRepository,
+        private getCreditNoteDocument: GetCreditNoteDocument
     ) { }
+
+    /**
+     * GET /api/credit-notes/:id/xml
+     * Descarga el XML firmado de la nota de crédito
+     */
+    public getXml = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.params;
+            logger.info('Generating XML for credit note', { id });
+
+            const { xml, documentNumber } = await this.getCreditNoteDocument.getSignedXml(id);
+
+            res.setHeader('Content-Type', 'application/xml');
+            res.setHeader('Content-Disposition', `attachment; filename=NotaCredito-${documentNumber}.xml`);
+            res.send(xml);
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    /**
+     * GET /api/credit-notes/:id/pdf
+     * Descarga el PDF (RIDE) de la nota de crédito
+     */
+    public getPdf = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.params;
+            logger.info('Generating PDF for credit note', { id });
+
+            const { pdf, documentNumber } = await this.getCreditNoteDocument.getPdf(id);
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `inline; filename=NotaCredito-${documentNumber}.pdf`);
+            res.send(pdf);
+        } catch (error) {
+            next(error);
+        }
+    };
 
     public create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {

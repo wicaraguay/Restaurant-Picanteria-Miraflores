@@ -11,9 +11,20 @@
 import { Router } from 'express';
 import { container } from '../../di/DIContainer';
 import { CreditNoteController } from '../../controllers/CreditNoteController';
+import { GetCreditNoteDocument } from '../../../application/use-cases/GetCreditNoteDocument';
 import { creditNoteLimiter, statusCheckLimiter } from '../middleware/RateLimitMiddleware';
 
 const router = Router();
+
+// Use case para regenerar documentos (XML firmado / PDF) de notas de crédito
+const getCreditNoteDocument = new GetCreditNoteDocument(
+    container.getRestaurantConfigRepository(),
+    container.getCreditNoteRepository(),
+    container.getBillRepository(),
+    container.getSRIService(),
+    container.getPDFService(),
+    container.getBillingService()
+);
 
 // Instantiate controller with dependencies from DI Container
 const creditNoteController = new CreditNoteController(
@@ -21,7 +32,8 @@ const creditNoteController = new CreditNoteController(
     container.getGetCreditNotesUseCase(),
     container.getCheckCreditNoteStatusUseCase(),
     container.getDeleteCreditNoteUseCase(),
-    container.getRestaurantConfigRepository() // ← taxRate source of truth
+    container.getRestaurantConfigRepository(), // ← taxRate source of truth
+    getCreditNoteDocument
 );
 
 /**
@@ -36,6 +48,18 @@ router.post('/', creditNoteLimiter, creditNoteController.create);
  * Obtener todas las notas de crédito con paginación y filtros
  */
 router.get('/', creditNoteController.getAll);
+
+/**
+ * GET /api/credit-notes/:id/xml
+ * Descargar el XML firmado de una nota de crédito
+ */
+router.get('/:id/xml', creditNoteController.getXml);
+
+/**
+ * GET /api/credit-notes/:id/pdf
+ * Descargar el PDF (RIDE) de una nota de crédito
+ */
+router.get('/:id/pdf', creditNoteController.getPdf);
 
 /**
  * GET /api/credit-notes/:id
