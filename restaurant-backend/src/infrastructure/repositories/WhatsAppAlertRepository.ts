@@ -21,7 +21,9 @@ export interface WhatsAppAlertDoc extends Document {
 const WhatsAppAlertSchema = new Schema({
     phone: { type: String, required: true },
     name: { type: String, default: null },
-    text: { type: String, default: '' },
+    text: { type: String, default: '' },          // último mensaje del cliente
+    messageCount: { type: Number, default: 1 },   // cuántos avisos acumula esta conversación
+    lastMessageAt: { type: Date, default: Date.now },
     attended: { type: Boolean, default: false },
     attendedAt: { type: Date, default: null }
 }, {
@@ -43,6 +45,8 @@ export interface WhatsAppAlert {
     phone: string;
     name: string | null;
     text: string;
+    messageCount: number;
+    lastMessageAt: Date;
     attended: boolean;
     createdAt: Date;
 }
@@ -54,27 +58,40 @@ class WhatsAppAlertRepository {
             phone: doc.phone,
             name: doc.name || null,
             text: doc.text || '',
+            messageCount: doc.messageCount || 1,
+            lastMessageAt: doc.lastMessageAt || doc.createdAt,
             attended: doc.attended,
             createdAt: doc.createdAt
         };
     }
 
-    /** Guarda una nueva alerta pendiente */
-    async create(data: { phone: string; name?: string | null; text?: string }): Promise<WhatsAppAlert> {
-        const doc = await WhatsAppAlertModel.create({
-            phone: data.phone,
-            name: data.name || null,
-            text: data.text || ''
-        });
-        logger.info('[WhatsAppAlert] Alert persisted', { phone: data.phone });
-        return this.mapToEntity(doc);
+    /**
+     * Registra actividad del cliente. AGRUPA POR CONVERSACIÓN: si el cliente ya
+     * tiene una alerta PENDIENTE, la actualiza (último mensaje + contador) en vez
+     * de crear una tarjeta nueva. Una vez atendida, el próximo mensaje abre una
+     * conversación pendiente nueva.
+     */
+    async create(data: { phone: string; name?: string | null; text?: string }): Promise<void> {
+        await WhatsAppAlertModel.updateOne(
+            { phone: data.phone, attended: false },
+            {
+                $set: {
+                    name: data.name || null,
+                    text: data.text || '',
+                    lastMessageAt: new Date()
+                },
+                $inc: { messageCount: 1 }
+            },
+            { upsert: true }
+        );
+        logger.info('[WhatsAppAlert] Alert upserted', { phone: data.phone });
     }
 
-    /** Alertas pendientes (no atendidas), más recientes primero */
+    /** Alertas pendientes (no atendidas), actividad más reciente primero */
     async findPending(limit: number = 50): Promise<WhatsAppAlert[]> {
         const docs = await WhatsAppAlertModel
             .find({ attended: false })
-            .sort({ createdAt: -1 })
+            .sort({ lastMessageAt: -1 })
             .limit(limit)
             .lean();
         return docs.map(d => this.mapToEntity(d));
@@ -88,6 +105,14 @@ class WhatsAppAlertRepository {
             { $set: { attended: true, attendedAt: new Date() } }
         );
         return result.modifiedCount > 0;
+    }
+
+    /** Marca como atendida la conversación pendiente de un cliente (ej. al responderle) */
+    async markAttendedByPhone(phone: string): Promise<void> {
+        await WhatsAppAlertModel.updateMany(
+            { phone, attended: false },
+            { $set: { attended: true, attendedAt: new Date() } }
+        );
     }
 
     /** Marca todas las alertas pendientes como atendidas */

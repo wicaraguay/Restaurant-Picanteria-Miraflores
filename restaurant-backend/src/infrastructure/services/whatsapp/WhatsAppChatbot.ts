@@ -9,6 +9,7 @@ import { EventEmitter } from 'events';
 import { logger } from '../../utils/Logger';
 import { getWhatsAppClient } from './WhatsAppClient';
 import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepository';
+import { getChatbotDailySendRepository } from '../../repositories/ChatbotDailySendRepository';
 
 interface ScheduleDay {
     dayOfWeek: number;
@@ -33,13 +34,10 @@ export class WhatsAppChatbot extends EventEmitter {
     private menuCache: string | null = null;
     private menuCacheExpiry: number = 0;
 
-    // Registro de usuarios que ya recibieron mensaje de cerrado (expira en 12 horas)
-    private closedMessageSent: Map<string, number> = new Map();
-    private readonly CLOSED_MESSAGE_COOLDOWN = 12 * 60 * 60 * 1000; // 12 horas
-
-    // Registro de usuarios que ya recibieron el menu (expira en 3 horas)
-    private menuSent: Map<string, number> = new Map();
-    private readonly MENU_COOLDOWN = 3 * 60 * 60 * 1000; // 3 horas
+    // REGLA DE ENVÍO: menú y mensaje de horario se envían MÁXIMO UNA VEZ POR DÍA
+    // CALENDARIO (hora Ecuador) a cada usuario. Al día siguiente, todos vuelven a
+    // ser elegibles. El control es PERSISTENTE (ChatbotDailySendRepository) para
+    // que un deploy/reinicio no duplique envíos el mismo día.
 
     // Alerta al personal: cooldown propio (más corto que el del menú) para que
     // un cliente que vuelve a escribir re-alerte, sin spamear por cada mensaje
@@ -90,59 +88,77 @@ export class WhatsAppChatbot extends EventEmitter {
             await this.loadConfig();
         }
 
+        const today = this.getTodayEcuador();
+        const dailySends = getChatbotDailySendRepository();
+
         // Verificar horario
         if (this.config?.schedule?.enabled) {
             const hours = this.checkBusinessHours();
             if (!hours.isOpen) {
-                // Solo enviar mensaje de cerrado si no se le envió recientemente
-                const lastSent = this.closedMessageSent.get(from);
-                const now = Date.now();
-
-                if (!lastSent || (now - lastSent) > this.CLOSED_MESSAGE_COOLDOWN) {
-                    await this.send(from, hours.message);
-                    this.closedMessageSent.set(from, now);
-                    this.cleanExpiredClosedMessages();
+                // Mensaje de horario: máximo UNA VEZ POR DÍA por usuario
+                const isFirstToday = await dailySends.tryMarkSentToday(from, 'closed', today);
+                if (isFirstToday) {
+                    const sent = await this.send(from, hours.message);
+                    if (sent) {
+                        // Registrar en el historial del chat que el bot respondió
+                        this.emit('bot_message', {
+                            phone: from.split('@')[0],
+                            text: '🤖 Mensaje automático de horario enviado (local cerrado)'
+                        });
+                    } else {
+                        // El envío falló → liberar la marca para reintentar cuando vuelva a escribir
+                        await dailySends.unmark(from, 'closed', today);
+                    }
                 }
                 return;
             }
         }
 
-        // Enviar menú solo una vez por usuario
-        const lastMenuSent = this.menuSent.get(from);
-        const now = Date.now();
-
-        if (!lastMenuSent || (now - lastMenuSent) > this.MENU_COOLDOWN) {
+        // Menú del día: máximo UNA VEZ POR DÍA por usuario (nuevo o recurrente).
+        // Al cambiar el día calendario (Ecuador), vuelve a enviarse si escribe.
+        const isFirstToday = await dailySends.tryMarkSentToday(from, 'menu', today);
+        if (isFirstToday) {
             const menu = await this.getMenu();
-            await this.send(from, menu);
-            this.menuSent.set(from, now);
-            this.cleanExpiredMenuMessages();
+            const sent = await this.send(from, menu);
+            if (sent) {
+                // Registrar en el historial del chat que el bot envió el menú
+                this.emit('bot_message', {
+                    phone: from.split('@')[0],
+                    text: '🤖 Menú del día enviado automáticamente'
+                });
+            } else {
+                // El envío falló → liberar la marca para reintentar cuando vuelva a escribir
+                await dailySends.unmark(from, 'menu', today);
+            }
         }
-        // Si ya recibió el menú, no hacer nada - el cliente atiende manualmente
+        // Si ya recibió el menú hoy, no hacer nada - el cliente atiende manualmente
     }
 
     /**
-     * Emite el evento 'customer_message' para que el admin muestre la alerta
-     * (sonido + notificación) de que un cliente está escribiendo por WhatsApp.
+     * Emite 'customer_message' en CADA mensaje del cliente para que la tarjeta
+     * de alerta en el admin siempre muestre el último mensaje y el contador real.
+     * El flag `notify` (cooldown 10 min) controla si además debe sonar/vibrar
+     * (toast + push) — así una ráfaga de mensajes actualiza la tarjeta sin spamear.
      */
     private notifyStaff(from: string, text?: string, name?: string): void {
         const now = Date.now();
         const lastAlert = this.alertSent.get(from);
+        const shouldNotify = !lastAlert || (now - lastAlert) >= this.ALERT_COOLDOWN;
 
-        if (lastAlert && (now - lastAlert) < this.ALERT_COOLDOWN) {
-            return; // Ya se alertó por este cliente hace poco
+        if (shouldNotify) {
+            this.alertSent.set(from, now);
+            this.cleanExpiredAlerts();
         }
-
-        this.alertSent.set(from, now);
-        this.cleanExpiredAlerts();
 
         const phone = from.split('@')[0];
         this.emit('customer_message', {
             phone,
             name: name || null,
-            text: (text || '').substring(0, 120),
-            timestamp: new Date().toISOString()
+            text: (text || '').substring(0, 1000), // texto completo para el historial del chat
+            timestamp: new Date().toISOString(),
+            notify: shouldNotify
         });
-        logger.info('[Chatbot] Staff alert emitted', { phone, name });
+        logger.info('[Chatbot] Staff alert emitted', { phone, name, notify: shouldNotify });
     }
 
     private cleanExpiredAlerts(): void {
@@ -276,27 +292,20 @@ export class WhatsAppChatbot extends EventEmitter {
     }
 
     /**
-     * Limpia registros expirados de mensajes de cerrado
+     * Fecha de HOY en zona horaria de Ecuador (YYYY-MM-DD).
+     * El "día" del negocio es el día calendario ecuatoriano, no el UTC del servidor
+     * (a las 19:00-24:00 de Ecuador el servidor UTC ya está en el día siguiente).
      */
-    private cleanExpiredClosedMessages(): void {
-        const now = Date.now();
-        for (const [phone, timestamp] of this.closedMessageSent) {
-            if (now - timestamp > this.CLOSED_MESSAGE_COOLDOWN) {
-                this.closedMessageSent.delete(phone);
-            }
-        }
-    }
+    private getTodayEcuador(): string {
+        const parts = new Intl.DateTimeFormat('es-EC', {
+            timeZone: 'America/Guayaquil',
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        }).formatToParts(new Date());
 
-    /**
-     * Limpia registros expirados de menus enviados
-     */
-    private cleanExpiredMenuMessages(): void {
-        const now = Date.now();
-        for (const [phone, timestamp] of this.menuSent) {
-            if (now - timestamp > this.MENU_COOLDOWN) {
-                this.menuSent.delete(phone);
-            }
-        }
+        const y = parts.find(p => p.type === 'year')?.value;
+        const m = parts.find(p => p.type === 'month')?.value;
+        const d = parts.find(p => p.type === 'day')?.value;
+        return `${y}-${m}-${d}`;
     }
 
     // Compatibilidad

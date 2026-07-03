@@ -10,7 +10,11 @@ export interface WhatsAppAlert {
     id: string;
     phone: string;
     name: string | null;
+    /** Último mensaje del cliente en esta conversación pendiente */
     text: string;
+    /** Cuántos mensajes acumula la conversación desde que quedó pendiente */
+    messageCount: number;
+    lastMessageAt: string;
     attended: boolean;
     createdAt: string;
 }

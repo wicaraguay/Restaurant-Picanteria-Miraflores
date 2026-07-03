@@ -7,6 +7,9 @@ import { getWhatsAppClient, isWhatsAppEnabled, getWhatsAppChatbot } from '../../
 import { logger } from '../../utils/Logger';
 import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepository';
 import { getWhatsAppAlertRepository } from '../../repositories/WhatsAppAlertRepository';
+import { getWhatsAppMessageRepository } from '../../repositories/WhatsAppMessageRepository';
+import { whatsAppSocketManager } from '../../websocket/WhatsAppSocketManager';
+import { jwtAuthMiddleware } from '../middleware/JWTAuthMiddleware';
 
 const router = Router();
 
@@ -20,6 +23,76 @@ const requireEnabled = (req: Request, res: Response, next: NextFunction) => {
     }
     next();
 };
+
+// ==================== CHAT INTEGRADO ====================
+
+// Historial de conversación con un cliente (últimos 100 mensajes)
+router.get('/chats/:phone/messages', jwtAuthMiddleware, async (req: Request, res: Response) => {
+    try {
+        const phone = req.params.phone.replace(/\D/g, ''); // solo dígitos
+        const messages = await getWhatsAppMessageRepository().findByPhone(phone);
+        res.json({ success: true, data: messages });
+    } catch (error: any) {
+        logger.error('[WhatsApp] Error fetching chat', { error });
+        res.status(500).json({ success: false, error: { code: 'CHAT_ERROR', message: error.message } });
+    }
+});
+
+// Enviar mensaje a un cliente desde el sistema (sale por el servidor, no por el celular)
+router.post('/chats/:phone/send', jwtAuthMiddleware, requireEnabled, async (req: Request, res: Response) => {
+    try {
+        const phone = req.params.phone.replace(/\D/g, '');
+        const text = (req.body?.text || '').trim();
+
+        if (!text || text.length > 4096) {
+            return res.status(400).json({
+                success: false,
+                error: { code: 'INVALID_MESSAGE', message: 'El mensaje no puede estar vacío ni superar 4096 caracteres' }
+            });
+        }
+
+        const client = getWhatsAppClient();
+        if (!client || !client.isConnected()) {
+            return res.status(503).json({
+                success: false,
+                error: { code: 'NOT_CONNECTED', message: 'WhatsApp no está conectado' }
+            });
+        }
+
+        const result = await client.sendText(phone, text);
+        if (!result.success) {
+            return res.status(502).json({
+                success: false,
+                error: { code: 'SEND_FAILED', message: result.error || 'No se pudo enviar el mensaje' }
+            });
+        }
+
+        // Persistir en el historial con quién respondió
+        const senderName = (req as any).user?.username || 'staff';
+        const saved = await getWhatsAppMessageRepository().save({
+            phone,
+            direction: 'out',
+            text,
+            senderName
+        });
+
+        // Responder = atender: la conversación sale del contador de pendientes
+        await getWhatsAppAlertRepository().markAttendedByPhone(phone);
+
+        // Avisar a los demás admins abiertos (y refrescar sus chats/contadores)
+        whatsAppSocketManager.broadcast('chat_message', {
+            phone,
+            direction: 'out',
+            text,
+            senderName
+        });
+
+        res.json({ success: true, data: saved });
+    } catch (error: any) {
+        logger.error('[WhatsApp] Error sending chat message', { error });
+        res.status(500).json({ success: false, error: { code: 'SEND_ERROR', message: error.message } });
+    }
+});
 
 // ==================== ALERTAS "CLIENTE ESCRIBIENDO" ====================
 

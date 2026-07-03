@@ -236,8 +236,10 @@ const startServer = async () => {
                 // 2. Persistir en BD (se conserva hasta que la marquen atendida)
                 // 3. Notificación PUSH a los dispositivos suscritos (app cerrada/background)
                 chatbot.on('customer_message', async (data: any) => {
+                    // Siempre: retransmitir al admin (actualiza la tarjeta en vivo)
                     whatsAppSocketManager.broadcast('customer_message', data);
 
+                    // Siempre: persistir/agrupar en la conversación pendiente del cliente
                     try {
                         const { getWhatsAppAlertRepository } = await import('./infrastructure/repositories/WhatsAppAlertRepository');
                         await getWhatsAppAlertRepository().create(data);
@@ -245,17 +247,56 @@ const startServer = async () => {
                         logger.error('[WhatsApp] Error persisting alert', { error });
                     }
 
+                    // Siempre: guardar el mensaje en el historial del chat integrado
                     try {
-                        const { getPushNotificationService } = await import('./infrastructure/services/PushNotificationService');
-                        const who = data.name ? `${data.name} (+${data.phone})` : `+${data.phone}`;
-                        await getPushNotificationService().sendToAll({
-                            title: '💬 Cliente escribiendo por WhatsApp',
-                            body: `${who}${data.text ? `: "${data.text.slice(0, 90)}"` : ''}`,
-                            url: '/admin',
-                            tag: 'whatsapp-alert'
+                        const { getWhatsAppMessageRepository } = await import('./infrastructure/repositories/WhatsAppMessageRepository');
+                        if (data.text) {
+                            await getWhatsAppMessageRepository().save({
+                                phone: data.phone,
+                                direction: 'in',
+                                text: data.text,
+                                senderName: data.name || null
+                            });
+                        }
+                    } catch (error) {
+                        logger.error('[WhatsApp] Error persisting chat message', { error });
+                    }
+
+                    // Solo con notify (cooldown 10 min/cliente): notificación push
+                    if (data.notify) {
+                        try {
+                            const { getPushNotificationService } = await import('./infrastructure/services/PushNotificationService');
+                            const who = data.name ? `${data.name} (+${data.phone})` : `+${data.phone}`;
+                            await getPushNotificationService().sendToAll({
+                                title: '💬 Cliente escribiendo por WhatsApp',
+                                body: `${who}${data.text ? `: "${data.text.slice(0, 90)}"` : ''}`,
+                                url: '/admin',
+                                tag: 'whatsapp-alert'
+                            });
+                        } catch (error) {
+                            logger.error('[WhatsApp] Error sending push', { error });
+                        }
+                    }
+                });
+
+                // Mensajes automáticos del bot (menú, horario) → historial del chat
+                chatbot.on('bot_message', async (data: any) => {
+                    try {
+                        const { getWhatsAppMessageRepository } = await import('./infrastructure/repositories/WhatsAppMessageRepository');
+                        await getWhatsAppMessageRepository().save({
+                            phone: data.phone,
+                            direction: 'out',
+                            text: data.text,
+                            senderName: 'chatbot'
+                        });
+                        whatsAppSocketManager.broadcast('chat_message', {
+                            phone: data.phone,
+                            direction: 'out',
+                            text: data.text,
+                            senderName: 'chatbot'
                         });
                     } catch (error) {
-                        logger.error('[WhatsApp] Error sending push', { error });
+                        logger.error('[WhatsApp] Error persisting bot message', { error });
                     }
                 });
 
