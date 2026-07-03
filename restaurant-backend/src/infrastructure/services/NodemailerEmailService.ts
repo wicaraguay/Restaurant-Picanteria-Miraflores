@@ -153,6 +153,11 @@ export class NodemailerEmailService implements IEmailService {
                                 <td style="padding: 5px 0; color: #6b7280; font-size: 14px;">No. Factura:</td>
                                 <td style="padding: 5px 0; color: #111827; font-weight: bold; text-align: right;">${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}</td>
                             </tr>
+                            ${invoice.info.claveAcceso ? `
+                            <tr>
+                                <td style="padding: 5px 0; color: #6b7280; font-size: 14px; vertical-align: top;">Clave de Acceso:</td>
+                                <td style="padding: 5px 0; color: #111827; font-family: monospace; font-size: 12px; text-align: right; word-break: break-all;">${invoice.info.claveAcceso}</td>
+                            </tr>` : ''}
                             <tr>
                                 <td style="padding: 5px 0; color: #6b7280; font-size: 14px;">Fecha de Emisión:</td>
                                 <td style="padding: 5px 0; color: #111827; font-weight: bold; text-align: right;">${dateStr}</td>
@@ -214,6 +219,11 @@ export class NodemailerEmailService implements IEmailService {
                                 <td style="padding: 5px 0; color: #6b7280; font-size: 14px;">No. Nota de Crédito:</td>
                                 <td style="padding: 5px 0; color: #111827; font-weight: bold; text-align: right;">${creditNote.info.estab}-${creditNote.info.ptoEmi}-${creditNote.info.secuencial}</td>
                             </tr>
+                            ${creditNote.info.claveAcceso ? `
+                            <tr>
+                                <td style="padding: 5px 0; color: #6b7280; font-size: 14px; vertical-align: top;">Clave de Acceso:</td>
+                                <td style="padding: 5px 0; color: #111827; font-family: monospace; font-size: 12px; text-align: right; word-break: break-all;">${creditNote.info.claveAcceso}</td>
+                            </tr>` : ''}
                             <tr>
                                 <td style="padding: 5px 0; color: #6b7280; font-size: 14px;">Doc. Modificado:</td>
                                 <td style="padding: 5px 0; color: #111827; font-weight: bold; text-align: right;">Factura ${creditNote.info.numDocModificado}</td>

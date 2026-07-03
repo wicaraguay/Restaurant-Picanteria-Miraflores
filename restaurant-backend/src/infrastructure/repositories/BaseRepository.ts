@@ -59,6 +59,15 @@ export abstract class BaseRepository<T> {
     }
 
     /**
+     * Hook (Template Method) para que repositorios hijos enriquezcan las queries
+     * de lectura paginada — ej. agregar .populate() de referencias.
+     * Por defecto no modifica la query.
+     */
+    protected applyQueryEnhancements(query: any): any {
+        return query;
+    }
+
+    /**
      * Create a new entity
      */
     async create(entity: T): Promise<T> {
@@ -161,6 +170,9 @@ export abstract class BaseRepository<T> {
             if (select) {
                 query = query.select(select);
             }
+
+            // Allow child repositories to enhance the query (e.g. populate references)
+            query = this.applyQueryEnhancements(query);
 
             const [data, total] = await Promise.all([
                 query.lean().exec(),

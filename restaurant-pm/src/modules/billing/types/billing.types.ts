@@ -52,6 +52,8 @@ export interface Bill {
 export interface CreditNote {
     id: string;
     billId: string;
+    /** Número de la factura original (numDocModificado, ej. 002-001-000000123) — resuelto por el backend vía populate */
+    billDocumentNumber?: string;
     documentNumber: string;
     date: string;
     reason: string;

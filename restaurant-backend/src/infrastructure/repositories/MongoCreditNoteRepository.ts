@@ -15,11 +15,28 @@ export class MongoCreditNoteRepository extends BaseRepository<CreditNote> implem
         super(CreditNoteModel, 'CreditNote');
     }
 
+    /**
+     * Al listar, populamos billId con el documentNumber de la factura original
+     * para poder mostrar "Factura Asociada" con el número real (numDocModificado)
+     * en lugar del ObjectId interno.
+     */
+    protected applyQueryEnhancements(query: any): any {
+        return query.populate('billId', 'documentNumber');
+    }
+
     protected mapToEntity(doc: any): CreditNote {
+        // billId puede venir como ObjectId (sin populate), como objeto poblado
+        // { _id, documentNumber }, o null si la factura original fue eliminada.
+        const billRef: any = doc.billId;
+        const billId = billRef?._id?.toString() || billRef?.toString() || billRef;
+        const billDocumentNumber = (billRef && typeof billRef === 'object' && billRef.documentNumber)
+            ? billRef.documentNumber
+            : undefined;
+
         return new CreditNote(
             doc.id || doc._id.toString(),
             doc.documentNumber,
-            doc.billId?.toString() || doc.billId,
+            billId,
             doc.originalAccessKey,
             doc.orderId,
             doc.date,
@@ -43,7 +60,8 @@ export class MongoCreditNoteRepository extends BaseRepository<CreditNote> implem
             doc.lastRetryDate,
             doc.createdAt,
             doc.sriMessage,
-            doc.errorLog || []
+            doc.errorLog || [],
+            billDocumentNumber
         );
     }
 

@@ -62,6 +62,9 @@ export class CreditNote {
         /** Mensaje del último error del SRI */
         public readonly sriMessage?: string,
         /** Historial completo de errores — nunca se sobreescribe */
-        public readonly errorLog?: CreditNoteErrorEntry[]
+        public readonly errorLog?: CreditNoteErrorEntry[],
+        /** Número de la factura original (numDocModificado, ej. 002-001-000000123).
+         *  Se resuelve vía populate de billId al listar — no está persistido en la NC. */
+        public readonly billDocumentNumber?: string
     ) { }
 }

@@ -147,6 +147,7 @@ export class ResendEmailService implements IEmailService {
                     <p>Adjunto encontrarás tu factura electrónica.</p>
                     <div style="background: #f9f9f9; padding: 15px; border-radius: 5px;">
                         <p><strong>No. Factura:</strong> ${invoice.info.estab}-${invoice.info.ptoEmi}-${invoice.info.secuencial}</p>
+                        ${invoice.info.claveAcceso ? `<p><strong>Clave de Acceso:</strong><br/><span style="font-family: monospace; font-size: 12px; word-break: break-all; color: #555;">${invoice.info.claveAcceso}</span></p>` : ''}
                         <p><strong>Fecha:</strong> ${dateStr}</p>
                         <p><strong>Total:</strong> $${invoice.info.importeTotal.toFixed(2)}</p>
                     </div>
@@ -239,6 +240,7 @@ export class ResendEmailService implements IEmailService {
                     <p>Adjunto encontrarás tu nota de crédito electrónica (Anulación parcial o total).</p>
                     <div style="background: #f9f9f9; padding: 15px; border-radius: 5px;">
                         <p><strong>No. Nota de Crédito:</strong> ${creditNote.info.estab}-${creditNote.info.ptoEmi}-${creditNote.info.secuencial}</p>
+                        ${creditNote.info.claveAcceso ? `<p><strong>Clave de Acceso:</strong><br/><span style="font-family: monospace; font-size: 12px; word-break: break-all; color: #555;">${creditNote.info.claveAcceso}</span></p>` : ''}
                         <p><strong>Documento Modificado:</strong> Factura ${creditNote.info.numDocModificado}</p>
                         <p><strong>Fecha Anulación:</strong> ${dateStr}</p>
                         <p><strong>Monto Reversado:</strong> $${creditNote.info.importeTotal.toFixed(2)}</p>

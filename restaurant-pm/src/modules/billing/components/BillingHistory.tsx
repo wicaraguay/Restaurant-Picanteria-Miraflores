@@ -1366,7 +1366,9 @@ const BillingHistory: React.FC = () => {
                                             <div className="bg-gray-50 dark:bg-dark-900/40 rounded-2xl p-4 space-y-2 text-xs animate-slide-down">
                                                 <div className="flex justify-between">
                                                     <span className="font-bold text-gray-400 uppercase text-[10px]">Factura asociada</span>
-                                                    <span className="font-mono text-gray-600 dark:text-gray-400">{cn.billId ? `REF: ${cn.billId.slice(-8)}` : 'N/A'}</span>
+                                                    <span className={cn.billDocumentNumber ? 'font-black text-gray-800 dark:text-gray-200' : 'font-mono text-gray-600 dark:text-gray-400'}>
+                                                        {cn.billDocumentNumber || (cn.billId ? `REF: ${cn.billId.slice(-8)}` : 'N/A')}
+                                                    </span>
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="font-bold text-gray-400 uppercase text-[10px]">Subtotal</span>
@@ -1454,9 +1456,13 @@ const BillingHistory: React.FC = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <span className="text-xs font-mono bg-gray-100 dark:bg-dark-700 px-2 py-1 rounded text-gray-600 dark:text-gray-400">
-                                                        {cn.billId ? `REF: ${cn.billId.slice(-8)}` : 'N/A'}
-                                                    </span>
+                                                    {cn.billDocumentNumber ? (
+                                                        <div className="font-black text-gray-800 dark:text-gray-200 text-xs">{cn.billDocumentNumber}</div>
+                                                    ) : (
+                                                        <span className="text-xs font-mono bg-gray-100 dark:bg-dark-700 px-2 py-1 rounded text-gray-600 dark:text-gray-400" title="Factura original no disponible">
+                                                            {cn.billId ? `REF: ${cn.billId.slice(-8)}` : 'N/A'}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="font-bold text-gray-800 dark:text-gray-200">{cn.customerName}</div>
