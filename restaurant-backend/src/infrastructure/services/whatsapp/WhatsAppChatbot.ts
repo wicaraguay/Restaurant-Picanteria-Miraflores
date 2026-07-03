@@ -153,6 +153,10 @@ export class WhatsAppChatbot extends EventEmitter {
         const phone = from.split('@')[0];
         this.emit('customer_message', {
             phone,
+            // JID COMPLETO — imprescindible para responder: WhatsApp puede entregar
+            // identidades ocultas (xxx@lid) cuyo número NO es un teléfono real.
+            // Responder a phone@s.whatsapp.net en esos casos va a un número inexistente.
+            jid: from,
             name: name || null,
             text: (text || '').substring(0, 1000), // texto completo para el historial del chat
             timestamp: new Date().toISOString(),

@@ -20,6 +20,8 @@ export interface WhatsAppAlertDoc extends Document {
 
 const WhatsAppAlertSchema = new Schema({
     phone: { type: String, required: true },
+    /** JID completo de WhatsApp (xxx@s.whatsapp.net o xxx@lid) — necesario para responder */
+    jid: { type: String, default: null },
     name: { type: String, default: null },
     text: { type: String, default: '' },          // último mensaje del cliente
     messageCount: { type: Number, default: 1 },   // cuántos avisos acumula esta conversación
@@ -43,6 +45,7 @@ const WhatsAppAlertModel = mongoose.model<WhatsAppAlertDoc>('WhatsAppAlert', Wha
 export interface WhatsAppAlert {
     id: string;
     phone: string;
+    jid: string | null;
     name: string | null;
     text: string;
     messageCount: number;
@@ -56,6 +59,7 @@ class WhatsAppAlertRepository {
         return {
             id: doc._id.toString(),
             phone: doc.phone,
+            jid: doc.jid || null,
             name: doc.name || null,
             text: doc.text || '',
             messageCount: doc.messageCount || 1,
@@ -71,11 +75,12 @@ class WhatsAppAlertRepository {
      * de crear una tarjeta nueva. Una vez atendida, el próximo mensaje abre una
      * conversación pendiente nueva.
      */
-    async create(data: { phone: string; name?: string | null; text?: string }): Promise<void> {
+    async create(data: { phone: string; jid?: string | null; name?: string | null; text?: string }): Promise<void> {
         await WhatsAppAlertModel.updateOne(
             { phone: data.phone, attended: false },
             {
                 $set: {
+                    jid: data.jid || null,
                     name: data.name || null,
                     text: data.text || '',
                     lastMessageAt: new Date()

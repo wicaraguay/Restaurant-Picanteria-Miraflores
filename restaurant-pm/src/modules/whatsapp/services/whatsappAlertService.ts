@@ -9,6 +9,8 @@ import { apiService } from '../../../api';
 export interface WhatsAppAlert {
     id: string;
     phone: string;
+    /** JID completo de WhatsApp (xxx@s.whatsapp.net o xxx@lid) — necesario para responder */
+    jid: string | null;
     name: string | null;
     /** Último mensaje del cliente en esta conversación pendiente */
     text: string;

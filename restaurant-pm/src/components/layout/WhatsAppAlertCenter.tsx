@@ -23,6 +23,8 @@ type PushState = 'unknown' | 'subscribed' | 'available' | 'denied' | 'unavailabl
 interface ActiveChat {
     phone: string;
     name: string | null;
+    /** JID completo — necesario para que la respuesta llegue a usuarios con identidad oculta (@lid) */
+    jid: string | null;
 }
 
 function timeAgo(iso: string): string {
@@ -160,7 +162,7 @@ const WhatsAppAlertCenter: React.FC = () => {
     }, []);
 
     const openChat = async (alert: WhatsAppAlert) => {
-        setActiveChat({ phone: alert.phone, name: alert.name });
+        setActiveChat({ phone: alert.phone, name: alert.name, jid: alert.jid });
         setMessages([]);
         setChatLoading(true);
         await fetchChat(alert.phone);
@@ -174,6 +176,7 @@ const WhatsAppAlertCenter: React.FC = () => {
     };
 
     // Mensajes en vivo mientras el chat está abierto (entrantes y de otros admins)
+    // + refresco cada 5s como respaldo por si el socket murió (móvil en background)
     useEffect(() => {
         if (!activeChat) return;
 
@@ -184,7 +187,8 @@ const WhatsAppAlertCenter: React.FC = () => {
         };
         const unsubIn = whatsappSocket.on('customer_message', refreshIfMatches);
         const unsubOut = whatsappSocket.on('chat_message', refreshIfMatches);
-        return () => { unsubIn(); unsubOut(); };
+        const chatPoll = setInterval(() => fetchChat(activeChat.phone), 5000);
+        return () => { unsubIn(); unsubOut(); clearInterval(chatPoll); };
     }, [activeChat, fetchChat]);
 
     // Auto-scroll al último mensaje
@@ -198,17 +202,31 @@ const WhatsAppAlertCenter: React.FC = () => {
 
         setSending(true);
         try {
-            const sent = await whatsappChatService.sendMessage(activeChat.phone, text);
+            const sent = await whatsappChatService.sendMessage(activeChat.phone, text, activeChat.jid);
             setDraft('');
             setMessages(prev => [...prev, sent]);
-            // Responder = atender: el backend ya marcó la alerta; reflejarlo local
-            setAlerts(prev => prev.filter(a => a.phone !== activeChat.phone));
+            // La conversación SIGUE pendiente mientras chatean — se cierra con "Terminar"
         } catch (error) {
             console.error('Send chat error:', error);
             toast.error('No se pudo enviar el mensaje. Verifica que WhatsApp esté conectado.', 'Error');
         } finally {
             setSending(false);
         }
+    };
+
+    /** Terminar conversación: marcarla atendida y volver a la lista */
+    const handleFinishChat = async () => {
+        if (!activeChat) return;
+        const pending = alerts.find(a => a.phone === activeChat.phone);
+        if (pending) {
+            setAlerts(prev => prev.filter(a => a.id !== pending.id));
+            try {
+                await whatsappAlertService.markAttended(pending.id);
+            } catch {
+                fetchAlerts();
+            }
+        }
+        closeChat();
     };
 
     const handleAttend = async (id: string) => {
@@ -280,17 +298,17 @@ const WhatsAppAlertCenter: React.FC = () => {
                         </button>
                         <div className="min-w-0 flex-1">
                             <h3 className="text-sm font-black text-white truncate">{activeChat.name || `+${activeChat.phone}`}</h3>
-                            <p className="text-[10px] font-bold text-green-100">+{activeChat.phone}</p>
+                            <p className="text-[10px] font-bold text-green-100">
+                                {activeChat.jid?.endsWith('@lid') ? 'ID privado de WhatsApp' : `+${activeChat.phone}`}
+                            </p>
                         </div>
-                        <a
-                            href={`https://wa.me/${activeChat.phone}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[9px] font-black text-green-100 hover:text-white uppercase tracking-wider"
-                            title="Abrir en WhatsApp"
+                        <button
+                            onClick={handleFinishChat}
+                            className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
+                            title="Marcar como atendida y cerrar"
                         >
-                            Abrir en app ↗
-                        </a>
+                            ✓ Terminar
+                        </button>
                     </div>
 
                     {/* Mensajes */}
@@ -392,10 +410,12 @@ const WhatsAppAlertCenter: React.FC = () => {
                                         <div className="min-w-0 flex items-center gap-2">
                                             <div className="min-w-0">
                                                 <p className="text-sm font-black text-gray-900 dark:text-white truncate">
-                                                    {alert.name || `+${alert.phone}`}
+                                                    {alert.name || (alert.jid?.endsWith('@lid') ? 'Cliente de WhatsApp' : `+${alert.phone}`)}
                                                 </p>
                                                 {alert.name && (
-                                                    <p className="text-[10px] font-bold text-gray-400">+{alert.phone}</p>
+                                                    <p className="text-[10px] font-bold text-gray-400">
+                                                        {alert.jid?.endsWith('@lid') ? 'ID privado de WhatsApp' : `+${alert.phone}`}
+                                                    </p>
                                                 )}
                                             </div>
                                             {alert.messageCount > 1 && (

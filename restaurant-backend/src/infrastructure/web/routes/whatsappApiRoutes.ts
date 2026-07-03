@@ -43,6 +43,12 @@ router.post('/chats/:phone/send', jwtAuthMiddleware, requireEnabled, async (req:
     try {
         const phone = req.params.phone.replace(/\D/g, '');
         const text = (req.body?.text || '').trim();
+        // JID COMPLETO del destinatario (xxx@lid o xxx@s.whatsapp.net).
+        // CRÍTICO: WhatsApp entrega identidades ocultas (@lid) cuyo número NO es
+        // un teléfono — enviar a phone@s.whatsapp.net iría a un número inexistente.
+        const rawJid = (req.body?.jid || '').trim();
+        const isValidJid = /^[0-9]+@(s\.whatsapp\.net|lid)$/.test(rawJid);
+        const destination = isValidJid ? rawJid : `${phone}@s.whatsapp.net`;
 
         if (!text || text.length > 4096) {
             return res.status(400).json({
@@ -59,7 +65,7 @@ router.post('/chats/:phone/send', jwtAuthMiddleware, requireEnabled, async (req:
             });
         }
 
-        const result = await client.sendText(phone, text);
+        const result = await client.sendText(destination, text);
         if (!result.success) {
             return res.status(502).json({
                 success: false,
@@ -75,9 +81,6 @@ router.post('/chats/:phone/send', jwtAuthMiddleware, requireEnabled, async (req:
             text,
             senderName
         });
-
-        // Responder = atender: la conversación sale del contador de pendientes
-        await getWhatsAppAlertRepository().markAttendedByPhone(phone);
 
         // Avisar a los demás admins abiertos (y refrescar sus chats/contadores)
         whatsAppSocketManager.broadcast('chat_message', {

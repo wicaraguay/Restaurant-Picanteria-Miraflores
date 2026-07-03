@@ -22,9 +22,13 @@ class WhatsAppChatService {
         return Array.isArray(data) ? data : [];
     }
 
-    /** Envía un mensaje al cliente (marca la alerta como atendida en el backend) */
-    public async sendMessage(phone: string, text: string): Promise<ChatMessage> {
-        return apiService.post<ChatMessage>(`/whatsapp/chats/${phone}/send`, { text });
+    /**
+     * Envía un mensaje al cliente.
+     * @param jid JID completo (xxx@lid o xxx@s.whatsapp.net) — imprescindible para
+     *            usuarios con identidad oculta de WhatsApp, cuyo número no es un teléfono real
+     */
+    public async sendMessage(phone: string, text: string, jid?: string | null): Promise<ChatMessage> {
+        return apiService.post<ChatMessage>(`/whatsapp/chats/${phone}/send`, { text, jid: jid || undefined });
     }
 }
 
