@@ -1,8 +1,11 @@
 /**
  * WhatsApp Chatbot - Simple
- * Envía el menú del día cuando alguien escribe
+ * Envía el menú del día cuando alguien escribe.
+ * Emite 'customer_message' (EventEmitter) cuando un cliente escribe,
+ * para alertar al personal en el sistema admin.
  */
 
+import { EventEmitter } from 'events';
 import { logger } from '../../utils/Logger';
 import { getWhatsAppClient } from './WhatsAppClient';
 import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepository';
@@ -24,7 +27,7 @@ interface ChatbotConfig {
     };
 }
 
-export class WhatsAppChatbot {
+export class WhatsAppChatbot extends EventEmitter {
     private menuRepository: any = null;
     private config: ChatbotConfig | null = null;
     private menuCache: string | null = null;
@@ -38,7 +41,13 @@ export class WhatsAppChatbot {
     private menuSent: Map<string, number> = new Map();
     private readonly MENU_COOLDOWN = 3 * 60 * 60 * 1000; // 3 horas
 
+    // Alerta al personal: cooldown propio (más corto que el del menú) para que
+    // un cliente que vuelve a escribir re-alerte, sin spamear por cada mensaje
+    private alertSent: Map<string, number> = new Map();
+    private readonly ALERT_COOLDOWN = 10 * 60 * 1000; // 10 minutos
+
     constructor() {
+        super();
         this.loadConfig();
         logger.info('[Chatbot] Initialized');
     }
@@ -66,10 +75,15 @@ export class WhatsAppChatbot {
     /**
      * Procesa mensaje entrante
      */
-    public async processMessage(message: { from: string; text?: string }): Promise<void> {
-        const { from, text } = message;
+    public async processMessage(message: { from: string; text?: string; name?: string }): Promise<void> {
+        const { from, text, name } = message;
 
         logger.info('[Chatbot] Processing', { from, text: text?.substring(0, 30) });
+
+        // Alertar al personal en el sistema admin: hay un cliente escribiendo por WhatsApp.
+        // Cooldown de 10 min por cliente — el personal recibe una alerta por "ráfaga" de
+        // mensajes, no una por cada mensaje.
+        this.notifyStaff(from, text, name);
 
         // Cargar config si no existe
         if (!this.config) {
@@ -104,6 +118,40 @@ export class WhatsAppChatbot {
             this.cleanExpiredMenuMessages();
         }
         // Si ya recibió el menú, no hacer nada - el cliente atiende manualmente
+    }
+
+    /**
+     * Emite el evento 'customer_message' para que el admin muestre la alerta
+     * (sonido + notificación) de que un cliente está escribiendo por WhatsApp.
+     */
+    private notifyStaff(from: string, text?: string, name?: string): void {
+        const now = Date.now();
+        const lastAlert = this.alertSent.get(from);
+
+        if (lastAlert && (now - lastAlert) < this.ALERT_COOLDOWN) {
+            return; // Ya se alertó por este cliente hace poco
+        }
+
+        this.alertSent.set(from, now);
+        this.cleanExpiredAlerts();
+
+        const phone = from.split('@')[0];
+        this.emit('customer_message', {
+            phone,
+            name: name || null,
+            text: (text || '').substring(0, 120),
+            timestamp: new Date().toISOString()
+        });
+        logger.info('[Chatbot] Staff alert emitted', { phone, name });
+    }
+
+    private cleanExpiredAlerts(): void {
+        const now = Date.now();
+        for (const [key, sentAt] of this.alertSent.entries()) {
+            if ((now - sentAt) > this.ALERT_COOLDOWN) {
+                this.alertSent.delete(key);
+            }
+        }
     }
 
     private async send(to: string, text: string): Promise<boolean> {

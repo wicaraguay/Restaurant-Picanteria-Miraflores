@@ -221,10 +221,23 @@ const startServer = async () => {
                     try {
                         await chatbot.processMessage({
                             from: message.from,
-                            text: message.text
+                            text: message.text,
+                            name: message.raw?.pushName // Nombre visible del cliente en WhatsApp
                         });
                     } catch (error) {
                         logger.error('[WhatsApp] Error processing message', { error });
+                    }
+                });
+
+                // Alerta "cliente escribiendo": retransmitir en vivo vía WebSocket
+                // Y persistir en BD para que se conserve aunque nadie tenga el admin abierto
+                chatbot.on('customer_message', async (data: any) => {
+                    whatsAppSocketManager.broadcast('customer_message', data);
+                    try {
+                        const { getWhatsAppAlertRepository } = await import('./infrastructure/repositories/WhatsAppAlertRepository');
+                        await getWhatsAppAlertRepository().create(data);
+                    } catch (error) {
+                        logger.error('[WhatsApp] Error persisting alert', { error });
                     }
                 });
 

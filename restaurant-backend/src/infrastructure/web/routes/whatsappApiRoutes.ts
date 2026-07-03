@@ -6,6 +6,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getWhatsAppClient, isWhatsAppEnabled, getWhatsAppChatbot } from '../../services/whatsapp';
 import { logger } from '../../utils/Logger';
 import { getChatbotConfigRepository } from '../../repositories/ChatbotConfigRepository';
+import { getWhatsAppAlertRepository } from '../../repositories/WhatsAppAlertRepository';
 
 const router = Router();
 
@@ -19,6 +20,41 @@ const requireEnabled = (req: Request, res: Response, next: NextFunction) => {
     }
     next();
 };
+
+// ==================== ALERTAS "CLIENTE ESCRIBIENDO" ====================
+
+// Alertas pendientes (se conservan hasta marcarlas como atendidas)
+router.get('/alerts', async (req: Request, res: Response) => {
+    try {
+        const alerts = await getWhatsAppAlertRepository().findPending();
+        res.json({ success: true, data: alerts });
+    } catch (error: any) {
+        logger.error('[WhatsApp] Error fetching alerts', { error });
+        res.status(500).json({ success: false, error: { code: 'ALERTS_ERROR', message: error.message } });
+    }
+});
+
+// Marcar todas las alertas como atendidas
+router.put('/alerts/attend-all', async (req: Request, res: Response) => {
+    try {
+        const count = await getWhatsAppAlertRepository().markAllAttended();
+        res.json({ success: true, data: { attended: count } });
+    } catch (error: any) {
+        logger.error('[WhatsApp] Error attending all alerts', { error });
+        res.status(500).json({ success: false, error: { code: 'ALERTS_ERROR', message: error.message } });
+    }
+});
+
+// Marcar una alerta como atendida
+router.put('/alerts/:id/attend', async (req: Request, res: Response) => {
+    try {
+        const ok = await getWhatsAppAlertRepository().markAttended(req.params.id);
+        res.json({ success: true, data: { attended: ok } });
+    } catch (error: any) {
+        logger.error('[WhatsApp] Error attending alert', { error, id: req.params.id });
+        res.status(500).json({ success: false, error: { code: 'ALERTS_ERROR', message: error.message } });
+    }
+});
 
 // ==================== ENDPOINTS ====================
 

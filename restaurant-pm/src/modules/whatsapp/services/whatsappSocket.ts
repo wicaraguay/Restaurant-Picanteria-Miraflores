@@ -114,6 +114,7 @@ class WhatsAppSocketService {
             'authenticated',
             'ready',
             'auth_failure',
+            'customer_message',         // Alerta: un cliente está escribiendo por WhatsApp
             'human_support_requested',  // Notificación cuando cliente pide hablar con humano
             'conversation_released'     // Notificación cuando se libera una conversación
         ];

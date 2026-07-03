@@ -26,6 +26,7 @@ import { Employee, Role } from './modules/hr/types/hr.types';
 import { api } from './api'; // Import API for polling
 import { orderService } from './modules/orders/services/OrderService';
 import Sidebar from './components/layout/Sidebar';
+import WhatsAppAlertCenter from './components/layout/WhatsAppAlertCenter';
 import { SunIcon, MoonIcon } from './components/ui/Icons';
 import { NAV_ITEMS } from './constants';
 import { ErrorBoundary } from './components/fallback/ErrorBoundary';
@@ -280,6 +281,9 @@ const AdminContent: React.FC = () => {
                 navItems={navItems}
                 onLogout={logout}
             />
+
+            {/* Alertas persistentes de WhatsApp — visibles en todo el admin */}
+            <WhatsAppAlertCenter />
         </div>
     );
 };

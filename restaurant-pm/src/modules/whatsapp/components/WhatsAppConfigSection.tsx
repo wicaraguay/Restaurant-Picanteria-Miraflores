@@ -54,6 +54,9 @@ export const WhatsAppConfigSection: React.FC = () => {
 
     // Inicializar
     useEffect(() => {
+        // Funciones de desuscripción de los listeners de esta vista
+        const unsubscribers: Array<() => void> = [];
+
         const init = async () => {
             const enabled = await checkEnabled();
             if (enabled) {
@@ -62,23 +65,23 @@ export const WhatsAppConfigSection: React.FC = () => {
                 // WebSocket para actualizaciones en tiempo real
                 whatsappSocket.connect();
 
-                whatsappSocket.on('qr', (data: { qrCode: string }) => {
+                unsubscribers.push(whatsappSocket.on('qr', (data: { qrCode: string }) => {
                     if (data.qrCode) {
                         setQrCode(data.qrCode);
                         setConnecting(false);
                     }
-                });
+                }));
 
-                whatsappSocket.on('connected', () => {
+                unsubscribers.push(whatsappSocket.on('connected', () => {
                     setStatus(prev => prev ? { ...prev, isConnected: true } : null);
                     setQrCode(null);
                     setConnecting(false);
                     setMessage({ type: 'success', text: 'WhatsApp conectado!' });
-                });
+                }));
 
-                whatsappSocket.on('disconnected', () => {
+                unsubscribers.push(whatsappSocket.on('disconnected', () => {
                     setStatus(prev => prev ? { ...prev, isConnected: false } : null);
-                });
+                }));
 
                 // Polling de respaldo cada 3 segundos
                 pollingRef.current = setInterval(loadStatus, 3000);
@@ -90,7 +93,10 @@ export const WhatsAppConfigSection: React.FC = () => {
         init();
 
         return () => {
-            whatsappSocket.disconnect();
+            // Solo quitamos los listeners de esta vista — NO desconectamos el socket:
+            // la conexión es compartida con la alerta global de "cliente escribiendo"
+            // que vive en AdminApp y debe seguir activa en todo el admin.
+            unsubscribers.forEach(unsub => unsub());
             if (pollingRef.current) clearInterval(pollingRef.current);
         };
     }, [checkEnabled, loadStatus]);
