@@ -107,25 +107,27 @@ describe('Credit Note Retry Limit Logic (CheckCreditNoteStatus)', () => {
         }));
     });
 
-    it('should STOP and return error if daily limit (3) is reached on the SAME day', async () => {
+    it('should allow status QUERY but block RESEND when daily send limit (3) is reached on the SAME day', async () => {
         const today = billingService.getCurrentDateEcuador().split('/').reverse().join('-');
         const ncData = {
-            id: 'nc123', 
-            accessKey: 'OLD_NC_KEY_1', 
-            documentNumber: '001-001-000000001', 
-            retryCount: 3, 
+            id: 'nc123',
+            accessKey: 'OLD_NC_KEY_1',
+            documentNumber: '001-001-000000001',
+            retryCount: 3,
             lastRetryDate: today,
             billId: 'bill123'
         };
-        
+
         mockCreditNoteRepo.findByAccessKey.mockResolvedValueOnce(ncData);
 
         const result = await checkCreditNoteStatus.execute('OLD_NC_KEY_1');
 
+        // La consulta de estado es lectura: SÍ se permite aunque el límite esté alcanzado
+        expect(mockSRIService.authorizeCreditNote).toHaveBeenCalledWith('OLD_NC_KEY_1', false);
+        // El REENVÍO sí está bloqueado por el límite diario
+        expect(mockSRIService.sendCreditNoteToSRI).not.toHaveBeenCalled();
         expect(result.success).toBe(false);
-        expect(result.error).toContain('Límite de 3 intentos diarios alcanzado');
-        // Verify SRI was NOT called for authorization query
-        expect(mockSRIService.authorizeCreditNote).not.toHaveBeenCalled();
+        expect(result.error).toContain('Límite de 3 envíos diarios alcanzado');
     });
 
     it('should RESET counter and generate NEW key if last retry was on a PREVIOUS day', async () => {

@@ -452,9 +452,15 @@ const BillingHistory: React.FC = () => {
 
             const result = await billingService.checkCreditNoteStatus(creditNote.accessKey);
 
-            const status = result.authorization?.estado || result.estado;
+            const status = result.authorization?.estado || result.status || result.estado;
 
-            if (status === 'AUTORIZADO') {
+            if (result.success === false && result.error) {
+                // El backend informa el motivo (ej. límite diario de envíos al SRI alcanzado)
+                const isLimit = result.error.startsWith('SRI_LIMIT_REACHED');
+                setProcessingState(InvoiceProcessState.ERROR);
+                setProcessingMessage(isLimit ? 'Límite diario de envíos alcanzado' : 'No se pudo verificar');
+                setProcessingDetails(result.error.replace('SRI_LIMIT_REACHED: ', ''));
+            } else if (status === 'AUTORIZADO') {
                 setProcessingState(InvoiceProcessState.AUTHORIZED);
                 setProcessingMessage('¡Nota de Crédito autorizada!');
                 setProcessingDetails('La nota de crédito fue autorizada por el SRI.');

@@ -31,29 +31,20 @@ export class CheckCreditNoteStatus {
             }
 
             // --- RETRY LIMIT & DATE LOGIC (SRI 2026 Compliance) ---
+            // El límite diario (3) aplica a ENVÍOS reales al SRI, no a consultas de estado.
+            // Consultar la autorización es una operación de lectura que el SRI permite
+            // libremente — antes cada clic en "Verificar estado" consumía un intento.
             const todayEcuador = this.billingService.getCurrentDateEcuador();
             const todayISO = todayEcuador.split('/').reverse().join('-'); // YYYY-MM-DD
             const lastRetry = creditNote.lastRetryDate;
 
-            let newRetryCount = (creditNote.retryCount || 0);
-            let shouldGenerateNewKey = false;
+            // Envíos al SRI realizados hoy (se resetea al cambiar el día)
+            let sendsToday = lastRetry === todayISO ? (creditNote.retryCount || 0) : 0;
+            const shouldGenerateNewKey = lastRetry !== todayISO;
+            const DAILY_SEND_LIMIT = 3;
 
-            if (lastRetry !== todayISO) {
-                // New day! Reset counter
-                logger.info(`[CheckCreditNoteStatus] New day detected (${lastRetry} -> ${todayISO}). Resetting retry counter.`);
-                newRetryCount = 1; // First attempt of the new day
-                shouldGenerateNewKey = true;
-            } else {
-                newRetryCount++;
-                logger.debug(`[CheckCreditNoteStatus] Same day attempt. New retry count: ${newRetryCount}`);
-
-                if (newRetryCount > 3) { // Changed from > 2 to > 3
-                    logger.warn(`[CheckCreditNoteStatus] Daily limit (3) reached for ${creditNote.documentNumber}`);
-                    return {
-                        success: false,
-                        error: 'SRI_LIMIT_REACHED: Límite de 3 intentos diarios alcanzado para este comprobante (1 emisión + 2 reintentos). Por favor, intente el día de mañana con una nueva clave de acceso automática.'
-                    };
-                }
+            if (shouldGenerateNewKey) {
+                logger.info(`[CheckCreditNoteStatus] New day detected (${lastRetry} -> ${todayISO}). Resetting send counter.`);
             }
             // -----------------------------------------------------
 
@@ -65,6 +56,15 @@ export class CheckCreditNoteStatus {
             let authResult;
 
             if (shouldGenerateNewKey) {
+                // Regenerar clave + reenviar ES un envío al SRI → consume el límite diario
+                if (sendsToday >= DAILY_SEND_LIMIT) {
+                    logger.warn(`[CheckCreditNoteStatus] Daily send limit (${DAILY_SEND_LIMIT}) reached for ${creditNote.documentNumber}`);
+                    return {
+                        success: false,
+                        error: `SRI_LIMIT_REACHED: Límite de ${DAILY_SEND_LIMIT} envíos diarios alcanzado para este comprobante. Por favor, intente el día de mañana con una nueva clave de acceso automática.`
+                    };
+                }
+
                 logger.info(`[CheckCreditNoteStatus] REGENERATING ACCESS KEY for ${creditNote.documentNumber} due to date change.`);
 
                 // Get config and original bill for regeneration
@@ -91,6 +91,7 @@ export class CheckCreditNoteStatus {
 
                 // Send to SRI
                 const sendResult = await this.sriService.sendCreditNoteToSRI(signedXml, isProd);
+                sendsToday = 1; // Primer envío del nuevo día
                 logger.info(`[CheckCreditNoteStatus] Resend result: ${sendResult.estado}`);
 
                 // Wait for authorization
@@ -101,22 +102,28 @@ export class CheckCreditNoteStatus {
                     accessKey: newAccessKey,
                     sriStatus: authResult.estado,
                     authorizationDate: authResult.fechaAutorizacion,
-                    retryCount: newRetryCount,
+                    retryCount: sendsToday,
                     lastRetryDate: todayISO,
                     date: new Date().toISOString()
                 });
 
                 accessKey = newAccessKey; // Update local variable for subsequent logic
             } else {
-                // NORMAL POLL: Query SRI for authorization status
+                // NORMAL POLL: consultar el estado de autorización es LECTURA — no consume el límite
                 authResult = await this.sriService.authorizeCreditNote(accessKey, isProd);
 
-                // If it's not authorized yet and we are in "Retry" mode, we might want to resend?
-                // For now, let's keep it consistent: we just authorize. 
-                // Wait, if it's DEVUELTA/NO ENCONTRADO, we SHOULD resend manually or via status check.
-
                 if (authResult.estado === 'EN PROCESO' || authResult.estado === 'UNKNOWN' || !authResult.estado) {
-                    // Try to resend if it was never received
+                    // El SRI no tiene el comprobante (o sigue pendiente) → requiere REENVÍO,
+                    // y reenviar sí consume el límite diario
+                    if (sendsToday >= DAILY_SEND_LIMIT) {
+                        logger.warn(`[CheckCreditNoteStatus] Daily send limit (${DAILY_SEND_LIMIT}) reached for ${creditNote.documentNumber} — skipping resend`);
+                        return {
+                            success: false,
+                            error: `SRI_LIMIT_REACHED: Límite de ${DAILY_SEND_LIMIT} envíos diarios alcanzado para este comprobante. La consulta de estado sigue disponible, pero el reenvío se habilitará mañana con una nueva clave de acceso automática.`,
+                            status: authResult.estado || 'EN PROCESO'
+                        };
+                    }
+
                     logger.info(`[CheckCreditNoteStatus] Document not found or pending. Attempting a fresh send.`);
 
                     const config = await this.configRepository.get();
@@ -127,17 +134,18 @@ export class CheckCreditNoteStatus {
                         const xml = this.sriService.generateCreditNoteXML(billingNC, accessKey);
                         const signedXml = await this.sriService.signXML(xml, config || undefined);
                         await this.sriService.sendCreditNoteToSRI(signedXml, isProd);
+                        sendsToday++;
 
                         // Re-query authorization
                         authResult = await this.sriService.waitForAuthorization(accessKey, isProd);
                     }
                 }
 
-                // Update database with latest status and increment retry count
+                // Update database with latest status; retryCount solo refleja envíos reales
                 await this.creditNoteRepository.update(creditNote.id, {
                     sriStatus: authResult.estado,
                     authorizationDate: authResult.fechaAutorizacion,
-                    retryCount: newRetryCount,
+                    retryCount: sendsToday,
                     lastRetryDate: todayISO
                 });
             }
@@ -185,7 +193,7 @@ export class CheckCreditNoteStatus {
                 status: authResult.estado,
                 authorizationNumber: authResult.numeroAutorizacion,
                 authorizationDate: authResult.fechaAutorizacion,
-                retryCount: newRetryCount,
+                retryCount: sendsToday,
                 sriResponse: authResult
             };
 
@@ -197,64 +205,56 @@ export class CheckCreditNoteStatus {
 
     private mapToBillingCreditNote(entity: any, config: any, originalBill: any, authDate?: string): BillingCreditNote {
         const [estab, ptoEmi, secuencial] = entity.documentNumber.split('-');
+        const info: any = config || {};
         // FIX M-01: Use dynamic tax rate from config instead of hardcoded 15%
-        const taxRate = config.billing?.taxRate || 15;
-        const taxCode = this.billingService.getTaxCode(taxRate);
+        const taxRate = info.billing?.taxRate || 15;
+
+        // CRITICAL: Recalcular los detalles desde los ítems de la factura original con
+        // calculateDetails — EXACTAMENTE el mismo camino que la emisión (GenerateCreditNote).
+        // El cálculo manual anterior (quantity × price) no aplicaba el penny adjustment
+        // y podía reintroducir el error SRI 52 "ERROR EN DIFERENCIAS" en los reintentos.
+        const details = this.billingService.calculateDetails(originalBill.items, taxRate);
+        const subtotal = details.reduce((sum, d) => sum + d.precioTotalSinImpuesto, 0);
+        const totalImpuestos = details.reduce((sum, d) => sum + d.impuestos[0].valor, 0);
+        const total = subtotal + totalImpuestos;
 
         return {
             info: {
                 ambiente: entity.environment || (process.env.SRI_ENV === '2' ? '2' : '1'),
                 tipoEmision: '1',
-                razonSocial: config.razonSocial,
-                nombreComercial: config.nombreComercial,
-                ruc: config.ruc,
+                // Campos reales del schema de config: businessName/name (config.razonSocial NO existe
+                // — el mapper anterior generaba <razonSocial> vacío y el SRI rechazaba el reenvío)
+                razonSocial: info.businessName || process.env.BUSINESS_NAME || 'RESTAURANTE DEMO',
+                nombreComercial: info.name || process.env.COMMERCIAL_NAME,
+                ruc: info.ruc || process.env.RUC,
                 claveAcceso: entity.accessKey,
                 codDoc: '04',
                 estab,
                 ptoEmi,
                 secuencial,
-                dirMatriz: config.fiscalAddress || config.address || process.env.DIR_MATRIZ,
+                dirMatriz: info.fiscalAddress || info.address || process.env.DIR_MATRIZ,
+                dirEstablecimiento: info.fiscalAddress || info.address || process.env.DIR_ESTABLECIMIENTO || process.env.DIR_MATRIZ,
                 // Fechas en zona horaria Ecuador (formatDateToSRI) — derivarlas de la porción
                 // UTC del ISO desplazaba +1 día para emisiones posteriores a las 19:00 Ecuador
                 fechaEmision: this.billingService.formatDateToSRI(entity.date),
                 codDocModificado: '01',
                 numDocModificado: originalBill.documentNumber,
                 fechaEmisionDocSustento: this.billingService.formatDateToSRI(originalBill.date),
-                tipoIdentificacionComprador: originalBill.customerIdentification.length === 13 ? '04' : '05',
+                tipoIdentificacionComprador: this.billingService.getIdentificacionType(entity.customerIdentification),
                 razonSocialComprador: entity.customerName,
                 identificacionComprador: entity.customerIdentification,
-                motivo: entity.reasonDescription,
-                totalSinImpuestos: entity.subtotal,
+                motivo: entity.reasonDescription || entity.reason,
+                totalSinImpuestos: subtotal,
                 totalDescuento: 0,
-                totalImpuestos: [{
-                    codigo: '2',
-                    codigoPorcentaje: taxCode, // FIX M-01: Use dynamic tax code
-                    tarifa: taxRate,
-                    baseImponible: entity.subtotal,
-                    valor: entity.tax
-                }],
-                importeTotal: entity.total,
+                totalImpuestos: [],
+                importeTotal: total,
                 moneda: 'DOLAR',
-                obligadoContabilidad: config.obligadoContabilidad ? 'SI' : 'NO',
+                obligadoContabilidad: info.obligadoContabilidad ? 'SI' : 'NO',
                 emailComprador: entity.customerEmail,
-                logoUrl: config.logoUrl,
-                emailMatriz: config.email
+                logoUrl: this.billingService.getLogoUrl(info),
+                emailMatriz: info.fiscalEmail || info.email || process.env.SMTP_FROM
             },
-            detalles: entity.items.map((item: any) => ({
-                codigoPrincipal: item.code || 'SERV',
-                descripcion: item.name,
-                cantidad: item.quantity,
-                precioUnitario: item.price,
-                descuento: 0,
-                precioTotalSinImpuesto: item.quantity * item.price,
-                impuestos: [{
-                    codigo: '2',
-                    codigoPorcentaje: taxCode, // FIX M-01: Use dynamic tax code
-                    tarifa: taxRate,
-                    baseImponible: item.quantity * item.price,
-                    valor: (item.total - (item.quantity * item.price))
-                }]
-            })),
+            detalles: details,
             billId: entity.billId,
             status: 'AUTHORIZED',
             creationDate: new Date(entity.date),
