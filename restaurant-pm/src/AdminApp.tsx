@@ -204,7 +204,10 @@ const AdminContent: React.FC = () => {
                         <Suspense fallback={<LoadingFallback />}>
                             <Routes>
                                 <Route path="dashboard" element={<Dashboard orders={state.orders} reservations={state.reservations} />} />
-                                <Route path="customers" element={
+                                {/* Redirect a /clientes: la navegación entre pestañas queda dentro
+                                    de customers/:tab (cambio de param no remonta el componente) */}
+                                <Route path="customers" element={<Navigate to="/admin/customers/clientes" replace />} />
+                                <Route path="customers/:tab" element={
                                     <CustomerManagement
                                         customers={state.customers}
                                         setCustomers={updateCustomers}
@@ -212,7 +215,11 @@ const AdminContent: React.FC = () => {
                                         setReservations={updateReservations}
                                     />
                                 } />
-                                <Route path="orders" element={
+                                {/* Redirect a /tablero para que toda la navegación interna ocurra
+                                    dentro de la misma ruta orders/:tab (cambio de param no remonta
+                                    el componente y no se pierde el estado local, ej. editingOrder) */}
+                                <Route path="orders" element={<Navigate to="/admin/orders/tablero" replace />} />
+                                <Route path="orders/:tab" element={
                                     <OrderManagement
                                         orders={state.orders}
                                         setOrders={updateOrders}
@@ -226,6 +233,7 @@ const AdminContent: React.FC = () => {
                                     />
                                 } />
                                 <Route path="categories" element={<CategoryManagement />} />
+                                <Route path="categories/:tab" element={<CategoryManagement />} />
                                 <Route path="kitchen" element={<KitchenManagement orders={state.orders} setOrders={updateOrders} />} />
                                 <Route path="hr" element={
                                     <HRManagement
@@ -238,7 +246,9 @@ const AdminContent: React.FC = () => {
                                 <Route path="settings" element={<SettingsManagement />} />
                                 <Route path="settings/:tab" element={<SettingsManagement />} />
                                 <Route path="billing" element={<BillingHistory />} />
+                                <Route path="billing/:tab" element={<BillingHistory />} />
                                 <Route path="whatsapp" element={<WhatsAppManagement />} />
+                                <Route path="whatsapp/:tab" element={<WhatsAppManagement />} />
                                 <Route path="website" element={<WebsiteManagement />} />
 
                                 <Route path="" element={<Navigate to="dashboard" replace />} />

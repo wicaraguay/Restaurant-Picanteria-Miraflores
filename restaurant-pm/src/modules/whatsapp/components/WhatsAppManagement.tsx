@@ -3,7 +3,8 @@
  * Solo conexión QR y configuración del chatbot
  */
 
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { WhatsAppConfigSection } from './WhatsAppConfigSection';
 import { WhatsAppStatsSection } from './WhatsAppStatsSection';
 import { ChatbotConfigSection } from './ChatbotConfigSection';
@@ -16,8 +17,33 @@ const tabs: { id: WhatsAppTab; label: string; icon: string }[] = [
     { id: 'config', label: 'Conexion', icon: '⚙️' },
 ];
 
+// Mapeo entre slugs de URL y pestañas internas.
+// URLs: /admin/whatsapp/dashboard | /admin/whatsapp/chatbot | /admin/whatsapp/conexion
+const TAB_BY_SLUG: Record<string, WhatsAppTab> = {
+    'dashboard': 'stats',
+    'chatbot': 'chatbot',
+    'conexion': 'config',
+};
+const SLUG_BY_TAB: Record<WhatsAppTab, string> = {
+    stats: 'dashboard',
+    chatbot: 'chatbot',
+    config: 'conexion',
+};
+
 export const WhatsAppManagement: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<WhatsAppTab>('config');
+    // Pestaña derivada de la URL (/admin/whatsapp/:tab) — permite enlaces
+    // directos a cada subsección y navegación con el botón atrás.
+    const { tab: tabSlug } = useParams<{ tab?: string }>();
+    const navigate = useNavigate();
+    const activeTab: WhatsAppTab = TAB_BY_SLUG[tabSlug ?? ''] ?? 'config';
+    const setActiveTab = (tab: WhatsAppTab) => navigate(`/admin/whatsapp/${SLUG_BY_TAB[tab]}`);
+
+    // Normalizar slugs inválidos (ej. /admin/whatsapp/xyz) a la pestaña de conexión
+    useEffect(() => {
+        if (tabSlug && !TAB_BY_SLUG[tabSlug]) {
+            navigate(`/admin/whatsapp/${SLUG_BY_TAB.config}`, { replace: true });
+        }
+    }, [tabSlug, navigate]);
 
     const renderContent = () => {
         switch (activeTab) {

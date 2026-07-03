@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../../api';
 import { orderService } from '../services/OrderService';
 import { billingService } from '../../billing/services/BillingService';
@@ -37,8 +38,26 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
     const { config, refreshConfig } = useRestaurantConfig();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-    const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
-    const [viewMode, setViewMode] = useState<'dashboard' | 'pos'>('dashboard');
+
+    // Vista y pestaña derivadas de la URL (/admin/orders/:tab).
+    // URLs: /admin/orders/tablero | /admin/orders/pos | /admin/orders/en-curso | /admin/orders/historial
+    // "tablero" y "en-curso" muestran lo mismo (tablero con pedidos activos).
+    const { tab: tabSlug } = useParams<{ tab?: string }>();
+    const navigate = useNavigate();
+    const viewMode: 'dashboard' | 'pos' = tabSlug === 'pos' ? 'pos' : 'dashboard';
+    const activeTab: 'active' | 'history' = tabSlug === 'historial' ? 'history' : 'active';
+    const setViewMode = (mode: 'dashboard' | 'pos') =>
+        navigate(`/admin/orders/${mode === 'pos' ? 'pos' : 'tablero'}`);
+    const setActiveTab = (tab: 'active' | 'history') =>
+        navigate(`/admin/orders/${tab === 'history' ? 'historial' : 'en-curso'}`);
+
+    // Normalizar slugs inválidos (ej. /admin/orders/xyz) al tablero
+    useEffect(() => {
+        const validSlugs = ['tablero', 'pos', 'en-curso', 'historial'];
+        if (tabSlug && !validSlugs.includes(tabSlug)) {
+            navigate('/admin/orders/tablero', { replace: true });
+        }
+    }, [tabSlug, navigate]);
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
     const [confirmBillingNoEmail, setConfirmBillingNoEmail] = useState<{ isOpen: boolean; order: Order | null; data: ClientData | null }>({ isOpen: false, order: null, data: null });
 

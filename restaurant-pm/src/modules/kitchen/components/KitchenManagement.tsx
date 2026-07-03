@@ -202,12 +202,12 @@ const KitchenOrderCard: React.FC<{
                                 e.stopPropagation();
                                 onSetEstimate(order.id, m);
                             }}
-                            className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all border-2 ${order.estimatedMinutes === m
+                            className={`flex-1 py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all border-2 whitespace-nowrap ${order.estimatedMinutes === m
                                     ? 'bg-blue-600 border-blue-600 text-white shadow-lg active:scale-95'
                                     : 'bg-white dark:bg-dark-900 border-gray-100 dark:border-dark-700 text-gray-500 hover:border-blue-500 hover:text-blue-500'
                                 }`}
                         >
-                            {m} min
+                            {m}<span className="hidden sm:inline"> min</span><span className="sm:hidden">'</span>
                         </button>
                     ))}
                 </div>

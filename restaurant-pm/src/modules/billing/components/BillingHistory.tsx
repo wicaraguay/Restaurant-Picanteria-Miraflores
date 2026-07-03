@@ -5,6 +5,7 @@
  * Organizado en pestañas: Facturas y Notas de Crédito.
  */
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { billingService } from '../services/BillingService';
 import { orderService } from '../../orders/services/OrderService';
 import { OrderStatus } from '../../orders/types/order.types';
@@ -42,6 +43,19 @@ import {
 
 type TabType = 'invoices' | 'creditNotes' | 'noInvoiceSales';
 
+// Mapeo entre slugs de URL y pestañas internas.
+// URLs: /admin/billing/facturas | /admin/billing/notas-credito | /admin/billing/ventas-sin-factura
+const TAB_BY_SLUG: Record<string, TabType> = {
+    'facturas': 'invoices',
+    'notas-credito': 'creditNotes',
+    'ventas-sin-factura': 'noInvoiceSales',
+};
+const SLUG_BY_TAB: Record<TabType, string> = {
+    invoices: 'facturas',
+    creditNotes: 'notas-credito',
+    noInvoiceSales: 'ventas-sin-factura',
+};
+
 // FIX M-06: Generate valid year options dynamically with range validation
 const BILLING_START_YEAR = 2024; // First year the system was in use
 const generateYearOptions = (): string[] => {
@@ -68,9 +82,20 @@ const BillingHistory: React.FC = () => {
     const isAdmin = currentUser?.role?.name === 'Administrador';
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Estado para pestañas
+    // Estado para pestañas — derivado de la URL (/admin/billing/:tab)
+    // Permite compartir enlaces directos a cada sección y usar el botón atrás.
     // ─────────────────────────────────────────────────────────────────────────
-    const [activeTab, setActiveTab] = useState<TabType>('invoices');
+    const { tab: tabSlug } = useParams<{ tab?: string }>();
+    const navigate = useNavigate();
+    const activeTab: TabType = TAB_BY_SLUG[tabSlug ?? ''] ?? 'invoices';
+    const setActiveTab = (tab: TabType) => navigate(`/admin/billing/${SLUG_BY_TAB[tab]}`);
+
+    // Normalizar slugs inválidos (ej. /admin/billing/xyz) a la pestaña de facturas
+    useEffect(() => {
+        if (tabSlug && !TAB_BY_SLUG[tabSlug]) {
+            navigate(`/admin/billing/${SLUG_BY_TAB.invoices}`, { replace: true });
+        }
+    }, [tabSlug, navigate]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Estado para Facturas
@@ -651,6 +676,214 @@ const BillingHistory: React.FC = () => {
             ? creditNotesLoading
             : manualSalesLoading;
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Acciones compartidas entre la tabla (desktop) y las tarjetas (móvil)
+    // ─────────────────────────────────────────────────────────────────────────
+    const renderBillActions = (bill: Bill) => (
+        <div className="inline-flex items-center gap-0.5 bg-gray-100 dark:bg-dark-700 rounded-2xl p-1 border border-gray-200 dark:border-dark-600">
+            {/* Documentos */}
+            <button
+                onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf`, '_blank')}
+                className="p-1.5 rounded-xl text-gray-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
+                title="Ver RIDE (PDF)"
+            >
+                <PrinterIcon className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+                onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf?format=ticket`, '_blank')}
+                className="p-1.5 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
+                title="Imprimir Ticket"
+            >
+                <div className="flex items-center justify-center w-3.5 h-3.5 border border-current rounded-[3px] text-[7px] font-bold leading-none">T</div>
+            </button>
+
+            <button
+                onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/xml`, '_blank')}
+                disabled={!bill.accessKey}
+                className="p-1.5 rounded-xl text-orange-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                title={bill.accessKey ? 'Descargar XML Firmado' : 'XML no disponible'}
+            >
+                <div className="flex items-center justify-center w-3.5 h-3.5 border border-current rounded-[3px] text-[6px] font-bold leading-none">XML</div>
+            </button>
+
+            <div className="w-px h-4 bg-gray-300 dark:bg-dark-500 mx-0.5" />
+
+            {/* Gestión */}
+            {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedBillForEdit(bill); setIsEditModalOpen(true); }}
+                    className="p-1.5 rounded-xl text-gray-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
+                    title="Editar datos del cliente"
+                >
+                    <EditIcon className="w-3.5 h-3.5" />
+                </button>
+            )}
+
+            {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                <button
+                    disabled={checkingStatusId === bill.id}
+                    onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!bill.accessKey || bill.sriStatus === 'BORRADOR' || bill.sriStatus === 'ERROR') {
+                            await handleReSubmit(bill);
+                        } else {
+                            await handleCheckStatus(bill);
+                        }
+                    }}
+                    className={`p-1.5 rounded-xl transition-all ${checkingStatusId === bill.id ? 'opacity-50 cursor-not-allowed' : ''} ${(!bill.accessKey || bill.sriStatus === 'BORRADOR')
+                        ? 'text-orange-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600'
+                        : 'text-blue-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600'}`}
+                    title={checkingStatusId === bill.id ? 'Verificando...' : ((!bill.accessKey || bill.sriStatus === 'BORRADOR') ? 'Re-intentar envío SRI' : 'Verificar estado SRI')}
+                >
+                    <RefreshCcwIcon className={`w-3.5 h-3.5 ${checkingStatusId === bill.id ? 'animate-spin' : ''}`} />
+                </button>
+            )}
+
+            {/* Nota de Crédito */}
+            <button
+                disabled={
+                    bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ||
+                    bill.hasCreditNote ||
+                    bill.customerIdentification?.trim() === '9999999999999'
+                }
+                onClick={(e) => { e.stopPropagation(); setSelectedBillForCreditNote(bill); }}
+                className={`p-1.5 rounded-xl transition-all ${bill.sriStatus?.trim().toUpperCase() === 'AUTORIZADO' && !bill.hasCreditNote && bill.customerIdentification?.trim() !== '9999999999999'
+                    ? 'text-gray-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 cursor-pointer'
+                    : 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-40'
+                    }`}
+                title={
+                    bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ? 'Solo facturas AUTORIZADAS'
+                        : bill.hasCreditNote ? 'Ya tiene Nota de Crédito'
+                            : bill.customerIdentification?.trim() === '9999999999999' ? 'No aplica para Consumidor Final'
+                                : 'Emitir Nota de Crédito'
+                }
+            >
+                <FileTextIcon className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Eliminar */}
+            <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    openDeleteModal('bill', bill.id);
+                }}
+                className="p-1.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-dark-600 transition-all"
+                title="Eliminar Registro"
+            >
+                <TrashIcon className="w-3.5 h-3.5" />
+            </button>
+        </div>
+    );
+
+    const renderCreditNoteActions = (cn: CreditNote) => (
+        <div className="inline-flex items-center gap-0.5 bg-gray-100 dark:bg-dark-700 rounded-2xl p-1 border border-gray-200 dark:border-dark-600">
+            {/* PDF */}
+            <button
+                onClick={() => window.open(`${API_BASE_URL}/credit-notes/${cn.id}/pdf`, '_blank')}
+                className="p-1.5 rounded-xl text-gray-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
+                title="Ver PDF"
+            >
+                <PrinterIcon className="w-3.5 h-3.5" />
+            </button>
+
+            {/* XML */}
+            <button
+                onClick={() => window.open(`${API_BASE_URL}/credit-notes/${cn.id}/xml`, '_blank')}
+                disabled={!cn.accessKey}
+                className="p-1.5 rounded-xl text-orange-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                title={cn.accessKey ? 'Descargar XML' : 'XML no disponible'}
+            >
+                <div className="flex items-center justify-center w-3.5 h-3.5 border border-current rounded-[3px] text-[6px] font-bold leading-none">XML</div>
+            </button>
+
+            <div className="w-px h-4 bg-gray-300 dark:bg-dark-500 mx-0.5" />
+
+            {/* Verificar Estado */}
+            {cn.sriStatus !== 'AUTORIZADO' && (
+                <button
+                    disabled={checkingStatusId === cn.id}
+                    onClick={() => handleCheckCreditNoteStatus(cn)}
+                    className={`p-1.5 rounded-xl text-blue-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 transition-all ${checkingStatusId === cn.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={checkingStatusId === cn.id ? 'Verificando...' : 'Verificar estado SRI'}
+                >
+                    <RefreshCcwIcon className={`w-3.5 h-3.5 ${checkingStatusId === cn.id ? 'animate-spin' : ''}`} />
+                </button>
+            )}
+
+            {/* Eliminar (Solo Admin) */}
+            {isAdmin && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        openDeleteModal('creditNote', cn.id);
+                    }}
+                    className="p-1.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-dark-600 transition-all"
+                    title="Eliminar Nota de Crédito"
+                >
+                    <TrashIcon className="w-3.5 h-3.5" />
+                </button>
+            )}
+        </div>
+    );
+
+    const printSaleTicket = (sale: any) => {
+        const totals = calculateOrderTotals(sale.items || []);
+        const saleId = sale.id || sale._id;
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Ticket de Venta</title>
+                <style>
+                    body { font-family: 'Courier New', Courier, monospace; width: 80mm; padding: 5px; font-size: 12px; line-height: 1.4; color: #000; }
+                    .center { text-align: center; }
+                    .bold { font-weight: bold; }
+                    .divider { border-top: 1px dashed #000; margin: 10px 0; }
+                    table { width: 100%; border-collapse: collapse; }
+                    .text-right { text-align: right; }
+                </style>
+            </head>
+            <body onload="window.print(); window.close();">
+                <div class="center bold" style="font-size: 16px;">PICANTERÍA MIRAFLORES</div>
+                <div class="center">COMPROBANTE DE VENTA INTERNA</div>
+                <div class="divider"></div>
+                <div><b>Pedido:</b> ${sale.orderNumber || saleId}</div>
+                <div><b>Fecha:</b> ${new Date(sale.createdAt).toLocaleString()}</div>
+                <div><b>Cliente:</b> ${sale.customerName || 'Consumidor Final'}</div>
+                <div class="divider"></div>
+                <table>
+                    <thead>
+                        <tr class="bold">
+                            <td>Cant</td>
+                            <td>Detalle</td>
+                            <td class="text-right">Total</td>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${(sale.items || []).map((item: any) => `
+                            <tr>
+                                <td>${item.quantity}</td>
+                                <td>${item.name}</td>
+                                <td class="text-right">$${((item.price || 0) * item.quantity).toFixed(2)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div class="divider"></div>
+                <div class="text-right">Subtotal 15%: $${totals.subtotal15.toFixed(2)}</div>
+                <div class="text-right">IVA 15%: $${totals.iva15.toFixed(2)}</div>
+                <div class="text-right">Subtotal 0%: $${totals.subtotal0.toFixed(2)}</div>
+                <div class="text-right bold" style="font-size: 14px;">TOTAL: $${totals.total.toFixed(2)}</div>
+                <div class="divider"></div>
+                <div class="center bold">¡GRACIAS POR SU VISITA!</div>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
+
     // ═══════════════════════════════════════════════════════════════════════════
     // RENDER
     // ═══════════════════════════════════════════════════════════════════════════
@@ -662,11 +895,11 @@ const BillingHistory: React.FC = () => {
             ═══════════════════════════════════════════════════════════════════ */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
                 <div className="flex flex-col">
-                    <h1 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
+                    <h1 className="text-xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
                         Facturación
                     </h1>
-                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                    <p className="text-[9px] md:text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                        <span className="w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-blue-600 animate-pulse"></span>
                         GESTIÓN DE DOCUMENTOS ELECTRÓNICOS
                     </p>
                 </div>
@@ -754,18 +987,18 @@ const BillingHistory: React.FC = () => {
             {/* ═══════════════════════════════════════════════════════════════════
                 PESTAÑAS DE NAVEGACIÓN
             ═══════════════════════════════════════════════════════════════════ */}
-            <div className="flex gap-2 bg-gray-100 dark:bg-dark-800 p-1.5 rounded-2xl w-fit">
+            <div className="flex gap-1 sm:gap-2 bg-gray-100 dark:bg-dark-800 p-1 sm:p-1.5 rounded-2xl w-full sm:w-fit">
                 <button
                     onClick={() => setActiveTab('invoices')}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black uppercase tracking-wider transition-all ${
+                    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] sm:text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${
                         activeTab === 'invoices'
                             ? 'bg-white dark:bg-dark-700 text-blue-600 dark:text-blue-400 shadow-lg'
                             : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                     }`}
                 >
-                    <FileTextIcon className="w-4 h-4" />
+                    <FileTextIcon className="w-4 h-4 hidden sm:block" />
                     Facturas
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                    <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full ${
                         activeTab === 'invoices'
                             ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
                             : 'bg-gray-200 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
@@ -775,15 +1008,16 @@ const BillingHistory: React.FC = () => {
                 </button>
                 <button
                     onClick={() => setActiveTab('creditNotes')}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black uppercase tracking-wider transition-all ${
+                    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] sm:text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${
                         activeTab === 'creditNotes'
                             ? 'bg-white dark:bg-dark-700 text-orange-600 dark:text-orange-400 shadow-lg'
                             : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                     }`}
                 >
-                    <AlertCircleIcon className="w-4 h-4" />
-                    Notas de Crédito
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                    <AlertCircleIcon className="w-4 h-4 hidden sm:block" />
+                    <span className="hidden sm:inline">Notas de Crédito</span>
+                    <span className="sm:hidden">N. Crédito</span>
+                    <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full ${
                         activeTab === 'creditNotes'
                             ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
                             : 'bg-gray-200 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
@@ -793,15 +1027,16 @@ const BillingHistory: React.FC = () => {
                 </button>
                 <button
                     onClick={() => setActiveTab('noInvoiceSales')}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black uppercase tracking-wider transition-all ${
+                    className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] sm:text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${
                         activeTab === 'noInvoiceSales'
                             ? 'bg-white dark:bg-dark-700 text-purple-600 dark:text-purple-400 shadow-lg'
                             : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                     }`}
                 >
-                    <CheckCircleIcon className="w-4 h-4" />
-                    Ventas Sin Factura
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                    <CheckCircleIcon className="w-4 h-4 hidden sm:block" />
+                    <span className="hidden sm:inline">Ventas Sin Factura</span>
+                    <span className="sm:hidden">Sin Factura</span>
+                    <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full ${
                         activeTab === 'noInvoiceSales'
                             ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400'
                             : 'bg-gray-200 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
@@ -817,10 +1052,97 @@ const BillingHistory: React.FC = () => {
             <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl shadow-black/5 border border-gray-100 dark:border-dark-700 overflow-hidden animate-slide-up">
                 <div className="overflow-x-auto custom-scroll">
                     {/* ─────────────────────────────────────────────────────────────
-                        TABLA DE FACTURAS
+                        FACTURAS — Tarjetas (móvil)
                     ───────────────────────────────────────────────────────────── */}
                     {activeTab === 'invoices' && (
-                        <table className="w-full text-left border-collapse">
+                        <div className="md:hidden divide-y divide-gray-100 dark:divide-dark-700">
+                            {billsLoading ? (
+                                Array(3).fill(0).map((_, i) => (
+                                    <div key={i} className="p-4 animate-pulse space-y-2">
+                                        <div className="h-4 bg-gray-100 dark:bg-dark-700 rounded w-2/3"></div>
+                                        <div className="h-4 bg-gray-100 dark:bg-dark-700 rounded w-1/3"></div>
+                                    </div>
+                                ))
+                            ) : bills.length === 0 ? (
+                                <div className="px-6 py-12 text-center text-gray-500">No hay facturas registradas.</div>
+                            ) : (
+                                bills.map((bill) => {
+                                    const totals = calculateOrderTotals(bill.items || []);
+                                    return (
+                                        <div key={bill.id} className="p-4 space-y-3">
+                                            <div className="flex justify-between items-start gap-3">
+                                                <div className="min-w-0">
+                                                    <div className="font-black text-gray-900 dark:text-gray-100 text-sm truncate">{bill.documentNumber}</div>
+                                                    <div className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                                        <HistoryIcon className="w-3 h-3" /> {bill.date}
+                                                    </div>
+                                                    <div className="font-bold text-gray-800 dark:text-gray-200 text-xs mt-1.5 truncate">{bill.customerName}</div>
+                                                    <div className="text-[10px] font-bold text-blue-600/60 dark:text-blue-400/60 uppercase tracking-wider">{bill.customerIdentification}</div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                                                    <div className="font-black text-blue-600 dark:text-blue-400 text-base">${totals.total.toFixed(2)}</div>
+                                                    {getStatusBadge(bill.sriStatus, bill.hasCreditNote)}
+                                                    <span className={`text-[8px] font-black uppercase ${bill.environment === '2' ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                                        {bill.environment === '2' ? 'PRODUCCIÓN' : 'PRUEBAS'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                <button
+                                                    onClick={() => toggleExpansion(bill.id)}
+                                                    className={`flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${expandedIds.has(bill.id) ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : 'bg-gray-100 dark:bg-dark-700 text-gray-500 dark:text-gray-400'}`}
+                                                >
+                                                    <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${expandedIds.has(bill.id) ? 'rotate-180' : ''}`} />
+                                                    Detalle
+                                                </button>
+                                                {renderBillActions(bill)}
+                                            </div>
+                                            {expandedIds.has(bill.id) && (
+                                                <div className="bg-gray-50 dark:bg-dark-900/40 rounded-2xl p-4 space-y-2 animate-slide-down">
+                                                    {bill.items?.map((item, idx) => (
+                                                        <div key={idx} className="flex justify-between gap-2 text-xs">
+                                                            <span className="font-bold text-gray-700 dark:text-gray-300">{item.quantity}× {item.name}</span>
+                                                            <span className="font-black text-gray-700 dark:text-gray-300 flex-shrink-0">${(item.total || 0).toFixed(2)}</span>
+                                                        </div>
+                                                    ))}
+                                                    <div className="border-t border-gray-200 dark:border-dark-700 pt-2 mt-2 space-y-1">
+                                                        <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase">
+                                                            <span>Subtotal</span><span>${(totals.subtotal0 + totals.subtotal15).toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase">
+                                                            <span>IVA (15%)</span><span>${totals.iva15.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs font-black text-blue-600 dark:text-blue-400 uppercase">
+                                                            <span>Total</span><span>${totals.total.toFixed(2)}</span>
+                                                        </div>
+                                                    </div>
+                                                    {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
+                                                        <button
+                                                            onClick={() => { setSelectedBillForXml(bill); setIsXmlModalOpen(true); }}
+                                                            className="w-full text-center text-[9px] font-bold text-gray-400 hover:text-blue-500 uppercase tracking-wider pt-1"
+                                                        >
+                                                            Ver XML técnico
+                                                        </button>
+                                                    )}
+                                                    <ErrorLogPanel
+                                                        errorLog={bill.errorLog || []}
+                                                        sriMessage={bill.sriMessage}
+                                                        documentNumber={bill.documentNumber}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
+
+                    {/* ─────────────────────────────────────────────────────────────
+                        TABLA DE FACTURAS (desktop / tablet)
+                    ───────────────────────────────────────────────────────────── */}
+                    {activeTab === 'invoices' && (
+                        <table className="w-full text-left border-collapse hidden md:table">
                             <thead>
                                 <tr className="bg-gray-100/50 dark:bg-dark-750 border-b border-gray-100 dark:border-dark-700">
                                     <th className="px-4 py-5 w-10"></th>
@@ -913,100 +1235,7 @@ const BillingHistory: React.FC = () => {
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <div className="flex justify-end">
-                                                        <div className="inline-flex items-center gap-0.5 bg-gray-100 dark:bg-dark-700 rounded-2xl p-1 border border-gray-200 dark:border-dark-600">
-                                                            {/* Documentos */}
-                                                            <button
-                                                                onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf`, '_blank')}
-                                                                className="p-1.5 rounded-xl text-gray-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
-                                                                title="Ver RIDE (PDF)"
-                                                            >
-                                                                <PrinterIcon className="w-3.5 h-3.5" />
-                                                            </button>
-
-                                                            <button
-                                                                onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/pdf?format=ticket`, '_blank')}
-                                                                className="p-1.5 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
-                                                                title="Imprimir Ticket"
-                                                            >
-                                                                <div className="flex items-center justify-center w-3.5 h-3.5 border border-current rounded-[3px] text-[7px] font-bold leading-none">T</div>
-                                                            </button>
-
-                                                            <button
-                                                                onClick={() => window.open(`${API_BASE_URL}/bills/${bill.id}/xml`, '_blank')}
-                                                                disabled={!bill.accessKey}
-                                                                className="p-1.5 rounded-xl text-orange-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                                                title={bill.accessKey ? 'Descargar XML Firmado' : 'XML no disponible'}
-                                                            >
-                                                                <div className="flex items-center justify-center w-3.5 h-3.5 border border-current rounded-[3px] text-[6px] font-bold leading-none">XML</div>
-                                                            </button>
-
-                                                            <div className="w-px h-4 bg-gray-300 dark:bg-dark-500 mx-0.5" />
-
-                                                            {/* Gestión */}
-                                                            {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); setSelectedBillForEdit(bill); setIsEditModalOpen(true); }}
-                                                                    className="p-1.5 rounded-xl text-gray-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
-                                                                    title="Editar datos del cliente"
-                                                                >
-                                                                    <EditIcon className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            )}
-
-                                                            {(bill.sriStatus !== 'AUTORIZADO' && bill.sriStatus !== 'CANCELLED') && (
-                                                                <button
-                                                                    disabled={checkingStatusId === bill.id}
-                                                                    onClick={async (e) => {
-                                                                        e.stopPropagation();
-                                                                        if (!bill.accessKey || bill.sriStatus === 'BORRADOR' || bill.sriStatus === 'ERROR') {
-                                                                            await handleReSubmit(bill);
-                                                                        } else {
-                                                                            await handleCheckStatus(bill);
-                                                                        }
-                                                                    }}
-                                                                    className={`p-1.5 rounded-xl transition-all ${checkingStatusId === bill.id ? 'opacity-50 cursor-not-allowed' : ''} ${(!bill.accessKey || bill.sriStatus === 'BORRADOR')
-                                                                        ? 'text-orange-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600'
-                                                                        : 'text-blue-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600'}`}
-                                                                    title={checkingStatusId === bill.id ? 'Verificando...' : ((!bill.accessKey || bill.sriStatus === 'BORRADOR') ? 'Re-intentar envío SRI' : 'Verificar estado SRI')}
-                                                                >
-                                                                    <RefreshCcwIcon className={`w-3.5 h-3.5 ${checkingStatusId === bill.id ? 'animate-spin' : ''}`} />
-                                                                </button>
-                                                            )}
-
-                                                            {/* Nota de Crédito */}
-                                                            <button
-                                                                disabled={
-                                                                    bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ||
-                                                                    bill.hasCreditNote ||
-                                                                    bill.customerIdentification?.trim() === '9999999999999'
-                                                                }
-                                                                onClick={(e) => { e.stopPropagation(); setSelectedBillForCreditNote(bill); }}
-                                                                className={`p-1.5 rounded-xl transition-all ${bill.sriStatus?.trim().toUpperCase() === 'AUTORIZADO' && !bill.hasCreditNote && bill.customerIdentification?.trim() !== '9999999999999'
-                                                                    ? 'text-gray-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 cursor-pointer'
-                                                                    : 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-40'
-                                                                    }`}
-                                                                title={
-                                                                    bill.sriStatus?.trim().toUpperCase() !== 'AUTORIZADO' ? 'Solo facturas AUTORIZADAS'
-                                                                        : bill.hasCreditNote ? 'Ya tiene Nota de Crédito'
-                                                                            : bill.customerIdentification?.trim() === '9999999999999' ? 'No aplica para Consumidor Final'
-                                                                                : 'Emitir Nota de Crédito'
-                                                                }
-                                                            >
-                                                                <FileTextIcon className="w-3.5 h-3.5" />
-                                                            </button>
-
-                                                            {/* Eliminar */}
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    openDeleteModal('bill', bill.id);
-                                                                }}
-                                                                className="p-1.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-dark-600 transition-all"
-                                                                title="Eliminar Registro"
-                                                            >
-                                                                <TrashIcon className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
+                                                        {renderBillActions(bill)}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1083,10 +1312,98 @@ const BillingHistory: React.FC = () => {
                     )}
 
                     {/* ─────────────────────────────────────────────────────────────
-                        TABLA DE NOTAS DE CRÉDITO
+                        NOTAS DE CRÉDITO — Tarjetas (móvil)
                     ───────────────────────────────────────────────────────────── */}
                     {activeTab === 'creditNotes' && (
-                        <table className="w-full text-left border-collapse">
+                        <div className="md:hidden divide-y divide-gray-100 dark:divide-dark-700">
+                            {creditNotesLoading ? (
+                                Array(3).fill(0).map((_, i) => (
+                                    <div key={i} className="p-4 animate-pulse space-y-2">
+                                        <div className="h-4 bg-gray-100 dark:bg-dark-700 rounded w-2/3"></div>
+                                        <div className="h-4 bg-gray-100 dark:bg-dark-700 rounded w-1/3"></div>
+                                    </div>
+                                ))
+                            ) : creditNotes.length === 0 ? (
+                                <div className="px-6 py-12 text-center text-gray-500">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <AlertCircleIcon className="w-12 h-12 text-gray-300 dark:text-gray-600" />
+                                        <p>No hay notas de crédito registradas.</p>
+                                        <p className="text-xs text-gray-400">Las notas de crédito se generan desde facturas autorizadas.</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                creditNotes.map((cn) => (
+                                    <div key={cn.id} className="p-4 space-y-3">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <div className="min-w-0">
+                                                <div className="font-black text-gray-900 dark:text-gray-100 text-sm truncate">{cn.documentNumber}</div>
+                                                <div className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                                    <HistoryIcon className="w-3 h-3" /> {cn.date}
+                                                </div>
+                                                <div className="font-bold text-gray-800 dark:text-gray-200 text-xs mt-1.5 truncate">{cn.customerName}</div>
+                                                <div className="text-[10px] font-bold text-orange-600/60 dark:text-orange-400/60 uppercase tracking-wider">{cn.customerIdentification}</div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                                                <div className="font-black text-orange-600 dark:text-orange-400 text-base">-${cn.total.toFixed(2)}</div>
+                                                {getStatusBadge(cn.sriStatus)}
+                                            </div>
+                                        </div>
+                                        <div className="text-xs font-medium text-gray-600 dark:text-gray-400 bg-orange-50/50 dark:bg-orange-900/10 rounded-xl px-3 py-2">
+                                            <span className="text-[9px] font-black text-orange-600/70 uppercase tracking-wider block">Motivo</span>
+                                            {cn.reasonDescription || cn.reason}
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                                            <button
+                                                onClick={() => toggleExpansion(cn.id)}
+                                                className={`flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${expandedIds.has(cn.id) ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400' : 'bg-gray-100 dark:bg-dark-700 text-gray-500 dark:text-gray-400'}`}
+                                            >
+                                                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${expandedIds.has(cn.id) ? 'rotate-180' : ''}`} />
+                                                Detalle
+                                            </button>
+                                            {renderCreditNoteActions(cn)}
+                                        </div>
+                                        {expandedIds.has(cn.id) && (
+                                            <div className="bg-gray-50 dark:bg-dark-900/40 rounded-2xl p-4 space-y-2 text-xs animate-slide-down">
+                                                <div className="flex justify-between">
+                                                    <span className="font-bold text-gray-400 uppercase text-[10px]">Factura asociada</span>
+                                                    <span className="font-mono text-gray-600 dark:text-gray-400">{cn.billId ? `REF: ${cn.billId.slice(-8)}` : 'N/A'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="font-bold text-gray-400 uppercase text-[10px]">Subtotal</span>
+                                                    <span className="font-medium text-gray-700 dark:text-gray-300">${cn.subtotal.toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="font-bold text-gray-400 uppercase text-[10px]">IVA</span>
+                                                    <span className="font-medium text-gray-700 dark:text-gray-300">${cn.tax.toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="font-bold text-gray-400 uppercase text-[10px]">Fecha Autorización</span>
+                                                    <span className="font-medium text-gray-700 dark:text-gray-300">{cn.authorizationDate || 'Pendiente'}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="font-bold text-gray-400 uppercase text-[10px] block">Clave de Acceso</span>
+                                                    <span className="font-mono text-[10px] text-gray-500 break-all">{cn.accessKey || 'No generada'}</span>
+                                                </div>
+                                                {cn.errorLog && cn.errorLog.length > 0 && (
+                                                    <ErrorLogPanel
+                                                        errorLog={cn.errorLog}
+                                                        sriMessage={cn.sriMessage}
+                                                        documentNumber={cn.documentNumber}
+                                                    />
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    )}
+
+                    {/* ─────────────────────────────────────────────────────────────
+                        TABLA DE NOTAS DE CRÉDITO (desktop / tablet)
+                    ───────────────────────────────────────────────────────────── */}
+                    {activeTab === 'creditNotes' && (
+                        <table className="w-full text-left border-collapse hidden md:table">
                             <thead>
                                 <tr className="bg-orange-50/50 dark:bg-dark-750 border-b border-gray-100 dark:border-dark-700">
                                     <th className="px-4 py-5 w-10"></th>
@@ -1164,54 +1481,7 @@ const BillingHistory: React.FC = () => {
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <div className="flex justify-end">
-                                                        <div className="inline-flex items-center gap-0.5 bg-gray-100 dark:bg-dark-700 rounded-2xl p-1 border border-gray-200 dark:border-dark-600">
-                                                            {/* PDF */}
-                                                            <button
-                                                                onClick={() => window.open(`${API_BASE_URL}/credit-notes/${cn.id}/pdf`, '_blank')}
-                                                                className="p-1.5 rounded-xl text-gray-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 dark:text-gray-400 transition-all"
-                                                                title="Ver PDF"
-                                                            >
-                                                                <PrinterIcon className="w-3.5 h-3.5" />
-                                                            </button>
-
-                                                            {/* XML */}
-                                                            <button
-                                                                onClick={() => window.open(`${API_BASE_URL}/credit-notes/${cn.id}/xml`, '_blank')}
-                                                                disabled={!cn.accessKey}
-                                                                className="p-1.5 rounded-xl text-orange-500 hover:text-orange-600 hover:bg-white dark:hover:bg-dark-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                                                title={cn.accessKey ? 'Descargar XML' : 'XML no disponible'}
-                                                            >
-                                                                <div className="flex items-center justify-center w-3.5 h-3.5 border border-current rounded-[3px] text-[6px] font-bold leading-none">XML</div>
-                                                            </button>
-
-                                                            <div className="w-px h-4 bg-gray-300 dark:bg-dark-500 mx-0.5" />
-
-                                                            {/* Verificar Estado */}
-                                                            {cn.sriStatus !== 'AUTORIZADO' && (
-                                                                <button
-                                                                    disabled={checkingStatusId === cn.id}
-                                                                    onClick={() => handleCheckCreditNoteStatus(cn)}
-                                                                    className={`p-1.5 rounded-xl text-blue-500 hover:text-blue-600 hover:bg-white dark:hover:bg-dark-600 transition-all ${checkingStatusId === cn.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                                    title={checkingStatusId === cn.id ? 'Verificando...' : 'Verificar estado SRI'}
-                                                                >
-                                                                    <RefreshCcwIcon className={`w-3.5 h-3.5 ${checkingStatusId === cn.id ? 'animate-spin' : ''}`} />
-                                                                </button>
-                                                            )}
-
-                                                            {/* Eliminar (Solo Admin) */}
-                                                            {isAdmin && (
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        openDeleteModal('creditNote', cn.id);
-                                                                    }}
-                                                                    className="p-1.5 rounded-xl text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-dark-600 transition-all"
-                                                                    title="Eliminar Nota de Crédito"
-                                                                >
-                                                                    <TrashIcon className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            )}
-                                                        </div>
+                                                        {renderCreditNoteActions(cn)}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1269,10 +1539,110 @@ const BillingHistory: React.FC = () => {
                     )}
 
                     {/* ─────────────────────────────────────────────────────────────
-                        TABLA DE VENTAS SIN FACTURA
+                        VENTAS SIN FACTURA — Tarjetas (móvil)
                     ───────────────────────────────────────────────────────────── */}
                     {activeTab === 'noInvoiceSales' && (
-                        <table className="w-full text-left border-collapse">
+                        <div className="md:hidden divide-y divide-gray-100 dark:divide-dark-700">
+                            {manualSalesLoading ? (
+                                Array(3).fill(0).map((_, i) => (
+                                    <div key={i} className="p-4 animate-pulse space-y-2">
+                                        <div className="h-4 bg-gray-100 dark:bg-dark-700 rounded w-2/3"></div>
+                                        <div className="h-4 bg-gray-100 dark:bg-dark-700 rounded w-1/3"></div>
+                                    </div>
+                                ))
+                            ) : manualSales.length === 0 ? (
+                                <div className="px-6 py-12 text-center text-gray-500">No hay ventas registradas sin factura.</div>
+                            ) : (
+                                manualSales.map((sale) => {
+                                    const totals = calculateOrderTotals(sale.items || []);
+                                    const saleId = sale.id || sale._id;
+                                    return (
+                                        <div key={saleId} className="p-4 space-y-3">
+                                            <div className="flex justify-between items-start gap-3">
+                                                <div className="min-w-0">
+                                                    <div className="font-black text-gray-900 dark:text-gray-100 text-sm truncate">
+                                                        {sale.orderNumber ? `PEDIDO #${sale.orderNumber}` : `REF: ${saleId?.slice(-8).toUpperCase()}`}
+                                                    </div>
+                                                    <div className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                                        <HistoryIcon className="w-3 h-3" /> {new Date(sale.createdAt).toLocaleString()}
+                                                    </div>
+                                                    <div className="font-bold text-gray-800 dark:text-gray-200 text-xs mt-1.5 truncate">{sale.customerName || 'Consumidor Final'}</div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                                                    <div className="font-black text-purple-600 dark:text-purple-400 text-base">${totals.total.toFixed(2)}</div>
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 uppercase">
+                                                        {sale.type || 'En Local'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                <button
+                                                    onClick={() => toggleExpansion(saleId)}
+                                                    className={`flex items-center gap-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${expandedIds.has(saleId) ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400' : 'bg-gray-100 dark:bg-dark-700 text-gray-500 dark:text-gray-400'}`}
+                                                >
+                                                    <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${expandedIds.has(saleId) ? 'rotate-180' : ''}`} />
+                                                    Detalle
+                                                </button>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        title="Imprimir Ticket"
+                                                        onClick={() => printSaleTicket(sale)}
+                                                        className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 border border-purple-100 dark:border-purple-800/30"
+                                                    >
+                                                        🖨️ Ticket
+                                                    </button>
+                                                    {isAdmin && (
+                                                        <button
+                                                            title="Eliminar Registro de Venta"
+                                                            onClick={() => openDeleteModal('manualSale', saleId)}
+                                                            className="flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30 text-red-700 dark:text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 border border-red-100 dark:border-red-900/30"
+                                                        >
+                                                            <TrashIcon className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {expandedIds.has(saleId) && (
+                                                <div className="bg-purple-50/30 dark:bg-purple-950/10 rounded-2xl p-4 space-y-2 animate-slide-down">
+                                                    {(sale.items || []).map((item: any, idx: number) => {
+                                                        const itemTotal = (item.price || 0) * (item.quantity || 0);
+                                                        return (
+                                                            <div key={idx} className="flex justify-between gap-2 text-xs">
+                                                                <span className="font-bold text-gray-700 dark:text-gray-300">
+                                                                    {item.quantity}× {item.name}
+                                                                    <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-black ${item.taxRate === 15 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-400'}`}>
+                                                                        {item.taxRate === 15 ? '15%' : '0%'}
+                                                                    </span>
+                                                                </span>
+                                                                <span className="font-black text-purple-600 dark:text-purple-400 flex-shrink-0">${itemTotal.toFixed(2)}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    <div className="border-t border-purple-100 dark:border-purple-900/30 pt-2 mt-2 space-y-1">
+                                                        <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase">
+                                                            <span>Sub 15%</span><span>${totals.subtotal15.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase">
+                                                            <span>Sub 0%</span><span>${totals.subtotal0.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs font-black text-purple-600 dark:text-purple-400 uppercase">
+                                                            <span>Total</span><span>${totals.total.toFixed(2)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
+
+                    {/* ─────────────────────────────────────────────────────────────
+                        TABLA DE VENTAS SIN FACTURA (desktop / tablet)
+                    ───────────────────────────────────────────────────────────── */}
+                    {activeTab === 'noInvoiceSales' && (
+                        <table className="w-full text-left border-collapse hidden md:table">
                             <thead>
                                 <tr className="bg-purple-50/50 dark:bg-dark-750 border-b border-gray-100 dark:border-dark-700">
                                     <th className="px-4 py-5 w-10"></th>
@@ -1348,61 +1718,7 @@ const BillingHistory: React.FC = () => {
                                                         <div className="flex justify-end gap-2">
                                                             <button
                                                                 title="Imprimir Ticket"
-                                                                onClick={() => {
-                                                                    const printWindow = window.open('', '_blank');
-                                                                    if (printWindow) {
-                                                                        printWindow.document.write(`
-                                                                            <html>
-                                                                            <head>
-                                                                                <title>Ticket de Venta</title>
-                                                                                <style>
-                                                                                    body { font-family: 'Courier New', Courier, monospace; width: 80mm; padding: 5px; font-size: 12px; line-height: 1.4; color: #000; }
-                                                                                    .center { text-align: center; }
-                                                                                    .bold { font-weight: bold; }
-                                                                                    .divider { border-top: 1px dashed #000; margin: 10px 0; }
-                                                                                    table { width: 100%; border-collapse: collapse; }
-                                                                                    .text-right { text-align: right; }
-                                                                                </style>
-                                                                            </head>
-                                                                            <body onload="window.print(); window.close();">
-                                                                                <div class="center bold" style="font-size: 16px;">PICANTERÍA MIRAFLORES</div>
-                                                                                <div class="center">COMPROBANTE DE VENTA INTERNA</div>
-                                                                                <div class="divider"></div>
-                                                                                <div><b>Pedido:</b> ${sale.orderNumber || saleId}</div>
-                                                                                <div><b>Fecha:</b> ${new Date(sale.createdAt).toLocaleString()}</div>
-                                                                                <div><b>Cliente:</b> ${sale.customerName || 'Consumidor Final'}</div>
-                                                                                <div class="divider"></div>
-                                                                                <table>
-                                                                                    <thead>
-                                                                                        <tr class="bold">
-                                                                                            <td>Cant</td>
-                                                                                            <td>Detalle</td>
-                                                                                            <td class="text-right">Total</td>
-                                                                                        </tr>
-                                                                                    </thead>
-                                                                                    <tbody>
-                                                                                        ${(sale.items || []).map((item: any) => `
-                                                                                            <tr>
-                                                                                                <td>${item.quantity}</td>
-                                                                                                <td>${item.name}</td>
-                                                                                                <td class="text-right">$${((item.price || 0) * item.quantity).toFixed(2)}</td>
-                                                                                            </tr>
-                                                                                        `).join('')}
-                                                                                    </tbody>
-                                                                                </table>
-                                                                                <div class="divider"></div>
-                                                                                <div class="text-right">Subtotal 15%: $${totals.subtotal15.toFixed(2)}</div>
-                                                                                <div class="text-right">IVA 15%: $${totals.iva15.toFixed(2)}</div>
-                                                                                <div class="text-right">Subtotal 0%: $${totals.subtotal0.toFixed(2)}</div>
-                                                                                <div class="text-right bold" style="font-size: 14px;">TOTAL: $${totals.total.toFixed(2)}</div>
-                                                                                <div class="divider"></div>
-                                                                                <div class="center bold">¡GRACIAS POR SU VISITA!</div>
-                                                                            </body>
-                                                                            </html>
-                                                                        `);
-                                                                        printWindow.document.close();
-                                                                    }
-                                                                }}
+                                                                onClick={() => printSaleTicket(sale)}
                                                                 className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 border border-purple-100 dark:border-purple-800/30"
                                                             >
                                                                 🖨️ Ticket
@@ -1480,7 +1796,7 @@ const BillingHistory: React.FC = () => {
                 {/* ═══════════════════════════════════════════════════════════════════
                     PAGINACIÓN
                 ═══════════════════════════════════════════════════════════════════ */}
-                <div className="px-6 py-8 bg-gray-50/50 dark:bg-dark-750/50 border-t border-gray-100 dark:border-dark-700 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="px-4 py-5 md:px-6 md:py-8 bg-gray-50/50 dark:bg-dark-750/50 border-t border-gray-100 dark:border-dark-700 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest order-2 md:order-1">
                         Mostrando {
                             activeTab === 'invoices'

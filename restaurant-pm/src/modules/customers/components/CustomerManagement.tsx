@@ -3,6 +3,7 @@
  * @description Componente principal para la gestión de clientes y reservas.
  */
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Customer, Reservation } from '../types/customer.types';
 import { SetState } from '../../../types';
 import { PlusIcon, EditIcon, TrashIcon, SearchIcon, ChevronLeftIcon, UsersIcon, ClipboardListIcon } from '../../../components/ui/Icons';
@@ -34,8 +35,21 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
     // Confirmations
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null; type: 'customer' | 'reservation' }>({ isOpen: false, id: null, type: 'customer' });
     
-    // UI State
-    const [activeTab, setActiveTab] = useState<'customers' | 'reservations'>('customers');
+    // UI State — pestaña derivada de la URL (/admin/customers/:tab).
+    // URLs: /admin/customers/clientes | /admin/customers/reservas
+    const { tab: tabSlug } = useParams<{ tab?: string }>();
+    const navigate = useNavigate();
+    const activeTab: 'customers' | 'reservations' = tabSlug === 'reservas' ? 'reservations' : 'customers';
+    const setActiveTab = (tab: 'customers' | 'reservations') =>
+        navigate(`/admin/customers/${tab === 'reservations' ? 'reservas' : 'clientes'}`);
+
+    // Normalizar slugs inválidos (ej. /admin/customers/xyz) a "clientes"
+    useEffect(() => {
+        if (tabSlug && tabSlug !== 'clientes' && tabSlug !== 'reservas') {
+            navigate('/admin/customers/clientes', { replace: true });
+        }
+    }, [tabSlug, navigate]);
+
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const PAGE_SIZE = 10;

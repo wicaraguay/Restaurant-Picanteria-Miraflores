@@ -4,6 +4,7 @@
  * Permite visualizar, crear, editar, eliminar y reordenar categorías.
  */
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Category, ProductType } from '../types/category.types';
 import { PlusIcon, EditIcon, TrashIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from '../../../components/ui/Icons';
 import { categoryService } from '../services/categoryService';
@@ -13,13 +14,41 @@ import ConfirmModal from '../../../components/ui/ConfirmModal';
 import Card from '../../../components/ui/Card';
 import { CategoryFormModal } from './CategoryFormModal';
 
+type FilterType = ProductType | 'all';
+
+// Mapeo entre slugs de URL y filtros internos.
+// URLs: /admin/categories/todas | /admin/categories/menu | /admin/categories/retail
+const FILTER_BY_SLUG: Record<string, FilterType> = {
+    'todas': 'all',
+    'menu': 'menu',
+    'retail': 'retail',
+};
+const SLUG_BY_FILTER: Record<string, string> = {
+    all: 'todas',
+    menu: 'menu',
+    retail: 'retail',
+};
+
 const CategoryManagement: React.FC = () => {
     const [categories, setCategories] = useState<Category[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
-    const [filterType, setFilterType] = useState<ProductType | 'all'>('all');
     const [isLoading, setIsLoading] = useState(true);
+
+    // Filtro derivado de la URL (/admin/categories/:tab) — permite enlaces
+    // directos a cada subsección y navegación con el botón atrás.
+    const { tab: tabSlug } = useParams<{ tab?: string }>();
+    const navigate = useNavigate();
+    const filterType: FilterType = FILTER_BY_SLUG[tabSlug ?? ''] ?? 'all';
+    const setFilterType = (filter: FilterType) => navigate(`/admin/categories/${SLUG_BY_FILTER[filter]}`);
+
+    // Normalizar slugs inválidos (ej. /admin/categories/xyz) a "todas"
+    useEffect(() => {
+        if (tabSlug && !FILTER_BY_SLUG[tabSlug]) {
+            navigate(`/admin/categories/${SLUG_BY_FILTER.all}`, { replace: true });
+        }
+    }, [tabSlug, navigate]);
 
     useEffect(() => {
         loadCategories();
