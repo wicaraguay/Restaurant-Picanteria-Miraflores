@@ -78,6 +78,9 @@ services:
       - TEST_EMAIL=${TEST_EMAIL}
       - BUSINESS_LOGO_URL=${BUSINESS_LOGO_URL}
       - FRONTEND_URL=${FRONTEND_URL}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:admin@picanteriamiraflores.com}
       - BACKUP_PATH=/app/backups
     ports:
       - "3000:3000"

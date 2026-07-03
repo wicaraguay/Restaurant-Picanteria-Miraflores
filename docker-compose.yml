@@ -67,6 +67,9 @@ services:
       - WHATSAPP_SESSION_PATH=/app/whatsapp-session
       - BACKUP_PATH=/app/backups
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:admin@picanteriamiraflores.com}
     volumes:
       - whatsapp_session:/app/whatsapp-session
       - backups_data:/app/backups

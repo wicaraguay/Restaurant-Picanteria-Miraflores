@@ -142,6 +142,7 @@ import whatsappApiRoutes from './infrastructure/web/routes/whatsappApiRoutes';
 import exportRoutes from './interfaces/http/routes/exportRoutes';
 import auditRoutes from './infrastructure/web/routes/auditRoutes';
 import backupRoutes from './infrastructure/web/routes/backupRoutes';
+import pushRoutes from './infrastructure/web/routes/pushRoutes';
 import { setupSwagger } from './infrastructure/http/swagger';
 
 // Setup Swagger/OpenAPI Documentation
@@ -164,6 +165,7 @@ app.use('/api/whatsapp', whatsappApiRoutes); // WhatsApp API para frontend
 app.use('/api/export', exportRoutes); // Exportación de datos (Excel/CSV)
 app.use('/api/audit', auditRoutes); // Logs de auditoría (solo admin)
 app.use('/api/backups', backupRoutes); // Sistema de respaldos de base de datos
+app.use('/api/push', pushRoutes); // Notificaciones push (Web Push) para el personal
 
 // Metrics endpoint (Prometheus)
 app.use('/metrics', metricsRoutes);
@@ -229,15 +231,31 @@ const startServer = async () => {
                     }
                 });
 
-                // Alerta "cliente escribiendo": retransmitir en vivo vía WebSocket
-                // Y persistir en BD para que se conserve aunque nadie tenga el admin abierto
+                // Alerta "cliente escribiendo":
+                // 1. Retransmitir en vivo vía WebSocket (app abierta en primer plano)
+                // 2. Persistir en BD (se conserva hasta que la marquen atendida)
+                // 3. Notificación PUSH a los dispositivos suscritos (app cerrada/background)
                 chatbot.on('customer_message', async (data: any) => {
                     whatsAppSocketManager.broadcast('customer_message', data);
+
                     try {
                         const { getWhatsAppAlertRepository } = await import('./infrastructure/repositories/WhatsAppAlertRepository');
                         await getWhatsAppAlertRepository().create(data);
                     } catch (error) {
                         logger.error('[WhatsApp] Error persisting alert', { error });
+                    }
+
+                    try {
+                        const { getPushNotificationService } = await import('./infrastructure/services/PushNotificationService');
+                        const who = data.name ? `${data.name} (+${data.phone})` : `+${data.phone}`;
+                        await getPushNotificationService().sendToAll({
+                            title: '💬 Cliente escribiendo por WhatsApp',
+                            body: `${who}${data.text ? `: "${data.text.slice(0, 90)}"` : ''}`,
+                            url: '/admin',
+                            tag: 'whatsapp-alert'
+                        });
+                    } catch (error) {
+                        logger.error('[WhatsApp] Error sending push', { error });
                     }
                 });
 

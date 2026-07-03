@@ -57,6 +57,8 @@ export default defineConfig(({ mode }) => {
           ]
         },
         workbox: {
+          // Manejador de notificaciones Web Push (alertas de WhatsApp)
+          importScripts: ['push-sw.js'],
           // SPA: cualquier navegación cae en index.html (React Router resuelve)
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//, /^\/ws\//],
