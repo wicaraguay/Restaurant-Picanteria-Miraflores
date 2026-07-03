@@ -27,7 +27,9 @@ export default defineConfig(({ mode }) => {
           scope: '/admin',
           display: 'standalone',
           orientation: 'portrait',
-          theme_color: '#1E40AF',
+          // Barra de estado del mismo color que el fondo de la app (se funden).
+          // El modo oscuro la ajusta dinámicamente vía useTheme.
+          theme_color: '#ffffff',
           background_color: '#ffffff',
           icons: [
             { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
