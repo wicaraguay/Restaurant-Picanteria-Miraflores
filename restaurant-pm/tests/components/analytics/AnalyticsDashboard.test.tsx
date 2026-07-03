@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { AnalyticsDashboard } from '@/components/analytics/AnalyticsDashboard';
 import { analyticsService } from '@/services/AnalyticsService';
-import { useRestaurantConfig } from '@/contexts/RestaurantConfigContext';
 
 // Mock the AnalyticsService
 vi.mock('@/services/AnalyticsService', () => ({
@@ -10,15 +9,6 @@ vi.mock('@/services/AnalyticsService', () => ({
         getDashboardAnalysis: vi.fn()
     }
 }));
-
-// Mock Recharts to avoid issues with ResponsiveContainer in JSDOM
-vi.mock('recharts', async () => {
-    const Actual = await vi.importActual('recharts');
-    return {
-        ...Actual,
-        ResponsiveContainer: ({ children }: any) => <div>{children}</div>
-    };
-});
 
 const mockStats = {
     totalRevenue: 1500.50,
@@ -69,15 +59,27 @@ describe('AnalyticsDashboard Component', () => {
         });
     });
 
-    it('debe mostrar los títulos de los gráficos', async () => {
+    it('debe mostrar las secciones del resumen', async () => {
         render(<AnalyticsDashboard />);
-        
+
         await waitFor(() => {
-            expect(screen.getByText(/Tendencia de Ingresos/i)).toBeDefined();
-            expect(screen.getByText(/Productos Estrella/i)).toBeDefined();
+            expect(screen.getByText(/Ingresos del Período/i)).toBeDefined();
+            expect(screen.getByText(/Productos Más Vendidos/i)).toBeDefined();
             expect(screen.getByText(/Ventas por Categoría/i)).toBeDefined();
-            expect(screen.getByText(/Actividad de Clientes/i)).toBeDefined();
             expect(screen.getByText(/Ventas por Tipo de Comprobante/i)).toBeDefined();
+            // La actividad por hora ahora se resume en el KPI "Hora Pico"
+            expect(screen.getByText(/Hora Pico/i)).toBeDefined();
+            expect(screen.getByText('13:00')).toBeDefined();
+        });
+    });
+
+    it('debe listar los productos más vendidos con sus cantidades', async () => {
+        render(<AnalyticsDashboard />);
+
+        await waitFor(() => {
+            expect(screen.getByText('CEVICHE MIXTO')).toBeDefined();
+            expect(screen.getByText('15 uds')).toBeDefined();
+            expect(screen.getByText('ARROZ CON MARISCOS')).toBeDefined();
         });
     });
 

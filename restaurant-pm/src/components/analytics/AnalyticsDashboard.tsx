@@ -1,31 +1,51 @@
+/**
+ * AnalyticsDashboard — versión simple y legible.
+ * Sin librerías de gráficas: números primero, barras CSS ligeras como apoyo visual.
+ */
 import React, { useEffect, useState } from 'react';
-import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    AreaChart, Area, PieChart, Pie, Cell, TooltipProps
-} from 'recharts';
 import { analyticsService, DashboardStats } from '../../services/AnalyticsService';
 import { RefreshCcwIcon as RefreshIcon } from '../ui/Icons';
 
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+const formatCurrency = (val: number) => `$${val.toFixed(2)}`;
 
-const CustomTooltip = ({ active, payload, label, formatter }: any) => {
-    if (active && payload && payload.length) {
-        return (
-            <div className="glass-panel p-4 border border-white/20 shadow-2xl backdrop-blur-md">
-                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1">{label}</p>
-                {payload.map((entry: any, index: number) => (
-                    <div key={index} className="flex items-center space-x-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
-                        <p className="text-sm font-bold text-gray-800 dark:text-white">
-                            {entry.name}: <span className="text-primary-500">{formatter ? formatter(entry.value) : entry.value}</span>
-                        </p>
-                    </div>
-                ))}
-            </div>
-        );
-    }
-    return null;
-};
+/** Fila con etiqueta, barra de progreso y valor — la base de todas las secciones */
+const StatRow: React.FC<{
+    label: string;
+    value: string;
+    pct: number; // 0-100
+    color: string; // tailwind bg class
+    rank?: number;
+}> = ({ label, value, pct, color, rank }) => (
+    <div className="py-2">
+        <div className="flex justify-between items-center gap-3 mb-1.5">
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-200 truncate">
+                {rank !== undefined && (
+                    <span className="inline-flex w-5 h-5 mr-2 rounded-md bg-gray-100 dark:bg-dark-700 text-gray-500 dark:text-gray-400 text-[10px] font-black items-center justify-center align-middle">
+                        {rank}
+                    </span>
+                )}
+                {label}
+            </span>
+            <span className="text-sm font-black text-gray-900 dark:text-white flex-shrink-0">{value}</span>
+        </div>
+        <div className="h-1.5 bg-gray-100 dark:bg-dark-700 rounded-full overflow-hidden">
+            <div
+                className={`h-full rounded-full transition-all duration-700 ${color}`}
+                style={{ width: `${Math.max(2, Math.min(100, pct))}%` }}
+            />
+        </div>
+    </div>
+);
+
+/** Tarjeta de sección con título uniforme */
+const Section: React.FC<{ title: string; children: React.ReactNode; empty?: boolean }> = ({ title, children, empty }) => (
+    <div className="glass-panel p-6">
+        <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4">{title}</h3>
+        {empty ? (
+            <p className="text-sm text-gray-400 text-center py-6">Sin datos en este período.</p>
+        ) : children}
+    </div>
+);
 
 export const AnalyticsDashboard: React.FC = () => {
     const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -51,206 +71,166 @@ export const AnalyticsDashboard: React.FC = () => {
     if (loading && !stats) return <div className="p-8 text-center text-gray-500 animate-pulse">Cargando análisis inteligente...</div>;
     if (!stats) return <div className="p-8 text-center text-gray-500">No hay datos de análisis disponibles</div>;
 
-    const formatCurrency = (val: number) => `$${val.toFixed(2)}`;
+    // ── Datos derivados (cálculo simple, sin gráficas) ──────────────────────
+    const peakHour = (stats.activityByHour || []).reduce(
+        (best, h) => (h.count > best.count ? h : best),
+        { hour: -1, count: 0 }
+    );
+
+    const topItems = (stats.topSellingItems || []).slice(0, 6);
+    const maxItemQty = Math.max(1, ...topItems.map(i => i.quantity));
+
+    const categories = stats.salesByCategory || [];
+    const categoryTotal = Math.max(0.01, categories.reduce((s, c) => s + c.total, 0));
+
+    const billingTypes = stats.salesByBillingType || [];
+    const billingTotal = Math.max(0.01, billingTypes.reduce((s, b) => s + b.total, 0));
+
+    const revenueDays = stats.revenueByDay || [];
+    const maxDayRevenue = Math.max(1, ...revenueDays.map(d => d.total));
+    // Mostrar como máximo ~10 etiquetas bajo las barras para que respire
+    const labelEvery = Math.max(1, Math.ceil(revenueDays.length / 10));
+    const formatDayLabel = (str: string) => {
+        const parts = str.split('-');
+        const d = parts.length === 2
+            ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1)
+            : new Date(str);
+        return range === 'year'
+            ? d.toLocaleDateString(undefined, { month: 'short' })
+            : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    };
+
+    const kpis = [
+        { label: 'Ventas Totales', value: formatCurrency(stats.totalRevenue), accent: 'text-blue-600 dark:text-blue-400' },
+        { label: 'Pedidos', value: stats.totalOrders.toString(), accent: 'text-green-600 dark:text-green-400' },
+        { label: 'Ticket Promedio', value: formatCurrency(stats.averageTicket), accent: 'text-purple-600 dark:text-purple-400' },
+        {
+            label: 'Hora Pico',
+            value: peakHour.hour >= 0 ? `${peakHour.hour}:00` : '—',
+            sub: peakHour.hour >= 0 ? `${peakHour.count} pedidos` : undefined,
+            accent: 'text-orange-600 dark:text-orange-400'
+        },
+    ];
 
     return (
-        <div className="space-y-8 animate-fadeIn">
-            {/* Header / Filter */}
-            <div className="flex flex-col sm:flex-row justify-between items-center glass-panel p-6 shadow-lg">
-                <h2 className="text-2xl font-black text-gray-800 dark:text-white tracking-tight mb-4 sm:mb-0">
-                    Análisis de Datos <span className="text-primary-500">Inteligente</span>
+        <div className="space-y-6 animate-fadeIn">
+            {/* Header / Filtro de rango */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 glass-panel p-4 sm:p-5">
+                <h2 className="text-lg sm:text-xl font-black text-gray-800 dark:text-white tracking-tight">
+                    Resumen del Negocio
                 </h2>
-                <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-2 bg-gray-100 dark:bg-dark-700/50 p-1 rounded-xl">
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 bg-gray-100 dark:bg-dark-700/50 p-1 rounded-xl">
                         {(['today', 'week', 'month', 'year'] as const).map((r) => (
                             <button
                                 key={r}
                                 onClick={() => setRange(r)}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                                    range === r 
-                                    ? 'bg-white dark:bg-dark-600 shadow-md text-primary-600 dark:text-primary-400 scale-105' 
-                                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    range === r
+                                        ? 'bg-white dark:bg-dark-600 shadow-md text-primary-600 dark:text-primary-400'
+                                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                                 }`}
                             >
                                 {r === 'today' ? 'Hoy' : r === 'week' ? 'Semana' : r === 'month' ? 'Mes' : 'Año'}
                             </button>
                         ))}
                     </div>
-                    <button onClick={fetchStats} className="p-3 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-all shadow-lg shadow-primary-500/30 active:scale-95" title="Actualizar datos">
-                        <RefreshIcon className={loading ? 'animate-spin' : ''} />
+                    <button
+                        onClick={fetchStats}
+                        className="p-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-all shadow-lg shadow-primary-500/20 active:scale-95"
+                        title="Actualizar datos"
+                    >
+                        <RefreshIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                    { label: 'Ventas Totales', value: formatCurrency(stats.totalRevenue), color: 'blue', icon: '💰' },
-                    { label: 'Pedidos Totales', value: stats.totalOrders.toString(), color: 'green', icon: '📦' },
-                    { label: 'Ticket Promedio', value: formatCurrency(stats.averageTicket), color: 'purple', icon: '📊' }
-                ].map((kpi, idx) => (
-                    <div key={idx} className="glass-panel p-8 relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
-                        <div className={`absolute -right-4 -top-4 w-24 h-24 bg-${kpi.color}-500/10 rounded-full blur-2xl group-hover:bg-${kpi.color}-500/20 transition-all`}></div>
-                        <div className="relative z-10">
-                            <div className="flex items-center space-x-2 mb-4">
-                                <span className="text-2xl">{kpi.icon}</span>
-                                <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">{kpi.label}</p>
-                            </div>
-                            <p className="text-4xl font-black text-gray-800 dark:text-white tracking-tighter">{kpi.value}</p>
-                        </div>
+            {/* KPIs — los números que importan, sin adornos */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {kpis.map((kpi, idx) => (
+                    <div key={idx} className="glass-panel p-4 sm:p-6">
+                        <p className="text-[10px] sm:text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">
+                            {kpi.label}
+                        </p>
+                        <p className={`text-2xl sm:text-3xl font-black tracking-tighter ${kpi.accent}`}>{kpi.value}</p>
+                        {kpi.sub && (
+                            <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">{kpi.sub}</p>
+                        )}
                     </div>
                 ))}
             </div>
 
-            {/* Main Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Revenue Trend - Area Chart with Gradients */}
-                <div className="glass-panel p-8 shadow-xl">
-                    <div className="flex justify-between items-center mb-8">
-                        <h3 className="text-xl font-black text-gray-800 dark:text-white tracking-tight">Tendencia de Ingresos</h3>
-                        <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase rounded-full">Real-time</span>
+            {/* Ingresos del período — barras CSS simples */}
+            <Section title="Ingresos del Período" empty={revenueDays.length === 0}>
+                <div className="flex items-end gap-1 h-36">
+                    {revenueDays.map((day, idx) => (
+                        <div
+                            key={day.date}
+                            className="flex-1 flex flex-col items-center justify-end h-full group"
+                            title={`${formatDayLabel(day.date)}: ${formatCurrency(day.total)}`}
+                        >
+                            {revenueDays.length <= 8 && (
+                                <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 mb-1">
+                                    {formatCurrency(day.total)}
+                                </span>
+                            )}
+                            <div
+                                className="w-full max-w-[48px] bg-blue-500 dark:bg-blue-500/80 rounded-t-lg transition-all duration-700 group-hover:bg-blue-600 min-h-[3px]"
+                                style={{ height: `${Math.max(3, (day.total / maxDayRevenue) * 100)}%` }}
+                            />
+                            <span className={`text-[9px] font-bold text-gray-400 mt-1.5 whitespace-nowrap ${idx % labelEvery === 0 ? '' : 'invisible'}`}>
+                                {formatDayLabel(day.date)}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </Section>
+
+            {/* Productos + desgloses */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <Section title="Productos Más Vendidos" empty={topItems.length === 0}>
+                    <div className="divide-y divide-gray-50 dark:divide-dark-700/50">
+                        {topItems.map((item, idx) => (
+                            <StatRow
+                                key={item.name}
+                                rank={idx + 1}
+                                label={item.name}
+                                value={`${item.quantity} uds`}
+                                pct={(item.quantity / maxItemQty) * 100}
+                                color="bg-green-500"
+                            />
+                        ))}
                     </div>
-                    <div className="h-[350px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={stats.revenueByDay}>
-                                <defs>
-                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.05} />
-                                <XAxis dataKey="date" stroke="#9CA3AF" fontSize={10} tickFormatter={(str) => {
-                                    // Handle both YYYY-MM-DD and YYYY-MM
-                                    const parts = str.split('-');
-                                    const d = parts.length === 2 
-                                        ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1)
-                                        : new Date(str);
-                                    
-                                    return range === 'year' 
-                                        ? d.toLocaleDateString(undefined, { month: 'short' })
-                                        : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-                                }} />
-                                <YAxis stroke="#9CA3AF" fontSize={10} tickFormatter={(val) => `$${val}`} />
-                                <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-                                <Area 
-                                    type="monotone" 
-                                    dataKey="total" 
-                                    name="Ingresos"
-                                    stroke="#3B82F6" 
-                                    strokeWidth={4} 
-                                    fillOpacity={1} 
-                                    fill="url(#colorRevenue)" 
-                                    animationDuration={1500}
+                </Section>
+
+                <div className="space-y-4 sm:space-y-6">
+                    <Section title="Ventas por Categoría" empty={categories.length === 0}>
+                        <div className="divide-y divide-gray-50 dark:divide-dark-700/50">
+                            {categories.map((cat) => (
+                                <StatRow
+                                    key={cat.category}
+                                    label={cat.category}
+                                    value={`${formatCurrency(cat.total)} · ${Math.round((cat.total / categoryTotal) * 100)}%`}
+                                    pct={(cat.total / categoryTotal) * 100}
+                                    color="bg-purple-500"
                                 />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
+                            ))}
+                        </div>
+                    </Section>
 
-                {/* Top Items - Horizontal Bar Chart */}
-                <div className="glass-panel p-8 shadow-xl">
-                    <h3 className="text-xl font-black text-gray-800 dark:text-white tracking-tight mb-8">Productos Estrella</h3>
-                    <div className="h-[350px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.topSellingItems} layout="vertical" margin={{ left: 40 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#374151" opacity={0.05} />
-                                <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" stroke="#9CA3AF" fontSize={11} width={120} />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
-                                <Bar 
-                                    dataKey="quantity" 
-                                    name="Cantidad"
-                                    fill="#10B981" 
-                                    radius={[0, 10, 10, 0]} 
-                                    barSize={24}
-                                    animationDuration={1500}
-                                    className="filter drop-shadow-lg"
+                    <Section title="Ventas por Tipo de Comprobante" empty={billingTypes.length === 0}>
+                        <div className="divide-y divide-gray-50 dark:divide-dark-700/50">
+                            {billingTypes.map((bt) => (
+                                <StatRow
+                                    key={bt.type}
+                                    label={bt.type}
+                                    value={`${formatCurrency(bt.total)} · ${Math.round((bt.total / billingTotal) * 100)}%`}
+                                    pct={(bt.total / billingTotal) * 100}
+                                    color="bg-orange-500"
                                 />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            </div>
-
-            {/* Secondary Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Sales by Category - Donut Chart */}
-                <div className="glass-panel p-8 shadow-xl">
-                    <h3 className="text-xl font-black text-gray-800 dark:text-white tracking-tight mb-8">Ventas por Categoría</h3>
-                    <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={stats.salesByCategory}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={70}
-                                    outerRadius={100}
-                                    paddingAngle={8}
-                                    dataKey="total"
-                                    nameKey="category"
-                                    animationDuration={2000}
-                                >
-                                    {stats.salesByCategory.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} className="outline-none hover:opacity-80 transition-opacity" />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                                <Legend verticalAlign="bottom" height={36}/>
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Hourly Activity - Bar Chart with Peak Indicator */}
-                <div className="glass-panel p-8 shadow-xl">
-                    <h3 className="text-xl font-black text-gray-800 dark:text-white tracking-tight mb-8">Actividad de Clientes</h3>
-                    <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.activityByHour}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.05} />
-                                <XAxis dataKey="hour" stroke="#9CA3AF" fontSize={10} tickFormatter={(h) => `${h}h`} />
-                                <YAxis stroke="#9CA3AF" fontSize={10} />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
-                                <Bar 
-                                    dataKey="count" 
-                                    name="Pedidos"
-                                    fill="#F59E0B" 
-                                    radius={[6, 6, 0, 0]}
-                                    animationDuration={1500}
-                                />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Sales by Billing Type - Donut Chart */}
-                <div className="glass-panel p-8 shadow-xl">
-                    <h3 className="text-xl font-black text-gray-800 dark:text-white tracking-tight mb-8">Ventas por Tipo de Comprobante</h3>
-                    <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={stats.salesByBillingType}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={70}
-                                    outerRadius={100}
-                                    paddingAngle={8}
-                                    dataKey="total"
-                                    nameKey="type"
-                                    animationDuration={2000}
-                                >
-                                    {stats.salesByBillingType.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} className="outline-none hover:opacity-80 transition-opacity" />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                                <Legend verticalAlign="bottom" height={36}/>
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
+                            ))}
+                        </div>
+                    </Section>
                 </div>
             </div>
         </div>
