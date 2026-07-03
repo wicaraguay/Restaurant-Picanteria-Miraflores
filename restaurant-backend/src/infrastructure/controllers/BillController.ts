@@ -227,7 +227,8 @@ export class BillController {
             detalles,
             info: {
                 estab, ptoEmi, secuencial,
-                fechaEmision: billData.date,
+                // Formato SRI (dd/mm/yyyy en zona Ecuador) — antes salía el ISO crudo en el XML descargado
+                fechaEmision: this.billingService.formatDateToSRI(billData.date),
                 razonSocialComprador: billData.customerName,
                 identificacionComprador: billData.customerIdentification,
                 tipoIdentificacionComprador: this.billingService.getIdentificacionType(billData.customerIdentification),

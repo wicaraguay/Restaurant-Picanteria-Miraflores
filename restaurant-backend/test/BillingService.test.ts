@@ -78,6 +78,25 @@ describe('BillingService', () => {
         });
     });
 
+    describe('formatDateToSRI', () => {
+        // Regresión SRI error 52 "ERROR EN DIFERENCIAS": las fechas deben formatearse
+        // en zona horaria de Ecuador, no la del servidor (UTC en el VPS).
+        it('should format ISO date using Ecuador timezone, not server timezone', () => {
+            // 2026-07-03 00:36 UTC = 2026-07-02 19:36 en Ecuador (UTC-5)
+            expect(billingService.formatDateToSRI('2026-07-03T00:36:41.571Z')).toBe('02/07/2026');
+        });
+
+        it('should keep the same date when time is midday in Ecuador', () => {
+            // 2026-07-03 14:00 UTC = 2026-07-03 09:00 en Ecuador
+            expect(billingService.formatDateToSRI('2026-07-03T14:00:00.000Z')).toBe('03/07/2026');
+        });
+
+        it('should pass through dates already in SRI format (dd/mm/yyyy)', () => {
+            // new Date('02/07/2026') lo interpretaría como 7 de febrero (formato US)
+            expect(billingService.formatDateToSRI('02/07/2026')).toBe('02/07/2026');
+        });
+    });
+
     describe('validateEmail', () => {
         it('should not throw for valid emails', () => {
             expect(() => billingService.validateEmail('cliente@gmail.com')).not.toThrow();

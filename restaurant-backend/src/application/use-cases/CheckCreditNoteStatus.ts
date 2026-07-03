@@ -210,10 +210,12 @@ export class CheckCreditNoteStatus {
                 ptoEmi,
                 secuencial,
                 dirMatriz: config.fiscalAddress || config.address || process.env.DIR_MATRIZ,
-                fechaEmision: entity.date.split('T')[0].split('-').reverse().join('/'),
+                // Fechas en zona horaria Ecuador (formatDateToSRI) — derivarlas de la porción
+                // UTC del ISO desplazaba +1 día para emisiones posteriores a las 19:00 Ecuador
+                fechaEmision: this.billingService.formatDateToSRI(entity.date),
                 codDocModificado: '01',
                 numDocModificado: originalBill.documentNumber,
-                fechaEmisionDocSustento: originalBill.createdAt ? new Date(originalBill.createdAt).toLocaleDateString('es-EC') : '',
+                fechaEmisionDocSustento: this.billingService.formatDateToSRI(originalBill.date),
                 tipoIdentificacionComprador: originalBill.customerIdentification.length === 13 ? '04' : '05',
                 razonSocialComprador: entity.customerName,
                 identificacionComprador: entity.customerIdentification,

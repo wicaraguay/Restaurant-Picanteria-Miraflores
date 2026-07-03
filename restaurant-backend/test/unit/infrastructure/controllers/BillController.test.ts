@@ -39,7 +39,8 @@ describe('BillController - generateXml', () => {
             getLogoUrl: vi.fn().mockReturnValue('logo.png'),
             getTaxCode: vi.fn().mockReturnValue('4'),
             getIdentificacionType: vi.fn().mockReturnValue('05'),
-            getPaymentMethodCode: vi.fn().mockReturnValue('01')
+            getPaymentMethodCode: vi.fn().mockReturnValue('01'),
+            formatDateToSRI: vi.fn().mockReturnValue('21/03/2024')
         };
 
         billController = new BillController(

@@ -272,14 +272,28 @@ export class BillingService {
      * Formats a date string or object to SRI DD/MM/YYYY format
      */
     public formatDateToSRI(date: string | Date): string {
-        const d = date instanceof Date ? date : new Date(date);
-
-        if (isNaN(d.getTime())) {
-            const now = new Date();
-            return `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+        // Si ya está en formato SRI (dd/mm/yyyy), devolver tal cual.
+        // new Date('02/07/2026') lo interpretaría como mes/día (formato US) y corrompería la fecha.
+        if (typeof date === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+            return date;
         }
 
-        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+        const d = date instanceof Date ? date : new Date(date);
+        const validDate = isNaN(d.getTime()) ? new Date() : d;
+
+        // CRITICAL: Formatear en zona horaria de Ecuador, NO la del servidor.
+        // El VPS corre en UTC: una factura emitida a las 19:36 de Ecuador (00:36 UTC del día
+        // siguiente) se formateaba con la fecha UTC (+1 día). En notas de crédito eso producía
+        // fechaEmisionDocSustento distinta a la fecha autorizada de la factura → SRI error 52
+        // "ERROR EN DIFERENCIAS".
+        const options: Intl.DateTimeFormatOptions = { timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const parts = new Intl.DateTimeFormat('es-EC', options).formatToParts(validDate);
+
+        const day = parts.find(p => p.type === 'day')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        const year = parts.find(p => p.type === 'year')?.value;
+
+        return `${day}/${month}/${year}`;
     }
 
     /**

@@ -85,8 +85,8 @@ export class GetCreditNoteDocument {
         const total = subtotal + totalImpuestos;
 
         const [estab, ptoEmi, secuencial] = entity.documentNumber.split('-');
-        // entity.date es ISO (yyyy-mm-dd...) → SRI usa dd/mm/yyyy
-        const fechaEmision = entity.date.split('T')[0].split('-').reverse().join('/');
+        // Fecha en zona horaria Ecuador — coincide con la embebida en la clave de acceso
+        const fechaEmision = this.billingService.formatDateToSRI(entity.date);
 
         logger.debug(`[GetCreditNoteDocument] Rebuilding NC ${entity.documentNumber} (taxRate ${taxRate}%)`);
 
