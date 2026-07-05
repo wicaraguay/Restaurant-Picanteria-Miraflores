@@ -75,7 +75,12 @@ export default defineConfig(({ mode }) => {
               // Tailwind CDN: cachear para que el estilo cargue instantáneo
               urlPattern: /^https:\/\/cdn\.tailwindcss\.com\/.*/i,
               handler: 'StaleWhileRevalidate',
-              options: { cacheName: 'cdn-cache' }
+              options: {
+                cacheName: 'cdn-cache',
+                // CRÍTICO cross-origin: los <script> de otro dominio dan respuestas
+                // "opacas" (status 0) que Workbox NO cachea sin esta autorización
+                cacheableResponse: { statuses: [0, 200] }
+              }
             },
             {
               // Fuentes de Google: cambian casi nunca
@@ -83,16 +88,32 @@ export default defineConfig(({ mode }) => {
               handler: 'CacheFirst',
               options: {
                 cacheName: 'fonts-cache',
+                cacheableResponse: { statuses: [0, 200] },
                 expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 }
               }
             },
             {
-              // Imágenes (fotos del menú, logos): cache con expiración semanal
+              // Imágenes de Cloudinary (fotos del menú): las URLs son INMUTABLES
+              // (llevan versión en la ruta) → cache agresivo de 30 días.
+              // cacheableResponse [0,200] es OBLIGATORIO: los <img> cross-origin
+              // producen respuestas opacas que Workbox descarta por defecto —
+              // sin esto la regla existía pero no cacheaba NADA.
+              urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'cloudinary-images',
+                cacheableResponse: { statuses: [0, 200] },
+                expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30, purgeOnQuotaError: true }
+              }
+            },
+            {
+              // Resto de imágenes (otros orígenes): cache semanal
               urlPattern: ({ request }: { request: Request }) => request.destination === 'image',
               handler: 'CacheFirst',
               options: {
                 cacheName: 'images-cache',
-                expiration: { maxEntries: 150, maxAgeSeconds: 60 * 60 * 24 * 7 }
+                cacheableResponse: { statuses: [0, 200] },
+                expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7, purgeOnQuotaError: true }
               }
             }
           ]
