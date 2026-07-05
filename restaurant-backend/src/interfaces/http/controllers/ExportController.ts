@@ -37,7 +37,7 @@ interface TaxBreakdown {
  * Calcula base 0%, base gravada e IVA desde los ítems del documento.
  * Los precios del sistema INCLUYEN IVA (total-driven): la base se extrae del total.
  */
-function computeBreakdown(items: any[]): TaxBreakdown {
+export function computeBreakdown(items: any[]): TaxBreakdown {
     let base0 = 0, base15 = 0, iva = 0;
 
     for (const item of items || []) {
@@ -59,15 +59,18 @@ function computeBreakdown(items: any[]): TaxBreakdown {
 }
 
 /** Mes de un documento en zona horaria Ecuador ('YYYY-MM') — el día fiscal es el ecuatoriano */
-function monthKeyEcuador(dateStr: string | Date): string {
+export function monthKeyEcuador(dateStr: string | Date): string {
     const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
     if (isNaN(d.getTime())) return '';
+    // GOTCHA Intl: si se pide solo año+mes, el 'month: 2-digit' se IGNORA y sale
+    // sin cero ('2026-7') — incluir day fuerza el patrón completo con padding.
+    // padStart de respaldo por si algún runtime/locale igual lo devuelve sin cero.
     const parts = new Intl.DateTimeFormat('es-EC', {
-        timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit'
+        timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit'
     }).formatToParts(d);
-    const y = parts.find(p => p.type === 'year')?.value;
-    const m = parts.find(p => p.type === 'month')?.value;
-    return `${y}-${m}`;
+    const y = parts.find(p => p.type === 'year')?.value || '';
+    const m = parts.find(p => p.type === 'month')?.value || '';
+    return `${y}-${m.padStart(2, '0')}`;
 }
 
 /** Fecha corta en zona Ecuador (dd/mm/yyyy) */
