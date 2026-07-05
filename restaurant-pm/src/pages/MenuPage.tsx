@@ -403,12 +403,12 @@ const MenuPage: React.FC = () => {
                                     {item.category}
                                 </span>
 
-                                {/* Precio */}
+                                {/* Precio — mismo valor y formato que el menú (2 decimales) */}
                                 <div
-                                    className="absolute top-4 right-4 w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-xl shadow-lg"
+                                    className="absolute top-4 right-4 h-16 min-w-16 px-3 rounded-2xl flex items-center justify-center font-bold text-lg whitespace-nowrap shadow-lg"
                                     style={{ backgroundColor: '#F57C00', color: '#FFF8E1', fontFamily: 'Fredoka, sans-serif' }}
                                 >
-                                    ${item.price.toFixed(0)}
+                                    ${item.price.toFixed(2)}
                                 </div>
                             </div>
 
