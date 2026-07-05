@@ -29,6 +29,8 @@ interface BillingModalProps {
     onProcess: () => void;
     onManualComplete: () => void;
     manualCompleteLabel?: string;
+    /** Oculta el botón de "cerrar sin facturar" (ej. al facturar una venta que YA es sin factura) */
+    hideManualComplete?: boolean;
 }
 
 const inputClass = "w-full rounded-2xl border border-gray-200 bg-gray-50/50 p-4 text-gray-900 text-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 focus:outline-none transition-all dark:border-dark-700 dark:bg-dark-800/50 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-500";
@@ -87,7 +89,8 @@ export const BillingModal: React.FC<BillingModalProps> = ({
     searchingIdentity,
     onProcess,
     onManualComplete,
-    manualCompleteLabel = "Cerrar sin Facturar"
+    manualCompleteLabel = "Cerrar sin Facturar",
+    hideManualComplete = false
 }) => {
     if (!billingOrder) return null;
 
@@ -340,13 +343,15 @@ export const BillingModal: React.FC<BillingModalProps> = ({
                             <CheckCircleIcon className="w-6 h-6" />
                             Confirmar y Facturar
                         </button>
-                        <button
-                            onClick={onManualComplete}
-                            className="flex-1 py-5 bg-white dark:bg-dark-800 text-gray-700 dark:text-gray-300 rounded-2xl font-black text-[10px] uppercase border border-gray-200 dark:border-dark-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
-                        >
-                            <PrinterIcon className="w-4 h-4" />
-                            {manualCompleteLabel}
-                        </button>
+                        {!hideManualComplete && (
+                            <button
+                                onClick={onManualComplete}
+                                className="flex-1 py-5 bg-white dark:bg-dark-800 text-gray-700 dark:text-gray-300 rounded-2xl font-black text-[10px] uppercase border border-gray-200 dark:border-dark-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+                            >
+                                <PrinterIcon className="w-4 h-4" />
+                                {manualCompleteLabel}
+                            </button>
+                        )}
                         <button
                             onClick={onClose}
                             className="py-5 px-6 text-gray-400 hover:text-red-500 font-bold text-[10px] uppercase tracking-widest"

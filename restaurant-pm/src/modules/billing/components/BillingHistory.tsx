@@ -6,11 +6,15 @@
  */
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { api } from '../../../api';
 import { billingService } from '../services/BillingService';
 import { orderService } from '../../orders/services/OrderService';
 import { OrderStatus } from '../../orders/types/order.types';
 import { Bill, CreditNote } from '../types/billing.types';
 import { API_BASE_URL } from '../../../config/api.config';
+import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
+import { BillingModal } from '../../orders/components/BillingModal';
+import { ClientData } from '../utils/invoiceGenerator';
 import CreditNoteModal from './CreditNoteModal.tsx';
 import InvoiceProcessingModal, { InvoiceProcessState } from './InvoiceProcessingModal';
 import { XMLViewerModal } from './XMLViewerModal';
@@ -80,6 +84,7 @@ const BillingHistory: React.FC = () => {
     // ─────────────────────────────────────────────────────────────────────────
     const { currentUser, isLoading: authLoading } = useAuth();
     const isAdmin = currentUser?.role?.name === 'Administrador';
+    const { config } = useRestaurantConfig();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Estado para pestañas — derivado de la URL (/admin/billing/:tab)
@@ -130,6 +135,13 @@ const BillingHistory: React.FC = () => {
     const [manualSalesLoading, setManualSalesLoading] = useState(false);
     const [manualSalesPage, setManualSalesPage] = useState(1);
     const [manualSalesTotal, setManualSalesTotal] = useState(0);
+
+    // Estado para facturar una venta ya registrada como "Sin Factura"
+    const [saleToInvoice, setSaleToInvoice] = useState<any | null>(null);
+    const [invoiceClientData, setInvoiceClientData] = useState<ClientData>({
+        identification: '', name: '', email: '', address: '', phone: '', paymentMethod: '01'
+    });
+    const [searchingIdentity, setSearchingIdentity] = useState(false);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Estado compartido
@@ -333,6 +345,128 @@ const BillingHistory: React.FC = () => {
             setManualSalesTotal(0);
         } finally {
             setManualSalesLoading(false);
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FACTURAR UNA VENTA REGISTRADA SIN FACTURA
+    // El SRI exige que la factura se emita con la fecha del día (transmisión en
+    // tiempo real). Por eso solo se permite facturar ventas del mismo día.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    const isSameDayEcuador = (dateInput: string | Date): boolean => {
+        try {
+            const fmt = (d: Date) => new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(d);
+            return fmt(new Date(dateInput)) === fmt(new Date());
+        } catch {
+            return false;
+        }
+    };
+
+    const handleOpenInvoiceForSale = (sale: any) => {
+        setSaleToInvoice(sale);
+        setInvoiceClientData({
+            identification: '',
+            name: sale.customerName && sale.customerName !== 'Consumidor Final' ? sale.customerName : '',
+            email: '',
+            address: '',
+            phone: '',
+            paymentMethod: '01'
+        });
+    };
+
+    // Autocompletar datos del cliente por identificación (igual que en Pedidos)
+    useEffect(() => {
+        const ident = invoiceClientData.identification;
+        if (ident && ident.length >= 10 && ident !== '9999999999999') {
+            const timeoutId = setTimeout(async () => {
+                setSearchingIdentity(true);
+                try {
+                    const customer = await api.customers.lookupByIdentification(ident);
+                    if (customer) {
+                        setInvoiceClientData(prev => ({
+                            ...prev,
+                            name: customer.name || prev.name,
+                            email: customer.email || prev.email,
+                            address: customer.address || prev.address,
+                            phone: customer.phone || prev.phone
+                        }));
+                    }
+                } catch {
+                    // Si no está en la BD local, el usuario completa manualmente
+                } finally {
+                    setSearchingIdentity(false);
+                }
+            }, 600);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [invoiceClientData.identification]);
+
+    const handleProcessSaleInvoice = () => {
+        if (!saleToInvoice) return;
+        if (!invoiceClientData.identification || !invoiceClientData.name) {
+            toast.warning('Completa RUC/Cédula y Nombre del cliente.', 'Datos Incompletos');
+            return;
+        }
+        executeSaleInvoice(saleToInvoice, invoiceClientData);
+    };
+
+    const executeSaleInvoice = async (sale: any, data: ClientData) => {
+        setSaleToInvoice(null);           // cerrar modal de datos
+        setIsProcessingModalOpen(true);   // abrir modal de progreso (reutilizado)
+
+        try {
+            setProcessingState(InvoiceProcessState.VALIDATING);
+            setProcessingMessage('Validando datos');
+            setProcessingDetails('Verificando información del cliente y productos...');
+
+            // Los precios YA incluyen IVA → enviar item.total para modo "total-driven"
+            const itemsConTotal = (sale.items || []).map((item: any) => ({
+                id: item.id || item.name,
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                total: parseFloat(((item.price || 0) * (item.quantity || 0)).toFixed(2)),
+                taxRate: item.taxRate
+            }));
+
+            setProcessingState(InvoiceProcessState.GENERATING);
+            setProcessingMessage('Generando factura electrónica');
+            setProcessingDetails('Creando documento XML según normativa SRI...');
+
+            const result = await billingService.generateXML({
+                order: { ...sale, id: String(sale.id || sale._id || ''), items: itemsConTotal },
+                client: data,
+                taxRate: config?.billing?.taxRate || 15,
+                logoUrl: config?.fiscalLogo || config?.logo
+            });
+
+            if (result.success) {
+                setGeneratedInvoiceNumber(result.invoiceNumber || result.invoiceId || '');
+                const sriStatus = result.authorization?.estado || result.sriResponse?.estado;
+                if (sriStatus === 'AUTORIZADO') {
+                    setProcessingState(InvoiceProcessState.AUTHORIZED);
+                    setProcessingMessage('¡Factura autorizada con éxito!');
+                    setProcessingDetails('La venta fue facturada y autorizada por el SRI.');
+                } else {
+                    setProcessingState(InvoiceProcessState.PENDING);
+                    setProcessingMessage('Factura generada correctamente');
+                    setProcessingDetails('La factura fue creada y enviada al SRI, aún EN PROCESO de autorización.');
+                }
+                // La venta pasó de "Sin Factura" a facturada: sale de esta pestaña y aparece en Facturas
+                await fetchManualSales();
+                await fetchBills();
+            } else {
+                setProcessingState(InvoiceProcessState.ERROR);
+                setProcessingMessage('Error al generar la factura');
+                setProcessingDetails(result.message || 'Hubo un problema al procesar la factura.');
+            }
+        } catch (error) {
+            setProcessingState(InvoiceProcessState.ERROR);
+            setProcessingMessage('Error en el proceso');
+            setProcessingDetails(error instanceof Error ? error.message : 'Error al procesar la factura con el servidor.');
         }
     };
 
@@ -1691,6 +1825,19 @@ const BillingHistory: React.FC = () => {
                                                     Detalle
                                                 </button>
                                                 <div className="flex gap-2">
+                                                    {(() => {
+                                                        const canInvoice = isSameDayEcuador(sale.createdAt);
+                                                        return (
+                                                            <button
+                                                                title={canInvoice ? 'Generar factura de esta venta' : 'Solo se puede facturar el mismo día de la venta (norma SRI)'}
+                                                                disabled={!canInvoice}
+                                                                onClick={() => handleOpenInvoiceForSale(sale)}
+                                                                className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 border ${canInvoice ? 'bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 border-green-100 dark:border-green-800/30' : 'bg-gray-50 text-gray-300 dark:bg-dark-800 dark:text-gray-600 border-gray-100 dark:border-dark-700 cursor-not-allowed opacity-60'}`}
+                                                            >
+                                                                🧾 Facturar
+                                                            </button>
+                                                        );
+                                                    })()}
                                                     <button
                                                         title="Imprimir Ticket"
                                                         onClick={() => printSaleTicket(sale)}
@@ -1823,6 +1970,19 @@ const BillingHistory: React.FC = () => {
                                                     </td>
                                                     <td className="px-6 py-4 text-right">
                                                         <div className="flex justify-end gap-2">
+                                                            {(() => {
+                                                                const canInvoice = isSameDayEcuador(sale.createdAt) && !isProcessingModalOpen;
+                                                                return (
+                                                                    <button
+                                                                        title={canInvoice ? 'Generar factura de esta venta' : 'Solo se puede facturar el mismo día de la venta (norma SRI)'}
+                                                                        disabled={!canInvoice}
+                                                                        onClick={(e) => { e.stopPropagation(); handleOpenInvoiceForSale(sale); }}
+                                                                        className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 border ${canInvoice ? 'bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 border-green-100 dark:border-green-800/30' : 'bg-gray-50 text-gray-300 dark:bg-dark-800 dark:text-gray-600 border-gray-100 dark:border-dark-700 cursor-not-allowed opacity-60'}`}
+                                                                    >
+                                                                        🧾 Facturar
+                                                                    </button>
+                                                                );
+                                                            })()}
                                                             <button
                                                                 title="Imprimir Ticket"
                                                                 onClick={() => printSaleTicket(sale)}
@@ -2010,6 +2170,22 @@ const BillingHistory: React.FC = () => {
                         fetchBills();
                         fetchCreditNotes();
                     }}
+                />
+            )}
+
+            {/* Facturar una venta registrada sin factura (reutiliza el modal de Pedidos) */}
+            {saleToInvoice && config && (
+                <BillingModal
+                    isOpen={!!saleToInvoice}
+                    onClose={() => setSaleToInvoice(null)}
+                    config={config}
+                    billingOrder={saleToInvoice}
+                    billingData={invoiceClientData}
+                    setBillingData={setInvoiceClientData}
+                    searchingIdentity={searchingIdentity}
+                    onProcess={handleProcessSaleInvoice}
+                    onManualComplete={() => setSaleToInvoice(null)}
+                    hideManualComplete
                 />
             )}
 
