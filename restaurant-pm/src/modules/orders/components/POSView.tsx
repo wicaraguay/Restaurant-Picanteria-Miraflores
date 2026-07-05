@@ -79,6 +79,18 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
 
     const total = cartItems.reduce((acc, item) => acc + (item.price || 0) * item.quantity, 0);
 
+    // Desglose de IVA respetando el taxRate de CADA producto (0%, 5%, 12%, 15%).
+    // Los precios YA incluyen IVA: la base se extrae dividiendo por (1 + tasa).
+    // Un producto al 0% aporta 0 de IVA (antes se asumía 15% para todo el total).
+    const { subtotal, ivaTotal } = cartItems.reduce((acc, item) => {
+        const itemTotal = (item.price || 0) * item.quantity;
+        const rate = (item.taxRate ?? 15) / 100;
+        const base = rate > 0 ? itemTotal / (1 + rate) : itemTotal;
+        acc.subtotal += base;
+        acc.ivaTotal += itemTotal - base;
+        return acc;
+    }, { subtotal: 0, ivaTotal: 0 });
+
     const handleConfirm = async () => {
         if (!customerName.trim()) {
             toast.warning('Por favor ingrese el nombre del cliente o número de mesa', 'Campo Requerido');
@@ -330,8 +342,8 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                         <div className="p-4 md:p-6 bg-white dark:bg-dark-900 border-t dark:border-dark-700 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
                             <div className="flex justify-between items-end mb-3 md:mb-6">
                                 <div className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Subtotal: ${(total / 1.15).toFixed(2)}</span>
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">IVA 15%: ${(total - (total / 1.15)).toFixed(2)}</span>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Subtotal: ${subtotal.toFixed(2)}</span>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">IVA: ${ivaTotal.toFixed(2)}</span>
                                 </div>
                                 <div className="text-right">
                                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest block">Total</span>
