@@ -78,7 +78,7 @@ const BillingHistory: React.FC = () => {
     // ─────────────────────────────────────────────────────────────────────────
     // Autenticación
     // ─────────────────────────────────────────────────────────────────────────
-    const { currentUser } = useAuth();
+    const { currentUser, isLoading: authLoading } = useAuth();
     const isAdmin = currentUser?.role?.name === 'Administrador';
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -87,7 +87,10 @@ const BillingHistory: React.FC = () => {
     // ─────────────────────────────────────────────────────────────────────────
     const { tab: tabSlug } = useParams<{ tab?: string }>();
     const navigate = useNavigate();
-    const activeTab: TabType = TAB_BY_SLUG[tabSlug ?? ''] ?? 'invoices';
+    const rawTab: TabType = TAB_BY_SLUG[tabSlug ?? ''] ?? 'invoices';
+    // Ventas Sin Factura es exclusiva del Administrador principal. Para cualquier
+    // otro rol (ej. contadora) la pestaña se comporta como si no existiera.
+    const activeTab: TabType = (!isAdmin && rawTab === 'noInvoiceSales') ? 'invoices' : rawTab;
     const setActiveTab = (tab: TabType) => navigate(`/admin/billing/${SLUG_BY_TAB[tab]}`);
 
     // Normalizar slugs inválidos (ej. /admin/billing/xyz) a la pestaña de facturas
@@ -96,6 +99,15 @@ const BillingHistory: React.FC = () => {
             navigate(`/admin/billing/${SLUG_BY_TAB.invoices}`, { replace: true });
         }
     }, [tabSlug, navigate]);
+
+    // Si un rol no autorizado entra por URL directa a ventas-sin-factura,
+    // se limpia la URL hacia Facturas (solo una vez cargada la sesión, para no
+    // expulsar al Administrador mientras se restaura su sesión al refrescar).
+    useEffect(() => {
+        if (!authLoading && !isAdmin && rawTab === 'noInvoiceSales') {
+            navigate(`/admin/billing/${SLUG_BY_TAB.invoices}`, { replace: true });
+        }
+    }, [authLoading, isAdmin, rawTab, navigate]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Estado para Facturas
@@ -1111,6 +1123,8 @@ const BillingHistory: React.FC = () => {
                         {creditNotesTotal}
                     </span>
                 </button>
+                {/* Ventas Sin Factura: visible SOLO para el Administrador principal */}
+                {isAdmin && (
                 <button
                     onClick={() => setActiveTab('noInvoiceSales')}
                     className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] sm:text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${
@@ -1130,6 +1144,7 @@ const BillingHistory: React.FC = () => {
                         {manualSalesTotal}
                     </span>
                 </button>
+                )}
             </div>
 
             {/* ═══════════════════════════════════════════════════════════════════

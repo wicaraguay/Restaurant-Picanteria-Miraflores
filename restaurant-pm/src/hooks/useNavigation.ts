@@ -33,9 +33,14 @@ export function useNavigation(currentUser: AuthenticatedUser | null) {
      * Ejemplo: /admin/orders -> orders
      */
     const currentView = useMemo((): ViewType => {
-        const pathParts = location.pathname.split('/');
-        // Si estamos en /admin/vistas-hijas, la parte de interés es la última
-        const viewFromPath = pathParts[pathParts.length - 1] as ViewType;
+        // La vista es el segmento inmediatamente después de "admin". Los segmentos
+        // posteriores son pestañas internas: /admin/billing/notas-credito → billing.
+        // (Antes se tomaba el ÚLTIMO segmento, lo que rompía las rutas con pestaña:
+        //  la vista se resolvía a la pestaña —inválida— y caía a 'dashboard',
+        //  expulsando a roles sin permiso de dashboard, ej. contadora.)
+        const pathParts = location.pathname.split('/').filter(Boolean);
+        const adminIdx = pathParts.indexOf('admin');
+        const viewFromPath = (adminIdx >= 0 ? pathParts[adminIdx + 1] : pathParts[0]) as ViewType;
 
         // Validar si es una vista válida, si no, dashboard
         const isValidView = NAV_ITEMS.some(item => item.view === viewFromPath);
