@@ -312,6 +312,18 @@ const AdminApp: React.FC = () => {
 const AdminAppContent: React.FC = () => {
     const { currentUser, isLoading } = useAuth();
 
+    // PWA: el manifest se enlaza SOLO en el admin. Chrome ofrece "Instalar app"
+    // a cualquier página que enlace un manifest válido (el scope no lo evita) —
+    // al agregar el <link> únicamente aquí, los clientes de la web pública (/)
+    // nunca ven la invitación de instalación; el personal en /admin sí.
+    useEffect(() => {
+        if (document.querySelector('link[rel="manifest"]')) return;
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = '/manifest.webmanifest';
+        document.head.appendChild(link);
+    }, []);
+
     if (isLoading) {
         return (
             <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex items-center justify-center">

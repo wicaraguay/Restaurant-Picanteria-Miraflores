@@ -15,49 +15,12 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate', // Deploy nuevo → todos los dispositivos se actualizan al abrir
         includeAssets: ['icon.png', 'apple-touch-icon.png'],
-        manifest: {
-          name: 'Picantería Miraflores',
-          short_name: 'Picantería',
-          description: 'Sistema de gestión del restaurante — pedidos, cocina y facturación',
-          lang: 'es',
-          start_url: '/admin',
-          // Scope /admin: la invitación a "Instalar app" solo aparece a quien
-          // navega el ADMIN (personal). Los clientes en la web pública (/) no
-          // ven ningún aviso de instalación.
-          scope: '/admin',
-          display: 'standalone',
-          orientation: 'portrait',
-          // Barra de estado del mismo color que el fondo de la app (se funden).
-          // El modo oscuro la ajusta dinámicamente vía useTheme.
-          theme_color: '#ffffff',
-          background_color: '#ffffff',
-          icons: [
-            { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
-            { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
-            { src: '/pwa-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-          ],
-          // Mantener presionado el ícono de la app → accesos directos
-          shortcuts: [
-            {
-              name: 'Tomar Pedido (POS)',
-              short_name: 'POS',
-              url: '/admin/orders/pos',
-              icons: [{ src: '/pwa-192.png', sizes: '192x192' }]
-            },
-            {
-              name: 'Central de Cocina',
-              short_name: 'Cocina',
-              url: '/admin/kitchen',
-              icons: [{ src: '/pwa-192.png', sizes: '192x192' }]
-            },
-            {
-              name: 'Pedidos en Curso',
-              short_name: 'Pedidos',
-              url: '/admin/orders/tablero',
-              icons: [{ src: '/pwa-192.png', sizes: '192x192' }]
-            }
-          ]
-        },
+        // El manifest NO se genera ni se inyecta aquí: vive como archivo estático
+        // (public/manifest.webmanifest) y su <link> lo agrega AdminApp SOLO en
+        // rutas /admin. Así Chrome nunca ofrece "Instalar app" a los clientes en
+        // la web pública — el scope del manifest no controla eso, solo la
+        // presencia del <link> en la página lo hace.
+        manifest: false,
         workbox: {
           // Manejador de notificaciones Web Push (alertas de WhatsApp)
           importScripts: ['push-sw.js'],
