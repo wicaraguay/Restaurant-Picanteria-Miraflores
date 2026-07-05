@@ -116,24 +116,40 @@ export class ExportController {
             const envLabel = environment === '2' ? 'PRODUCCIÓN' : 'PRUEBAS';
             const isProd = environment === '2';
 
-            // Facturas AUTORIZADAS del mes, del ambiente activo
+            // Facturas AUTORIZADAS del mes (cualquier ambiente) — para diagnóstico
             const allBills = await this.billRepository.findAll();
-            const bills = allBills.filter((b: any) =>
+            const authorizedBillsInMonth = allBills.filter((b: any) =>
                 b.sriStatus === 'AUTORIZADO' &&
-                monthKeyEcuador(b.date || b.createdAt) === targetKey &&
-                (isProd ? b.environment === '2' : b.environment !== '2')
+                monthKeyEcuador(b.date || b.createdAt) === targetKey
+            );
+            // Solo las del AMBIENTE ACTIVO entran al reporte (jamás mezclar pruebas/producción)
+            const bills = authorizedBillsInMonth.filter((b: any) =>
+                isProd ? b.environment === '2' : b.environment !== '2'
             ).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const billsExcludedByEnv = authorizedBillsInMonth.length - bills.length;
 
             // Notas de crédito AUTORIZADAS del mes, del ambiente activo
             // (la interfaz expone findPaginated; a escala de restaurante una página de 100 basta)
             const allCreditNotes = this.creditNoteRepository
                 ? (await this.creditNoteRepository.findPaginated(1, 100, { sriStatus: 'AUTORIZADO' }, { createdAt: -1 })).data
                 : [];
-            const creditNotes = allCreditNotes.filter((cn: any) =>
+            const authorizedNCInMonth = allCreditNotes.filter((cn: any) =>
                 cn.sriStatus === 'AUTORIZADO' &&
-                monthKeyEcuador(cn.date || cn.createdAt) === targetKey &&
-                (isProd ? cn.environment === '2' : cn.environment !== '2')
+                monthKeyEcuador(cn.date || cn.createdAt) === targetKey
+            );
+            const creditNotes = authorizedNCInMonth.filter((cn: any) =>
+                isProd ? cn.environment === '2' : cn.environment !== '2'
             ).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const ncExcludedByEnv = authorizedNCInMonth.length - creditNotes.length;
+
+            logger.info('[ExportController] Tax report filter', {
+                period: targetKey,
+                environment: envLabel,
+                billsIncluded: bills.length,
+                billsExcludedByEnv,
+                ncIncluded: creditNotes.length,
+                ncExcludedByEnv
+            });
 
             const workbook = new ExcelJS.Workbook();
             const headerStyle = (row: ExcelJS.Row) => {
@@ -235,6 +251,13 @@ export class ExportController {
             const monthName = new Intl.DateTimeFormat('es-EC', { month: 'long' }).format(new Date(year, month - 1, 15));
             wsSummary.addRow({ concept: `REPORTE MENSUAL — ${monthName.toUpperCase()} ${year} (ambiente: ${envLabel})`, value: '' }).font = { bold: true };
             wsSummary.addRow({ concept: `Facturas autorizadas: ${bills.length} · Notas de crédito autorizadas: ${creditNotes.length}`, value: '' });
+            if (billsExcludedByEnv > 0 || ncExcludedByEnv > 0) {
+                const warnRow = wsSummary.addRow({
+                    concept: `⚠️ Excluidos por pertenecer a OTRO ambiente: ${billsExcludedByEnv} factura(s), ${ncExcludedByEnv} NC — este reporte solo incluye ${envLabel}`,
+                    value: ''
+                });
+                warnRow.font = { bold: true, color: { argb: 'FFB45309' } };
+            }
             wsSummary.addRow({ concept: '', value: '' });
             wsSummary.addRow({ concept: 'VENTAS (facturas autorizadas)', value: '' }).font = { bold: true };
             wsSummary.addRow({ concept: 'Ventas tarifa 0% (base imponible)', value: r2(billTotals.base0) });

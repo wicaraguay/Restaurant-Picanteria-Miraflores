@@ -210,11 +210,14 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
 
     const handleOpenBilling = (order: Order) => {
         // Enriquecer los items con el taxRate más reciente de menuItems
+        // y con el ID del plato — el backend deriva de él el codigoPrincipal
+        // SRI estable (PLT-XXXXXX) en lugar de usar el nombre como código
         const enrichedItems = order.items.map((item: any) => {
             const menuItem = menuItems.find((m: any) => m.name === item.name);
             const currentTaxRate = menuItem ? menuItem.taxRate : (item.taxRate !== undefined ? item.taxRate : 15);
             return {
                 ...item,
+                id: menuItem?.id || item.id,
                 taxRate: currentTaxRate
             };
         });

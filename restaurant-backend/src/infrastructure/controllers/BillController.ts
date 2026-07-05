@@ -156,7 +156,7 @@ export class BillController {
             }
 
             return {
-                codigoPrincipal: item.id || item.name || 'ITEM',
+                codigoPrincipal: this.billingService.buildItemCode(item),
                 descripcion: item.name,
                 cantidad: item.quantity,
                 precioUnitario: parseFloat((subtotal / item.quantity).toFixed(6)),

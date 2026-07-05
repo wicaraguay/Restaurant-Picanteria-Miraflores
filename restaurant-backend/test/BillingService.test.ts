@@ -78,6 +78,31 @@ describe('BillingService', () => {
         });
     });
 
+    describe('buildItemCode', () => {
+        it('should derive stable PLT code from Mongo ObjectId', () => {
+            const item = { id: '696d77ba909bb6094493cbc9', name: 'Sancocho de chancho' };
+            expect(billingService.buildItemCode(item)).toBe('PLT-93CBC9');
+            // Estable: mismo plato → mismo código siempre
+            expect(billingService.buildItemCode(item)).toBe('PLT-93CBC9');
+        });
+
+        it('should sanitize and truncate long names to 25 chars (SRI limit)', () => {
+            const item = { name: 'Encebollado mixto con chifles extra grandes' };
+            const code = billingService.buildItemCode(item);
+            expect(code.length).toBeLessThanOrEqual(25);
+            expect(code).toBe('ENCEBOLLADO-MIXTO-CON-CHI');
+        });
+
+        it('should strip accents and special characters', () => {
+            const code = billingService.buildItemCode({ name: 'Chanfaina c/ chicharrón' });
+            expect(code).toBe('CHANFAINA-C-CHICHARRON');
+        });
+
+        it('should fall back to ITEM-n when no id or name', () => {
+            expect(billingService.buildItemCode({}, 2)).toBe('ITEM-3');
+        });
+    });
+
     describe('formatDateToSRI', () => {
         // Regresión SRI error 52 "ERROR EN DIFERENCIAS": las fechas deben formatearse
         // en zona horaria de Ecuador, no la del servidor (UTC en el VPS).

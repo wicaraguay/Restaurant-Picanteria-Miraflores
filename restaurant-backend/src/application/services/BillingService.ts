@@ -28,6 +28,30 @@ export interface BillingDetail {
 export class BillingService {
     constructor(private customerRepository?: ICustomerRepository) { }
 
+    /**
+     * Genera el codigoPrincipal SRI de un ítem — automático y estable.
+     * - Con id interno de Mongo (24 hex): PLT-XXXXXX (últimos 6, siempre el mismo por plato)
+     * - Sin id: nombre saneado (sin tildes, alfanumérico)
+     * SIEMPRE ≤ 25 caracteres: la ficha técnica del SRI limita el campo a 25 —
+     * un nombre de plato largo como código haría que el SRI rechace la factura.
+     */
+    public buildItemCode(item: any, index: number = 0): string {
+        const raw = item?.id ? String(item.id) : '';
+
+        if (/^[0-9a-f]{24}$/i.test(raw)) {
+            return `PLT-${raw.slice(-6).toUpperCase()}`;
+        }
+
+        const source = raw || item?.name || `ITEM-${index + 1}`;
+        const sanitized = source
+            .normalize('NFD').replace(/[̀-ͯ]/g, '') // sin tildes
+            .toUpperCase()
+            .replace(/[^A-Z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+        return (sanitized || `ITEM-${index + 1}`).substring(0, 25);
+    }
+
     public calculateDetails(items: any[], taxRate: number = 15): BillingDetail[] {
         // 1. Calculate individual items and accumulate totals
         let totalSubtotalSum = 0;
@@ -69,7 +93,7 @@ export class BillingService {
             totalInclusiveSum += totalInclusive;
 
             return {
-                codigoPrincipal: item.id || `ITEM-${index + 1}`,
+                codigoPrincipal: this.buildItemCode(item, index),
                 descripcion: item.name,
                 cantidad: quantity,
                 precioUnitario: parseFloat((subtotalRounded / quantity).toFixed(6)),

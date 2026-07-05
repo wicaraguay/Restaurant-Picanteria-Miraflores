@@ -40,7 +40,8 @@ describe('BillController - generateXml', () => {
             getTaxCode: vi.fn().mockReturnValue('4'),
             getIdentificacionType: vi.fn().mockReturnValue('05'),
             getPaymentMethodCode: vi.fn().mockReturnValue('01'),
-            formatDateToSRI: vi.fn().mockReturnValue('21/03/2024')
+            formatDateToSRI: vi.fn().mockReturnValue('21/03/2024'),
+            buildItemCode: vi.fn().mockReturnValue('PLT-TEST01')
         };
 
         billController = new BillController(
