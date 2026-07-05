@@ -19,15 +19,253 @@ import { IMenuRepository } from '../../../domain/repositories/IMenuRepository';
 import { ICustomerRepository } from '../../../domain/repositories/ICustomerRepository';
 import { IBillRepository } from '../../../domain/repositories/IBillRepository';
 import { IOrderRepository } from '../../../domain/repositories/IOrderRepository';
+import { ICreditNoteRepository } from '../../../domain/repositories/ICreditNoteRepository';
+import { IRestaurantConfigRepository } from '../../../domain/repositories/IRestaurantConfigRepository';
 import { logger } from '../../../infrastructure/utils/Logger';
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Desglose de un documento por tarifa de IVA a partir de sus ítems */
+interface TaxBreakdown {
+    base0: number;
+    base15: number;
+    iva: number;
+    total: number;
+}
+
+/**
+ * Calcula base 0%, base gravada e IVA desde los ítems del documento.
+ * Los precios del sistema INCLUYEN IVA (total-driven): la base se extrae del total.
+ */
+function computeBreakdown(items: any[]): TaxBreakdown {
+    let base0 = 0, base15 = 0, iva = 0;
+
+    for (const item of items || []) {
+        const totalInclusive = (item.total !== undefined && item.total !== null)
+            ? item.total
+            : (item.price || 0) * (item.quantity || 1);
+        const rate = (item.taxRate !== undefined && item.taxRate !== null) ? item.taxRate : 15;
+
+        if (rate === 0) {
+            base0 += totalInclusive;
+        } else {
+            const base = totalInclusive / (1 + rate / 100);
+            base15 += base;
+            iva += totalInclusive - base;
+        }
+    }
+
+    return { base0: r2(base0), base15: r2(base15), iva: r2(iva), total: r2(base0 + base15 + iva) };
+}
+
+/** Mes de un documento en zona horaria Ecuador ('YYYY-MM') — el día fiscal es el ecuatoriano */
+function monthKeyEcuador(dateStr: string | Date): string {
+    const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('es-EC', {
+        timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit'
+    }).formatToParts(d);
+    const y = parts.find(p => p.type === 'year')?.value;
+    const m = parts.find(p => p.type === 'month')?.value;
+    return `${y}-${m}`;
+}
+
+/** Fecha corta en zona Ecuador (dd/mm/yyyy) */
+function dateEcuador(dateStr: string | Date): string {
+    const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('es-EC', {
+        timeZone: 'America/Guayaquil', day: '2-digit', month: '2-digit', year: 'numeric'
+    }).format(d);
+}
 
 export class ExportController {
     constructor(
         private menuRepository: IMenuRepository,
         private customerRepository: ICustomerRepository,
         private billRepository: IBillRepository,
-        private orderRepository: IOrderRepository
+        private orderRepository: IOrderRepository,
+        private creditNoteRepository?: ICreditNoteRepository,
+        private configRepository?: IRestaurantConfigRepository
     ) {}
+
+    /**
+     * Reporte Mensual para Declaración (Formulario 104 — IVA Ecuador).
+     * GET /api/export/tax-report?month=MM&year=YYYY
+     *
+     * Excel con 3 hojas:
+     *  1. Resumen — los números netos que van al formulario
+     *  2. Facturas AUTORIZADAS del mes con desglose base 0% / base gravada / IVA
+     *  3. Notas de crédito AUTORIZADAS del mes (restan)
+     *
+     * Solo incluye documentos del AMBIENTE ACTIVO del sistema (pruebas o
+     * producción) — jamás mezcla comprobantes de prueba en una declaración.
+     */
+    async exportTaxReport(req: Request, res: Response): Promise<void> {
+        try {
+            const month = parseInt(req.query.month as string, 10);
+            const year = parseInt(req.query.year as string, 10);
+
+            if (!month || month < 1 || month > 12 || !year || year < 2020 || year > 2100) {
+                res.status(400).json({ error: 'Parámetros inválidos: se requiere month (1-12) y year' });
+                return;
+            }
+
+            const targetKey = `${year}-${month.toString().padStart(2, '0')}`;
+            const environment = this.configRepository ? await this.configRepository.getEnvironment() : '1';
+            const envLabel = environment === '2' ? 'PRODUCCIÓN' : 'PRUEBAS';
+            const isProd = environment === '2';
+
+            // Facturas AUTORIZADAS del mes, del ambiente activo
+            const allBills = await this.billRepository.findAll();
+            const bills = allBills.filter((b: any) =>
+                b.sriStatus === 'AUTORIZADO' &&
+                monthKeyEcuador(b.date || b.createdAt) === targetKey &&
+                (isProd ? b.environment === '2' : b.environment !== '2')
+            ).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            // Notas de crédito AUTORIZADAS del mes, del ambiente activo
+            // (la interfaz expone findPaginated; a escala de restaurante una página de 100 basta)
+            const allCreditNotes = this.creditNoteRepository
+                ? (await this.creditNoteRepository.findPaginated(1, 100, { sriStatus: 'AUTORIZADO' }, { createdAt: -1 })).data
+                : [];
+            const creditNotes = allCreditNotes.filter((cn: any) =>
+                cn.sriStatus === 'AUTORIZADO' &&
+                monthKeyEcuador(cn.date || cn.createdAt) === targetKey &&
+                (isProd ? cn.environment === '2' : cn.environment !== '2')
+            ).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            const workbook = new ExcelJS.Workbook();
+            const headerStyle = (row: ExcelJS.Row) => {
+                row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+            };
+            const moneyCols = (ws: ExcelJS.Worksheet, keys: string[]) =>
+                keys.forEach(k => { ws.getColumn(k).numFmt = '$#,##0.00'; });
+
+            // ── Hoja 1: Resumen (creada primero para que abra el Excel; se llena al final) ──
+            const wsSummary = workbook.addWorksheet('Resumen');
+            wsSummary.columns = [
+                { header: 'Concepto', key: 'concept', width: 45 },
+                { header: 'Valor', key: 'value', width: 16 }
+            ];
+            headerStyle(wsSummary.getRow(1));
+
+            // ── Hoja 2: Facturas ─────────────────────────────────────────────
+            const wsBills = workbook.addWorksheet('Facturas');
+            wsBills.columns = [
+                { header: 'Fecha', key: 'date', width: 12 },
+                { header: 'Número', key: 'number', width: 20 },
+                { header: 'Cliente', key: 'client', width: 30 },
+                { header: 'RUC/CI', key: 'identification', width: 15 },
+                { header: 'Base 0%', key: 'base0', width: 12 },
+                { header: 'Base Gravada', key: 'base15', width: 14 },
+                { header: 'IVA', key: 'iva', width: 12 },
+                { header: 'Total', key: 'total', width: 12 }
+            ];
+            headerStyle(wsBills.getRow(1));
+
+            const billTotals = { base0: 0, base15: 0, iva: 0, total: 0 };
+            for (const bill of bills as any[]) {
+                const bd = computeBreakdown(bill.items);
+                billTotals.base0 += bd.base0;
+                billTotals.base15 += bd.base15;
+                billTotals.iva += bd.iva;
+                billTotals.total += bd.total;
+                wsBills.addRow({
+                    date: dateEcuador(bill.date || bill.createdAt),
+                    number: bill.documentNumber,
+                    client: bill.customerName,
+                    identification: bill.customerIdentification,
+                    base0: bd.base0, base15: bd.base15, iva: bd.iva, total: bd.total
+                });
+            }
+            const billTotalRow = wsBills.addRow({
+                client: 'TOTALES',
+                base0: r2(billTotals.base0), base15: r2(billTotals.base15),
+                iva: r2(billTotals.iva), total: r2(billTotals.total)
+            });
+            billTotalRow.font = { bold: true };
+            moneyCols(wsBills, ['base0', 'base15', 'iva', 'total']);
+
+            // ── Hoja 3: Notas de Crédito ─────────────────────────────────────
+            const wsNC = workbook.addWorksheet('Notas de Crédito');
+            wsNC.columns = [
+                { header: 'Fecha', key: 'date', width: 12 },
+                { header: 'Número', key: 'number', width: 20 },
+                { header: 'Cliente', key: 'client', width: 30 },
+                { header: 'RUC/CI', key: 'identification', width: 15 },
+                { header: 'Base 0%', key: 'base0', width: 12 },
+                { header: 'Base Gravada', key: 'base15', width: 14 },
+                { header: 'IVA', key: 'iva', width: 12 },
+                { header: 'Total', key: 'total', width: 12 }
+            ];
+            headerStyle(wsNC.getRow(1));
+
+            const ncTotals = { base0: 0, base15: 0, iva: 0, total: 0 };
+            for (const cn of creditNotes as any[]) {
+                const bd = computeBreakdown(cn.items);
+                ncTotals.base0 += bd.base0;
+                ncTotals.base15 += bd.base15;
+                ncTotals.iva += bd.iva;
+                ncTotals.total += bd.total;
+                wsNC.addRow({
+                    date: dateEcuador(cn.date || cn.createdAt),
+                    number: cn.documentNumber,
+                    client: cn.customerName,
+                    identification: cn.customerIdentification,
+                    base0: bd.base0, base15: bd.base15, iva: bd.iva, total: bd.total
+                });
+            }
+            const ncTotalRow = wsNC.addRow({
+                client: 'TOTALES',
+                base0: r2(ncTotals.base0), base15: r2(ncTotals.base15),
+                iva: r2(ncTotals.iva), total: r2(ncTotals.total)
+            });
+            ncTotalRow.font = { bold: true };
+            moneyCols(wsNC, ['base0', 'base15', 'iva', 'total']);
+
+            // ── Llenar la hoja Resumen (ya creada al inicio) ─────────────────
+            const net = {
+                base0: r2(billTotals.base0 - ncTotals.base0),
+                base15: r2(billTotals.base15 - ncTotals.base15),
+                iva: r2(billTotals.iva - ncTotals.iva)
+            };
+
+            const monthName = new Intl.DateTimeFormat('es-EC', { month: 'long' }).format(new Date(year, month - 1, 15));
+            wsSummary.addRow({ concept: `REPORTE MENSUAL — ${monthName.toUpperCase()} ${year} (ambiente: ${envLabel})`, value: '' }).font = { bold: true };
+            wsSummary.addRow({ concept: `Facturas autorizadas: ${bills.length} · Notas de crédito autorizadas: ${creditNotes.length}`, value: '' });
+            wsSummary.addRow({ concept: '', value: '' });
+            wsSummary.addRow({ concept: 'VENTAS (facturas autorizadas)', value: '' }).font = { bold: true };
+            wsSummary.addRow({ concept: 'Ventas tarifa 0% (base imponible)', value: r2(billTotals.base0) });
+            wsSummary.addRow({ concept: 'Ventas tarifa gravada (base imponible)', value: r2(billTotals.base15) });
+            wsSummary.addRow({ concept: 'IVA generado en ventas', value: r2(billTotals.iva) });
+            wsSummary.addRow({ concept: '', value: '' });
+            wsSummary.addRow({ concept: 'NOTAS DE CRÉDITO (restan)', value: '' }).font = { bold: true };
+            wsSummary.addRow({ concept: 'NC tarifa 0% (base imponible)', value: r2(ncTotals.base0) });
+            wsSummary.addRow({ concept: 'NC tarifa gravada (base imponible)', value: r2(ncTotals.base15) });
+            wsSummary.addRow({ concept: 'IVA en notas de crédito', value: r2(ncTotals.iva) });
+            wsSummary.addRow({ concept: '', value: '' });
+            const netTitle = wsSummary.addRow({ concept: 'NETOS PARA DECLARACIÓN (Formulario 104)', value: '' });
+            netTitle.font = { bold: true };
+            wsSummary.addRow({ concept: 'Ventas netas tarifa 0%', value: net.base0 }).font = { bold: true };
+            wsSummary.addRow({ concept: 'Ventas netas tarifa gravada', value: net.base15 }).font = { bold: true };
+            wsSummary.addRow({ concept: 'IVA neto en ventas', value: net.iva }).font = { bold: true };
+            wsSummary.getColumn('value').numFmt = '$#,##0.00';
+
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename=declaracion-104-${targetKey}.xlsx`);
+            await workbook.xlsx.write(res);
+            res.end();
+
+            logger.info('[ExportController] Tax report exported', {
+                period: targetKey, environment: envLabel, bills: bills.length, creditNotes: creditNotes.length
+            });
+        } catch (error) {
+            logger.error('[ExportController] Error exporting tax report', error);
+            res.status(500).json({ error: 'Error al generar el reporte mensual' });
+        }
+    }
 
     /**
      * Exporta el menú completo con categorías, precios e ingredientes en Excel

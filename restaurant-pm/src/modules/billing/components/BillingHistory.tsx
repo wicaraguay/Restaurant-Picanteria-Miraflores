@@ -524,6 +524,50 @@ const BillingHistory: React.FC = () => {
         }
     };
 
+    // Reporte Mensual para Declaración (Formulario 104) — Excel generado en el backend
+    const [reportMonth, setReportMonth] = useState<string>(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+    });
+    const [downloadingReport, setDownloadingReport] = useState(false);
+
+    const handleTaxReport = async () => {
+        const [year, month] = reportMonth.split('-');
+        if (!year || !month) {
+            toast.warning('Selecciona el mes del reporte.', 'Reporte 104');
+            return;
+        }
+
+        setDownloadingReport(true);
+        try {
+            const token = localStorage.getItem('restaurant_pm_token');
+            const response = await fetch(`${API_BASE_URL}/export/tax-report?month=${parseInt(month, 10)}&year=${year}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+
+            if (!response.ok) {
+                throw new Error('No se pudo generar el reporte');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `declaracion-104-${reportMonth}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+
+            toast.success(`Reporte de ${reportMonth} descargado`, '📋 DECLARACIÓN 104');
+        } catch (error) {
+            console.error('Tax report error:', error);
+            toast.error('No se pudo generar el reporte mensual.', 'Error');
+        } finally {
+            setDownloadingReport(false);
+        }
+    };
+
     const handleExportCSV = async () => {
         setBillsLoading(true);
         try {
@@ -961,14 +1005,34 @@ const BillingHistory: React.FC = () => {
                     </form>
                 </div>
 
-                <div className="flex gap-2 w-full lg:w-auto">
+                <div className="flex flex-wrap gap-2 w-full lg:w-auto">
                     {activeTab === 'invoices' && (
-                        <button
-                            onClick={handleExportCSV}
-                            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-green-600 hover:bg-green-700 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-green-500/20 transition-all active:scale-95"
-                        >
-                            <span>📊</span> Exportar CSV
-                        </button>
+                        <>
+                            {/* Reporte Mensual para Declaración (Formulario 104) */}
+                            <div className="flex items-center gap-1.5 bg-white dark:bg-dark-800 border border-gray-100 dark:border-dark-700 rounded-2xl px-2 py-1 shadow-lg shadow-black/5">
+                                <input
+                                    type="month"
+                                    value={reportMonth}
+                                    onChange={e => setReportMonth(e.target.value)}
+                                    className="bg-transparent text-xs font-bold text-gray-700 dark:text-gray-200 outline-none px-1 py-2"
+                                    title="Mes del reporte de declaración"
+                                />
+                                <button
+                                    onClick={handleTaxReport}
+                                    disabled={downloadingReport}
+                                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                                    title="Excel con desglose por tarifa de IVA y notas de crédito — los números del Formulario 104"
+                                >
+                                    {downloadingReport ? 'Generando…' : '📋 Reporte 104'}
+                                </button>
+                            </div>
+                            <button
+                                onClick={handleExportCSV}
+                                className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-green-600 hover:bg-green-700 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-green-500/20 transition-all active:scale-95"
+                            >
+                                <span>📊</span> Exportar CSV
+                            </button>
+                        </>
                     )}
                     <button
                         onClick={() => {
