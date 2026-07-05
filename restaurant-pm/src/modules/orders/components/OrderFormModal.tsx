@@ -11,6 +11,7 @@ import Modal from '../../../components/ui/Modal';
 import { SearchIcon, ClipboardListIcon, MinusIcon, PlusIcon, TrashIcon } from '../../../components/ui/Icons';
 import { toast } from '../../../components/ui/AlertProvider';
 import { Validators } from '../../../utils/validators';
+import { categoryKey, uniqueCategoryNames } from '../../../utils/categoryName';
 
 const inputClass = "w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-gray-900 text-sm focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700/50 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:bg-gray-700 dark:focus:ring-blue-500/20";
 
@@ -41,12 +42,12 @@ export const OrderFormModal: React.FC<OrderFormModalProps> = ({ isOpen, onClose,
     const availableItems = menuItems.filter(item => item.available);
 
     // Derived State: Categories
-    const categories = ['Todos', ...Array.from(new Set(availableItems.map(item => item.category)))];
+    const categories = ['Todos', ...uniqueCategoryNames(availableItems.map(item => item.category))];
 
     // Filtered Menu Items
     const filteredMenuItems = availableItems.filter(item => {
         const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory = selectedCategory === 'Todos' || item.category === selectedCategory;
+        const matchesCategory = selectedCategory === 'Todos' || categoryKey(item.category) === categoryKey(selectedCategory);
         return matchesSearch && matchesCategory;
     });
 

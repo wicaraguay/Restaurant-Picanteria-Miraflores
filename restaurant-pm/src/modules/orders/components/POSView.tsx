@@ -4,6 +4,7 @@ import { Order, OrderItem, OrderStatus } from '../types/order.types';
 import { SearchIcon, PlusIcon, MinusIcon, TrashIcon, ClipboardListIcon, ChevronLeftIcon } from '../../../components/ui/Icons';
 import { toast } from '../../../components/ui/AlertProvider';
 import { optimizeImage } from '../../../utils/cloudinary';
+import { categoryKey, uniqueCategoryNames } from '../../../utils/categoryName';
 import '../styles/posStyles.css';
 
 interface POSViewProps {
@@ -26,7 +27,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
 
     // Categories
     const categories = useMemo(() => {
-        const cats = ['Todos', ...Array.from(new Set(menuItems.filter(i => i.available).map(i => i.category)))];
+        const cats = ['Todos', ...uniqueCategoryNames(menuItems.filter(i => i.available).map(i => i.category))];
         return cats;
     }, [menuItems]);
 
@@ -35,7 +36,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
         return menuItems.filter(item => {
             if (!item.available) return false;
             const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesCategory = selectedCategory === 'Todos' || item.category === selectedCategory;
+            const matchesCategory = selectedCategory === 'Todos' || categoryKey(item.category) === categoryKey(selectedCategory);
             return matchesSearch && matchesCategory;
         });
     }, [menuItems, searchQuery, selectedCategory]);

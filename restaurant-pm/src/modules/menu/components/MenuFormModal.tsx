@@ -130,8 +130,8 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
 
             const itemToSave: MenuItem = {
                 id: item?.id || Date.now().toString(),
-                name: formData.name,
-                category: formData.category,
+                name: (formData.name || '').trim(),
+                category: (formData.category || '').trim(),
                 categoryId: formData.categoryId,
                 price: formData.price,
                 description: formData.description || '',

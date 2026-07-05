@@ -12,6 +12,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { logger } from '../utils/Logger';
 import { migrateSequentialsToEnvironments } from './migrations/migrateSequentialsToEnvironments';
 import { migrateMenuCategories } from './migrations/migrateMenuCategories';
+import { migrateMenuCategoryNames } from './migrations/migrateMenuCategoryNames';
 
 /**
  * Clase DatabaseConnection - Implementa patrón Singleton
@@ -184,6 +185,12 @@ export class DatabaseConnection {
             await migrateMenuCategories();
         } catch (error) {
             logger.error('[Data Migration] Menu categories migration failed (non-fatal):', error);
+        }
+
+        try {
+            await migrateMenuCategoryNames();
+        } catch (error) {
+            logger.error('[Data Migration] Menu category names migration failed (non-fatal):', error);
         }
     }
 

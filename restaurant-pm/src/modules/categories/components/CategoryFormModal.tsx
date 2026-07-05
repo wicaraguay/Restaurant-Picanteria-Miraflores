@@ -105,7 +105,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({ isOpen, on
 
             const categoryToSave: Category = {
                 id: category?.id || Date.now().toString(),
-                name: formData.name!,
+                name: formData.name!.trim(),
                 description: formData.description || '',
                 productType: formData.productType as ProductType,
                 visibleOnWebsite: formData.visibleOnWebsite ?? true,

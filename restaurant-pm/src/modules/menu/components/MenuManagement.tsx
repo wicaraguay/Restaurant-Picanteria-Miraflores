@@ -9,6 +9,7 @@ import { MenuItem } from '../types/menu.types';
 import { PlusIcon, EditIcon, TrashIcon } from '../../../components/ui/Icons';
 import { menuService } from '../services/MenuService';
 import { logger } from '../../../utils/logger';
+import { categoryKey } from '../../../utils/categoryName';
 import { toast } from '../../../components/ui/AlertProvider';
 import ConfirmModal from '../../../components/ui/ConfirmModal';
 
@@ -98,7 +99,9 @@ const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems
 
     const groupedMenu = useMemo(() => {
         return menuItems.reduce((acc, item) => {
-            (acc[item.category] = acc[item.category] || []).push(item);
+            // Clave normalizada: "Especial De Casa" y "ESPECIAL DE CASA " son la misma sección
+            const key = categoryKey(item.category) || 'SIN CATEGORÍA';
+            (acc[key] = acc[key] || []).push(item);
             return acc;
         }, {} as Record<string, MenuItem[]>);
     }, [menuItems]);
