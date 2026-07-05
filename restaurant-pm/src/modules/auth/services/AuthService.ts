@@ -68,8 +68,10 @@ export class AuthService {
 
             return user;
         } catch (error) {
-            // Si falla la validación, nos aseguramos de limpiar el token
-            apiService.setToken(null);
+            // NO borramos el token aquí. Un 401 real (token inválido/expirado) ya lo
+            // limpia la capa de API en processResponse. Ante un error transitorio
+            // (timeout, backend "despertando", red caída) preservamos el token para
+            // que la sesión se restaure sola en el próximo arranque con backend listo.
             return null;
         } finally {
             // Solo restaurar si el token original era distinto al que validamos

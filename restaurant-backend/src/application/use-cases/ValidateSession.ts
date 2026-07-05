@@ -1,8 +1,9 @@
 /**
  * ValidateSession Use Case
- * 
- * Valida que un token JWT sea válido y que el sessionId coincida
- * con el almacenado en la base de datos (para sesión única).
+ *
+ * Valida que un token JWT sea válido y que el usuario exista.
+ * Se permiten SESIONES MÚLTIPLES: la app (PWA), el navegador y varios
+ * dispositivos pueden mantener su sesión a la vez sin expulsarse entre sí.
  */
 
 import { IEmployeeRepository } from '../../domain/repositories/IEmployeeRepository';
@@ -28,15 +29,10 @@ export class ValidateSession {
             return null;
         }
 
-        // Verificar que el sessionId coincida (sesión única)
-        if (employee.activeSessionId !== payload.sessionId) {
-            logger.warn('Session ID mismatch - user logged in elsewhere', {
-                userId: payload.userId,
-                expectedSessionId: employee.activeSessionId,
-                providedSessionId: payload.sessionId
-            });
-            return null;
-        }
+        // Sesiones múltiples permitidas: ya NO se exige que el sessionId del token
+        // coincida con el activeSessionId de la BD. Cada login sigue registrando su
+        // activeSessionId/lastLoginAt como referencia del último inicio, pero eso ya
+        // no invalida las sesiones abiertas en otros dispositivos.
 
         logger.info('Session validated successfully', { userId: employee.id });
 
