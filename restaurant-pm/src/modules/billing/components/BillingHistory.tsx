@@ -4,7 +4,7 @@
  * Permite buscar, filtrar, autorizar, consultar estado y emitir notas de crédito.
  * Organizado en pestañas: Facturas y Notas de Crédito.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { billingService } from '../services/BillingService';
 import { orderService } from '../../orders/services/OrderService';
@@ -531,6 +531,19 @@ const BillingHistory: React.FC = () => {
     });
     const [downloadingReport, setDownloadingReport] = useState(false);
 
+    // Últimos 14 meses como opciones legibles ("Julio 2026") — sin adivinar formatos
+    const reportMonthOptions = useMemo(() => {
+        const options: { value: string; label: string }[] = [];
+        const now = new Date();
+        for (let i = 0; i < 14; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const value = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+            const raw = new Intl.DateTimeFormat('es-EC', { month: 'long', year: 'numeric' }).format(d);
+            options.push({ value, label: raw.charAt(0).toUpperCase() + raw.slice(1) });
+        }
+        return options;
+    }, []);
+
     const handleTaxReport = async () => {
         const [year, month] = reportMonth.split('-');
         if (!year || !month) {
@@ -1010,13 +1023,16 @@ const BillingHistory: React.FC = () => {
                         <>
                             {/* Reporte Mensual para Declaración (Formulario 104) */}
                             <div className="flex items-center gap-1.5 bg-white dark:bg-dark-800 border border-gray-100 dark:border-dark-700 rounded-2xl px-2 py-1 shadow-lg shadow-black/5">
-                                <input
-                                    type="month"
+                                <select
                                     value={reportMonth}
                                     onChange={e => setReportMonth(e.target.value)}
-                                    className="bg-transparent text-xs font-bold text-gray-700 dark:text-gray-200 outline-none px-1 py-2"
+                                    className="bg-transparent text-xs font-bold text-gray-700 dark:text-gray-200 outline-none px-1 py-2 cursor-pointer"
                                     title="Mes del reporte de declaración"
-                                />
+                                >
+                                    {reportMonthOptions.map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
                                 <button
                                     onClick={handleTaxReport}
                                     disabled={downloadingReport}
