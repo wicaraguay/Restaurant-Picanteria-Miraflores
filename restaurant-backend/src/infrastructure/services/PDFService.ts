@@ -234,20 +234,16 @@ export class PDFService {
         this.generateHr(doc, currentY);
         currentY += 10;
 
-        // Rows - Mostrar precios ORIGINALES con IVA incluido (igual que facturas)
+        // Rows - Precios SIN IVA, idénticos al XML autorizado (igual que facturas)
         doc.font('Helvetica').fontSize(8.5).fillColor('#4b5563');
 
         creditNote.detalles.forEach(item => {
             const startX = leftMargin;
-            // Calcular precio con IVA incluido: subtotal + impuesto
-            const taxValue = item.impuestos?.[0]?.valor || 0;
-            const totalConIva = item.precioTotalSinImpuesto + taxValue;
-            const priceConIva = totalConIva / item.cantidad;
 
             doc.text(item.descripcion, startX, currentY, { width: colWidths.desc });
             doc.text(item.cantidad.toString(), startX + colWidths.desc, currentY, { width: colWidths.qty, align: 'center' });
-            doc.text(`$${priceConIva.toFixed(2)}`, startX + colWidths.desc + colWidths.qty, currentY, { width: colWidths.unit, align: 'right' });
-            doc.text(`$${totalConIva.toFixed(2)}`, startX + colWidths.desc + colWidths.qty + colWidths.unit, currentY, { width: colWidths.total, align: 'right' });
+            doc.text(`$${this.formatUnitPrice(item.precioUnitario)}`, startX + colWidths.desc + colWidths.qty, currentY, { width: colWidths.unit, align: 'right' });
+            doc.text(`$${item.precioTotalSinImpuesto.toFixed(2)}`, startX + colWidths.desc + colWidths.qty + colWidths.unit, currentY, { width: colWidths.total, align: 'right' });
 
             currentY = doc.y + 8;
             if (currentY > 700) {
@@ -489,13 +485,11 @@ export class PDFService {
                 doc.moveTo(leftMargin, y).lineTo(rightMargin, y).lineWidth(0.5).stroke();
                 y += 5;
 
-                // --- Items List (Precios ORIGINALES con IVA incluido) ---
+                // --- Items List (Precios SIN IVA, idénticos al XML autorizado) ---
                 doc.font('Helvetica').fontSize(8);
                 invoice.detalles.forEach(item => {
-                    // Mostrar precio ORIGINAL (con IVA incluido)
-                    // El desglose del IVA se hace SOLO en los totales
-                    // item.total viene del billData original (ya incluye IVA)
-                    const totalItem = ((item as any).total ?? item.precioTotalSinImpuesto).toFixed(2);
+                    // Sin IVA para que las líneas sumen el SUBTOTAL del desglose
+                    const totalItem = item.precioTotalSinImpuesto.toFixed(2);
 
                     doc.text(item.cantidad.toString(), leftMargin, y, { width: 25, align: 'center' });
                     doc.text(item.descripcion, leftMargin + 30, y, { width: 125, align: 'left' });
@@ -822,16 +816,12 @@ export class PDFService {
                 position = 50;
             }
 
-            // Mostrar precios ORIGINALES (con IVA incluido) en la tabla de items
-            // El desglose del IVA se hace SOLO en los totales (SUBTOTAL 15%, IVA 15%, etc.)
-            // item.price y item.total vienen del billData original (ya incluyen IVA)
-            const displayUnitPrice = (item as any).price ?? item.precioUnitario;
-            const displayTotal = (item as any).total ?? item.precioTotalSinImpuesto;
-
+            // Precios SIN IVA, idénticos al XML autorizado: así la suma de las líneas
+            // cuadra con SUBTOTAL SIN IMPUESTOS y el IVA se desglosa en los totales
             doc.text(item.cantidad.toString(), colQty, position, { width: 50, align: 'center' });
             doc.text(item.descripcion, colDesc, position, { width: 260 });
-            doc.text(`$${displayUnitPrice.toFixed(2)}`, colPrice, position, { width: 80, align: 'right' });
-            doc.text(`$${displayTotal.toFixed(2)}`, colTotal, position, { width: 85, align: 'right' });
+            doc.text(`$${this.formatUnitPrice(item.precioUnitario)}`, colPrice, position, { width: 80, align: 'right' });
+            doc.text(`$${item.precioTotalSinImpuesto.toFixed(2)}`, colTotal, position, { width: 85, align: 'right' });
 
             position += 18; // Reduced row height slightly
         }
@@ -897,6 +887,17 @@ export class PDFService {
 
     private generateHr(doc: PDFKit.PDFDocument, y: number, lineWidth = 1, color = '#e5e7eb', startX = 30, endX = 565) {
         doc.strokeColor(color).lineWidth(lineWidth).moveTo(startX, y).lineTo(endX, y).stroke();
+    }
+
+    /**
+     * Precio unitario sin IVA tal como va en el XML autorizado (hasta 6 decimales).
+     * No se redondea a 2 decimales: cantidad × precio dejaría de cuadrar con el
+     * total de línea. Solo se recortan ceros a la derecha (mínimo 2 decimales).
+     */
+    private formatUnitPrice(value: number): string {
+        const trimmed = value.toFixed(6).replace(/0+$/, '');
+        const decimals = trimmed.split('.')[1] || '';
+        return decimals.length < 2 ? value.toFixed(2) : trimmed;
     }
 
     /**
