@@ -6,6 +6,7 @@
  */
 import React from 'react';
 import { optimizeImage } from '../../../utils/cloudinary';
+import { sriItemCode } from '../../../utils/sriItemCode';
 import { MenuItem } from '../types/menu.types';
 import { EditIcon, TrashIcon } from '../../../components/ui/Icons';
 import ToggleSwitch from '../../../components/ui/ToggleSwitch';
@@ -60,6 +61,14 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onEdit, onDele
                     <h3 className="font-black text-gray-900 dark:text-white text-xl leading-tight tracking-tighter">
                         {item.name}
                     </h3>
+                    {/* Código SRI DEL PRODUCTO (derivado de su ID único) — junto al nombre
+                        para que quede claro que pertenece al plato, no a la categoría */}
+                    <span
+                        className="inline-block mt-1.5 text-[9px] font-mono font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-dark-900 px-2 py-0.5 rounded-md border border-gray-100 dark:border-dark-700"
+                        title="Código SRI de ESTE producto — se genera automáticamente de su ID único y aparece en las facturas"
+                    >
+                        {sriItemCode(item)}
+                    </span>
                 </div>
                 
                 <p className="text-gray-500 dark:text-gray-400 text-sm line-clamp-2 mb-6 flex-1">

@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { MenuItem } from '../types/menu.types';
 import Modal from '../../../components/ui/Modal';
 import { uploadToCloudinary } from '../../../utils/cloudinary';
+import { sriItemCode } from '../../../utils/sriItemCode';
 import { logger } from '../../../utils/logger';
 import { Validators } from '../../../utils/validators';
 import { toast } from '../../../components/ui/AlertProvider';
@@ -156,6 +157,12 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 block ml-1">Nombre del Plato</label>
                     <input type="text" name="name" value={formData.name || ''} onChange={handleChange} required placeholder="Ej: Ceviche Mixto" className={`${inputClass} ${errors.name ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
                     {errors.name && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1 uppercase">{errors.name}</p>}
+                    {isEditing && item?.id && (
+                        <p className="text-[10px] font-bold text-gray-400 mt-1.5 ml-1">
+                            Código SRI: <span className="font-mono text-gray-500 dark:text-gray-400">{sriItemCode(item)}</span>
+                            <span className="text-gray-300 dark:text-gray-600"> · automático, aparece en las facturas</span>
+                        </p>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
