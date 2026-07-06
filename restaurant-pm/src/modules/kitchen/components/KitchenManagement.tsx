@@ -261,17 +261,25 @@ const KitchenOrderCard: React.FC<{
                             }`}
                         title={item.prepared ? 'Toca para desmarcar' : 'Toca cuando esté listo'}
                     >
-                        <div className="flex items-center gap-3">
-                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${item.prepared ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                        <div className="flex items-center gap-3 min-w-0">
+                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black flex-shrink-0 ${item.prepared ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
                                 }`}>
                                 {item.quantity}
                             </span>
-                            <span className={`font-bold text-sm ${item.prepared
-                                    ? 'text-gray-400 dark:text-gray-500 line-through'
-                                    : 'text-gray-800 dark:text-gray-100'
-                                }`}>
-                                {item.name}
-                            </span>
+                            <div className="min-w-0">
+                                <span className={`font-bold text-sm ${item.prepared
+                                        ? 'text-gray-400 dark:text-gray-500 line-through'
+                                        : 'text-gray-800 dark:text-gray-100'
+                                    }`}>
+                                    {item.name}
+                                </span>
+                                {/* Nota del cajero para la cocina */}
+                                {item.notes && (
+                                    <p className={`text-[11px] font-bold mt-0.5 ${item.prepared ? 'text-gray-400 dark:text-gray-500' : 'text-orange-600 dark:text-orange-400'}`}>
+                                        📝 {item.notes}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                         {item.prepared ? (
                             <CheckCircleIcon className="w-5 h-5 text-green-500 flex-shrink-0" />

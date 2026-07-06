@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MenuItem } from '../../menu/types/menu.types';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
-import { SearchIcon, PlusIcon, MinusIcon, TrashIcon, ClipboardListIcon, ChevronLeftIcon } from '../../../components/ui/Icons';
+import { SearchIcon, PlusIcon, MinusIcon, TrashIcon, ClipboardListIcon, ChevronLeftIcon, EditIcon } from '../../../components/ui/Icons';
 import { toast } from '../../../components/ui/AlertProvider';
 import { optimizeImage } from '../../../utils/cloudinary';
 import { categoryKey, uniqueCategoryNames } from '../../../utils/categoryName';
@@ -24,6 +24,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
     const [isSaving, setIsSaving] = useState(false);
     const [showTicketMobile, setShowTicketMobile] = useState(false);
     const [lastAddedFeedback, setLastAddedFeedback] = useState<string | null>(null);
+    const [editingPriceIdx, setEditingPriceIdx] = useState<number | null>(null);
 
     // Categories
     const categories = useMemo(() => {
@@ -71,9 +72,37 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
     };
 
     const removeItem = (index: number) => {
+        if (cartItems[index]?.prepared) return; // los preparados no se eliminan
+        setCartItems(prev => prev.filter((_, i) => i !== index));
+        // Mantener el índice de edición de precio alineado tras el filtrado
+        setEditingPriceIdx(prev => {
+            if (prev === null) return null;
+            if (prev === index) return null;
+            return prev > index ? prev - 1 : prev;
+        });
+    };
+
+    // Ajustar el precio de una línea (ej. sustitución más cara: arroz relleno).
+    // Guarda el precio original la primera vez para poder mostrarlo tachado.
+    const updateItemPrice = (index: number, newPrice: number) => {
         setCartItems(prev => {
-            if (prev[index].prepared) return prev;
-            return prev.filter((_, i) => i !== index);
+            const newItems = [...prev];
+            const item = newItems[index];
+            if (item.prepared) return prev;
+            if (isNaN(newPrice) || newPrice < 0) return prev;
+            const rounded = Math.round(newPrice * 100) / 100; // 2 decimales (moneda)
+            const originalPrice = item.originalPrice ?? item.price;
+            newItems[index] = { ...item, price: rounded, originalPrice };
+            return newItems;
+        });
+    };
+
+    // Nota para la cocina por producto (ej. "sin cebolla", "arroz relleno")
+    const updateItemNotes = (index: number, notes: string) => {
+        setCartItems(prev => {
+            const newItems = [...prev];
+            newItems[index] = { ...newItems[index], notes };
+            return newItems;
         });
     };
 
@@ -298,43 +327,91 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                                     <p className="font-bold text-sm tracking-tight text-center">EL TICKET ESTÁ VACÍO<br/>SELECCIONA PRODUCTOS</p>
                                 </div>
                             ) : (
-                                cartItems.map((item, idx) => (
-                                    <div key={idx} className="animate-slide-up bg-white dark:bg-dark-900 p-2.5 md:p-3 rounded-xl md:rounded-2xl flex items-center gap-2 md:gap-3 shadow-sm border border-gray-50 dark:border-dark-700">
-                                        <div className="flex-1 min-w-0">
-                                            <h5 className="font-bold text-xs md:text-sm text-gray-800 dark:text-gray-100 truncate">{item.name}</h5>
-                                            <p className="text-[9px] md:text-[10px] font-bold text-gray-400 dark:text-gray-500 tracking-tighter">${item.price?.toFixed(2)} c/u</p>
-                                        </div>
-                                        <div className="flex items-center bg-gray-50 dark:bg-dark-800 rounded-xl p-0.5">
-                                            <button 
-                                                onClick={() => updateQuantity(idx, -1)}
-                                                data-testid={`btn-minus-${idx}`}
-                                                className="w-9 h-9 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-red-500 active:bg-red-50 dark:active:bg-red-950/20 rounded-lg disabled:opacity-30 transition-colors"
+                                cartItems.map((item, idx) => {
+                                    const priceAdjusted = item.originalPrice != null && item.originalPrice !== item.price;
+                                    return (
+                                    <div key={idx} className="animate-slide-up bg-white dark:bg-dark-900 p-2.5 md:p-3 rounded-xl md:rounded-2xl shadow-sm border border-gray-50 dark:border-dark-700 space-y-2">
+                                        <div className="flex items-center gap-2 md:gap-3">
+                                            <div className="flex-1 min-w-0">
+                                                <h5 className="font-bold text-xs md:text-sm text-gray-800 dark:text-gray-100 truncate">{item.name}</h5>
+                                                {/* Precio por unidad — tocar para ajustar (ej. sustitución más cara) */}
+                                                {editingPriceIdx === idx ? (
+                                                    <div className="flex items-center gap-1 mt-0.5">
+                                                        <span className="text-[10px] font-bold text-gray-400">$</span>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            autoFocus
+                                                            defaultValue={item.price ?? 0}
+                                                            onBlur={(e) => { updateItemPrice(idx, parseFloat(e.target.value)); setEditingPriceIdx(null); }}
+                                                            onKeyDown={(e) => { if (e.key === 'Enter') { updateItemPrice(idx, parseFloat((e.target as HTMLInputElement).value)); setEditingPriceIdx(null); } }}
+                                                            className="w-16 text-[11px] font-bold bg-gray-50 dark:bg-dark-800 border border-blue-300 dark:border-blue-700 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                                        />
+                                                        <span className="text-[9px] text-gray-400">c/u</span>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => !item.prepared && setEditingPriceIdx(idx)}
+                                                        disabled={item.prepared}
+                                                        className="flex items-center gap-1 mt-0.5 disabled:cursor-default"
+                                                        title="Tocar para ajustar el precio"
+                                                    >
+                                                        {priceAdjusted && (
+                                                            <span className="text-[9px] md:text-[10px] font-bold text-gray-300 dark:text-gray-600 line-through">${item.originalPrice!.toFixed(2)}</span>
+                                                        )}
+                                                        <span className={`text-[9px] md:text-[10px] font-bold tracking-tighter ${priceAdjusted ? 'text-orange-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                                                            ${item.price?.toFixed(2)} c/u
+                                                        </span>
+                                                        {!item.prepared && <EditIcon className="w-2.5 h-2.5 text-gray-300" />}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center bg-gray-50 dark:bg-dark-800 rounded-xl p-0.5">
+                                                <button
+                                                    onClick={() => updateQuantity(idx, -1)}
+                                                    data-testid={`btn-minus-${idx}`}
+                                                    className="w-9 h-9 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-red-500 active:bg-red-50 dark:active:bg-red-950/20 rounded-lg disabled:opacity-30 transition-colors"
+                                                    disabled={item.prepared}
+                                                >
+                                                    <MinusIcon className="w-4 h-4 md:w-3 md:h-3" />
+                                                </button>
+                                                <span className="w-7 text-center text-sm md:text-xs font-black">{item.quantity}</span>
+                                                <button
+                                                    onClick={() => updateQuantity(idx, 1)}
+                                                    data-testid={`btn-plus-${idx}`}
+                                                    className="w-9 h-9 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 active:bg-blue-50 dark:active:bg-blue-950/20 rounded-lg disabled:opacity-30 transition-colors"
+                                                    disabled={item.prepared}
+                                                >
+                                                    <PlusIcon className="w-4 h-4 md:w-3 md:h-3" />
+                                                </button>
+                                            </div>
+                                            <div className="w-14 md:w-12 text-right">
+                                                <p className="font-black text-sm text-gray-900 dark:text-white">${((item.price || 0) * item.quantity).toFixed(2)}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => removeItem(idx)}
+                                                className="w-9 h-9 md:w-auto md:h-auto flex items-center justify-center text-gray-300 hover:text-red-500 active:bg-red-50 dark:active:bg-red-950/20 rounded-lg transition-colors disabled:opacity-10"
                                                 disabled={item.prepared}
                                             >
-                                                <MinusIcon className="w-4 h-4 md:w-3 md:h-3" />
-                                            </button>
-                                            <span className="w-7 text-center text-sm md:text-xs font-black">{item.quantity}</span>
-                                            <button 
-                                                onClick={() => updateQuantity(idx, 1)}
-                                                data-testid={`btn-plus-${idx}`}
-                                                className="w-9 h-9 md:w-8 md:h-8 flex items-center justify-center text-gray-400 hover:text-blue-500 active:bg-blue-50 dark:active:bg-blue-950/20 rounded-lg disabled:opacity-30 transition-colors"
-                                                disabled={item.prepared}
-                                            >
-                                                <PlusIcon className="w-4 h-4 md:w-3 md:h-3" />
+                                                <TrashIcon className="w-4 h-4" />
                                             </button>
                                         </div>
-                                        <div className="w-14 md:w-12 text-right">
-                                            <p className="font-black text-sm text-gray-900 dark:text-white">${((item.price || 0) * item.quantity).toFixed(2)}</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => removeItem(idx)}
-                                            className="w-9 h-9 md:w-auto md:h-auto flex items-center justify-center text-gray-300 hover:text-red-500 active:bg-red-50 dark:active:bg-red-950/20 rounded-lg transition-colors disabled:opacity-10"
-                                            disabled={item.prepared}
-                                        >
-                                            <TrashIcon className="w-4 h-4" />
-                                        </button>
+                                        {/* Nota para la cocina (ej. "arroz relleno en vez de blanco", "sin cebolla") */}
+                                        {item.prepared ? (
+                                            item.notes ? <p className="text-[10px] text-gray-500 dark:text-gray-400 px-1">📝 {item.notes}</p> : null
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                value={item.notes || ''}
+                                                onChange={(e) => updateItemNotes(idx, e.target.value)}
+                                                placeholder="📝 Nota para cocina (opcional)"
+                                                className="w-full text-[10px] md:text-[11px] bg-gray-50 dark:bg-dark-800 border border-gray-100 dark:border-dark-700 rounded-lg px-2.5 py-1.5 text-gray-700 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
+                                            />
+                                        )}
                                     </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
 

@@ -29,6 +29,8 @@ export interface OrderItem {
     price?: number;
     prepared?: boolean;
     taxRate?: number; // IVA individual del producto (0, 5, 12, 15)
+    notes?: string; // Nota para la cocina (ej. "sin cebolla", "arroz relleno en vez de blanco")
+    originalPrice?: number; // Precio original del menú cuando el cajero ajusta el precio de la línea
 }
 
 export interface Order {
