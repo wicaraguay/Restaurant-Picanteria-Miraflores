@@ -58,7 +58,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
 
     useEffect(() => {
         if (isOpen) {
-            setFormData(isEditing ? { ...item } : { name: '', category: '', categoryId: '', price: '', description: '', available: true, imageUrl: '', taxRate: 15 } as Partial<MenuItem>);
+            setFormData(isEditing ? { ...item } : { name: '', category: '', categoryId: '', price: undefined, description: '', available: true, imageUrl: '', taxRate: 15 });
             setImageFile(null);
             setIsUploading(false);
             setErrors({});
