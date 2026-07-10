@@ -55,7 +55,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
 
     useEffect(() => {
         if (isOpen) {
-            setFormData(isEditing ? { ...item } : { name: '', category: '', categoryId: '', price: 0, description: '', available: true, imageUrl: '', taxRate: 15 });
+            setFormData(isEditing ? { ...item } : { name: '', category: '', categoryId: '', price: '', description: '', available: true, imageUrl: '', taxRate: 15 } as Partial<MenuItem>);
             setImageFile(null);
             setIsUploading(false);
             setErrors({});
@@ -75,7 +75,10 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                 category: selectedCategory?.name || prev.category || ''
             }));
         } else {
-            setFormData(prev => ({ ...prev, [name]: type === 'number' ? parseFloat(value) : value }));
+            // Guardamos SIEMPRE el texto crudo (incluido el precio). Convertir a número
+            // en cada tecla rompe estados intermedios como "0", "0.", "0.05" y, combinado
+            // con `value={price || ''}`, borra el 0 inicial (0 es falsy en JS).
+            setFormData(prev => ({ ...prev, [name]: value }));
         }
     };
 
@@ -98,7 +101,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
         const categoryVal = Validators.required(formData.category, 'Categoría');
         if (!categoryVal.valid) newErrors.category = categoryVal.error!;
 
-        const priceVal = Validators.positiveNumber(formData.price || 0, 'Precio');
+        const priceVal = Validators.positiveNumber(parseFloat(String(formData.price)) || 0, 'Precio');
         if (!priceVal.valid) newErrors.price = priceVal.error!;
 
         setErrors(newErrors);
@@ -133,7 +136,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                 name: (formData.name || '').trim(),
                 category: (formData.category || '').trim(),
                 categoryId: formData.categoryId,
-                price: formData.price,
+                price: parseFloat(String(formData.price)) || 0,
                 description: formData.description || '',
                 available: formData.available || false,
                 imageUrl: finalImageUrl,
@@ -200,7 +203,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                     </div>
                     <div>
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 block ml-1">Precio ($)</label>
-                        <input type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} required placeholder="0.00" className={`${inputClass} ${errors.price ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
+                        <input type="number" step="0.01" min="0" name="price" value={formData.price ?? ''} onChange={handleChange} required placeholder="0.00" className={`${inputClass} ${errors.price ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
                         {errors.price && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1 uppercase">{errors.price}</p>}
                     </div>
                 </div>
