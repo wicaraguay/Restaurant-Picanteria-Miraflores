@@ -17,6 +17,9 @@ import { Category } from '../../categories/types/category.types';
 
 const inputClass = "w-full rounded-2xl border border-gray-200 bg-gray-50 p-4 text-gray-900 text-sm font-medium focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none transition-all dark:border-gray-700 dark:bg-dark-900/50 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-500 dark:focus:bg-dark-900 dark:focus:ring-blue-500/10";
 
+/** Convierte el texto del precio a número, aceptando coma o punto como separador decimal. */
+const parsePrice = (v: unknown): number => parseFloat(String(v ?? '').replace(',', '.')) || 0;
+
 export interface MenuFormModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -74,10 +77,15 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                 categoryId: value,
                 category: selectedCategory?.name || prev.category || ''
             }));
+        } else if (name === 'price') {
+            // Precio como TEXTO controlado: solo dígitos y UN separador decimal
+            // (coma o punto — los teclados en español usan coma), máx. 2 decimales.
+            // Con type="number" el navegador reporta "" en estados intermedios como
+            // "0," o "0." y React borraba lo tecleado al re-renderizar.
+            if (/^\d*([.,]\d{0,2})?$/.test(value)) {
+                setFormData(prev => ({ ...prev, price: value as unknown as number }));
+            }
         } else {
-            // Guardamos SIEMPRE el texto crudo (incluido el precio). Convertir a número
-            // en cada tecla rompe estados intermedios como "0", "0.", "0.05" y, combinado
-            // con `value={price || ''}`, borra el 0 inicial (0 es falsy en JS).
             setFormData(prev => ({ ...prev, [name]: value }));
         }
     };
@@ -101,7 +109,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
         const categoryVal = Validators.required(formData.category, 'Categoría');
         if (!categoryVal.valid) newErrors.category = categoryVal.error!;
 
-        const priceVal = Validators.positiveNumber(parseFloat(String(formData.price)) || 0, 'Precio');
+        const priceVal = Validators.positiveNumber(parsePrice(formData.price), 'Precio');
         if (!priceVal.valid) newErrors.price = priceVal.error!;
 
         setErrors(newErrors);
@@ -136,7 +144,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                 name: (formData.name || '').trim(),
                 category: (formData.category || '').trim(),
                 categoryId: formData.categoryId,
-                price: parseFloat(String(formData.price)) || 0,
+                price: parsePrice(formData.price),
                 description: formData.description || '',
                 available: formData.available || false,
                 imageUrl: finalImageUrl,
@@ -203,7 +211,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                     </div>
                     <div>
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 block ml-1">Precio ($)</label>
-                        <input type="number" step="0.01" min="0" name="price" value={formData.price ?? ''} onChange={handleChange} required placeholder="0.00" className={`${inputClass} ${errors.price ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
+                        <input type="text" inputMode="decimal" name="price" value={formData.price ?? ''} onChange={handleChange} required placeholder="0.00" className={`${inputClass} ${errors.price ? 'border-red-500 ring-4 ring-red-500/10' : ''}`} />
                         {errors.price && <p className="text-[10px] text-red-500 font-bold mt-1 ml-1 uppercase">{errors.price}</p>}
                     </div>
                 </div>
