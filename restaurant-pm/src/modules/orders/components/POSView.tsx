@@ -180,27 +180,14 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
         }
     };
 
-    // Paleta rotativa: TODA categoría recibe color (las clases cat-* anteriores
-    // no existían en ningún CSS, así que las pastillas salían siempre grises)
-    const PILL_COLORS = [
-        'border-red-300 text-red-600 dark:border-red-800 dark:text-red-400',
-        'border-cyan-300 text-cyan-600 dark:border-cyan-800 dark:text-cyan-400',
-        'border-amber-300 text-amber-600 dark:border-amber-800 dark:text-amber-400',
-        'border-purple-300 text-purple-600 dark:border-purple-800 dark:text-purple-400',
-        'border-green-300 text-green-600 dark:border-green-800 dark:text-green-400',
-        'border-pink-300 text-pink-600 dark:border-pink-800 dark:text-pink-400'
-    ];
-
+    // Un solo color: activa resaltada, inactivas neutras. shrink-0 evita que el
+    // flex con scroll horizontal aplaste las pastillas y desborde el texto.
     const getCategoryClass = (cat: string) => {
-        const base = "px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border-2 text-[10px] md:text-sm font-bold flex items-center justify-center min-w-[70px] md:min-w-[100px] whitespace-nowrap transition-all ";
+        const base = "shrink-0 px-3.5 md:px-5 py-1.5 md:py-2 rounded-xl md:rounded-2xl border-2 text-[10px] md:text-sm font-bold flex items-center justify-center whitespace-nowrap transition-all ";
         if (selectedCategory === cat) {
             return base + 'bg-blue-600 border-blue-600 text-white shadow-lg scale-105';
         }
-        if (cat === 'Todos') {
-            return base + 'bg-white dark:bg-dark-800 border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300';
-        }
-        const colorIdx = categories.indexOf(cat) % PILL_COLORS.length;
-        return `${base} bg-white dark:bg-dark-800 ${PILL_COLORS[colorIdx]}`;
+        return base + 'bg-white dark:bg-dark-800 border-gray-200 dark:border-dark-600 text-gray-500 dark:text-gray-300';
     };
 
     return (
