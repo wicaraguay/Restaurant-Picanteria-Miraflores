@@ -200,7 +200,7 @@ const CreditNoteModal: React.FC<CreditNoteModalProps> = ({
                 </div>
 
                 {/* Body */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                <form autoComplete="off" onSubmit={handleSubmit} className="p-6 space-y-6">
                     {/* Bill Info */}
                     <div className="bg-gray-50 dark:bg-dark-750 p-4 rounded-xl border border-gray-200 dark:border-dark-700">
                         <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-3">Factura Original</h3>

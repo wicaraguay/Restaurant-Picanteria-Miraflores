@@ -104,7 +104,7 @@ const BrandCustomizationSection: React.FC<BrandCustomizationSectionProps> = ({
                         </div>
 
                         {/* Colors */}
-                        <form onSubmit={onSaveColors} className="space-y-6">
+                        <form autoComplete="off" onSubmit={onSaveColors} className="space-y-6">
                             <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Esquema de Colores</label>
                             <div className="space-y-4">
                                 <div className="flex items-center gap-4 group">

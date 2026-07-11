@@ -218,7 +218,7 @@ export const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, on
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'EDITAR EMPLEADO' : 'AÑADIR EMPLEADO'}>
-            <form onSubmit={handleSubmit} className="space-y-8 max-h-[75vh] overflow-y-auto px-1 custom-scrollbar">
+            <form autoComplete="off" onSubmit={handleSubmit} className="space-y-8 max-h-[75vh] overflow-y-auto px-1 custom-scrollbar">
 
                 {/* Panel de contexto: QUÉ empleado se está editando */}
                 {isEditing && employee && (
@@ -296,7 +296,7 @@ export const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, on
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className={labelClass}>Usuario</label>
-                            <input type="text" name="username" value={formData.username || ''} onChange={handleChange} onBlur={() => handleBlur('username')} placeholder="Ej: jperez" className={`${inputClass} ${errors.username ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10' : ''}`} />
+                            <input type="text" name="username" autoComplete="off" value={formData.username || ''} onChange={handleChange} onBlur={() => handleBlur('username')} placeholder="Ej: jperez" className={`${inputClass} ${errors.username ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10' : ''}`} />
                             {errors.username && <p className={errorClass} data-testid="error-username">{errors.username}</p>}
                         </div>
                         <div>
@@ -305,6 +305,7 @@ export const EmployeeFormModal: React.FC<EmployeeFormModalProps> = ({ isOpen, on
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     name="password"
+                                    autoComplete="new-password"
                                     value={formData.password || ''}
                                     onChange={handleChange}
                                     onBlur={() => handleBlur('password')}

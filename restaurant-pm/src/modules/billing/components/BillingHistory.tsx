@@ -1115,7 +1115,7 @@ const BillingHistory: React.FC = () => {
 
                 {/* Barra de Filtros */}
                 <div className="flex flex-col md:flex-row gap-3 w-full lg:flex-1 lg:max-w-3xl">
-                    <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 w-full">
+                    <form autoComplete="off" onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 w-full">
                         <div className="relative flex-1">
                             <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                             <input

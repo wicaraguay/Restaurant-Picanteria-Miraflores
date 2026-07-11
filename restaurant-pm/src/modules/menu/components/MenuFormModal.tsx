@@ -228,7 +228,7 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Plato' : 'Añadir Plato'}>
-            <form onSubmit={handleSubmit} className="space-y-5 py-2">
+            <form autoComplete="off" onSubmit={handleSubmit} className="space-y-5 py-2">
                 {/* Panel de contexto: QUÉ plato se está editando */}
                 {isEditing && item && (
                     <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50/60 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-900">

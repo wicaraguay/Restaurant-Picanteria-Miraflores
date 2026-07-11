@@ -174,7 +174,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Perfil de Cliente' : 'Nuevo Registro de Cliente'}>
-            <form onSubmit={handleSubmit} className="space-y-6 pt-2">
+            <form autoComplete="off" onSubmit={handleSubmit} className="space-y-6 pt-2">
                 {isEditing && (
                     <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-900">
                         <p className="font-black text-gray-900 dark:text-white uppercase tracking-tighter truncate">{customer!.name}</p>

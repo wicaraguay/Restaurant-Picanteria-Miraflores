@@ -47,7 +47,7 @@ const BusinessInfoSection: React.FC<BusinessInfoSectionProps> = ({ businessInfo,
                         </div>
                     </div>
 
-                    <form onSubmit={onSave} className="space-y-4">
+                    <form autoComplete="off" onSubmit={onSave} className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-1.5">
                                 <label htmlFor="name" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Nombre del Restaurante *</label>

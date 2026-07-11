@@ -33,7 +33,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({ isOp
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Reserva' : 'Añadir Reserva'}>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form autoComplete="off" onSubmit={handleSubmit} className="space-y-4">
                 <input type="text" name="name" defaultValue={reservation?.name || ''} required className={inputClass} placeholder="Nombre" />
                 <div className="flex gap-4">
                     <div className="w-1/3">

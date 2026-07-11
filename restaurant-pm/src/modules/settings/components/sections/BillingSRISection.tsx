@@ -64,7 +64,7 @@ const BillingSRISection: React.FC<BillingSRISectionProps> = ({
                         </div>
                     </div>
 
-                    <form onSubmit={onSave} className="space-y-8">
+                    <form autoComplete="off" onSubmit={onSave} className="space-y-8">
                         {/* Información Fiscal Main */}
                         <div className="space-y-4">
                             <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Información del RUC</h3>

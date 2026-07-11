@@ -156,7 +156,7 @@ export const EditBillModal: React.FC<EditBillModalProps> = ({
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-8">
+                <form autoComplete="off" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-8">
                     {/* Section 1: Customer Data */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">

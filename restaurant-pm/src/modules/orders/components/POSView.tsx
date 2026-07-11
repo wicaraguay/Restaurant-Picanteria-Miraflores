@@ -373,6 +373,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                                 type="text"
                                 ref={nameInputRef}
                                 autoFocus
+                                autoComplete="off"
                                 placeholder="NOMBRE DEL CLIENTE / MESA *"
                                 value={customerName}
                                 onChange={e => setCustomerName(e.target.value.toUpperCase())}
