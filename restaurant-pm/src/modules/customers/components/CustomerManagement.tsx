@@ -234,6 +234,14 @@ const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, setC
                 onSave={handleSaveCustomer}
                 customer={editingCustomer}
                 isLoading={isSaving}
+                onEditExisting={(found) => {
+                    // El lookup viene del backend; preferimos la copia local (id garantizado)
+                    const local = customers.find(c =>
+                        (found.id && c.id === found.id) ||
+                        (found.identification && c.identification === found.identification)
+                    );
+                    handleOpenCustomerForm(local || found);
+                }}
             />
             <ReservationFormModal
                 isOpen={isReservationModalOpen}
