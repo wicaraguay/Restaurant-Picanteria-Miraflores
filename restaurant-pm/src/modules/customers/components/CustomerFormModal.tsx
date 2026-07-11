@@ -40,6 +40,7 @@ const emptyForm: FormState = { name: '', identification: '', phone: '', email: '
 export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, onSave, customer, isLoading, onEditExisting }) => {
     const isEditing = customer !== null;
     const [form, setForm] = useState<FormState>(emptyForm);
+    const [initialForm, setInitialForm] = useState<FormState>(emptyForm);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [existing, setExisting] = useState<Customer | null>(null);
     const [lookingUp, setLookingUp] = useState(false);
@@ -47,18 +48,23 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
     // Cargar datos al abrir (crear = vacío, editar = datos del cliente)
     useEffect(() => {
         if (isOpen) {
-            setForm(customer ? {
+            const loaded: FormState = customer ? {
                 name: customer.name || '',
                 identification: customer.identification || '',
                 phone: customer.phone || '',
                 email: customer.email || '',
                 address: customer.address || '',
                 loyaltyPoints: String(customer.loyaltyPoints ?? 0)
-            } : emptyForm);
+            } : emptyForm;
+            setForm(loaded);
+            setInitialForm(loaded);
             setErrors({});
             setExisting(null);
         }
     }, [isOpen, customer]);
+
+    // En edición: solo se puede guardar si el empleado cambió algo
+    const isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
 
     // Búsqueda automática por identificación (mismo patrón que OrderManagement)
     useEffect(() => {
@@ -162,13 +168,27 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
             identification: form.identification,
             address: form.address.trim(),
             loyaltyPoints: isEditing ? (parseInt(form.loyaltyPoints) || 0) : 0,
-            lastVisit: new Date().toISOString(),
+            // Editar el perfil NO cuenta como visita — se conserva la fecha real
+            lastVisit: isEditing ? customer!.lastVisit : new Date().toISOString(),
         });
     };
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Perfil de Cliente' : 'Nuevo Registro de Cliente'}>
             <form onSubmit={handleSubmit} className="space-y-6 pt-2">
+                {isEditing && (
+                    <div className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-900">
+                        <div className="min-w-0">
+                            <p className="font-black text-gray-900 dark:text-white uppercase tracking-tighter truncate">{customer!.name}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                Última visita: {customer!.lastVisit ? new Date(customer!.lastVisit).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Sin registro'}
+                            </p>
+                        </div>
+                        <span className="shrink-0 inline-flex items-center px-3 py-1.5 rounded-full text-[10px] font-black bg-blue-600 text-white shadow-lg shadow-blue-500/20">
+                            {customer!.loyaltyPoints ?? 0} PTS
+                        </span>
+                    </div>
+                )}
                 <div className="space-y-4">
                     <div>
                         <label className={labelClass}>Identificación (RUC/CI)</label>
@@ -221,6 +241,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
                         <input
                             type="text"
                             name="name"
+                            autoFocus={isEditing}
                             placeholder="Ej. JUAN PÉREZ"
                             value={form.name}
                             onChange={e => setField('name', e.target.value.toUpperCase())}
@@ -289,6 +310,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
                                 className={`w-32 ${inputClass}`}
                                 disabled={isLoading}
                             />
+                            <p className="text-[10px] font-bold text-gray-300 dark:text-gray-500 mt-1 ml-1 uppercase tracking-widest">Ajuste manual — usar solo para correcciones</p>
                         </div>
                     )}
                 </div>
@@ -304,8 +326,9 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
                     </button>
                     <button
                         type="submit"
-                        className={`px-8 py-3 rounded-2xl bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-blue-500/25 active:scale-95 flex items-center gap-2 ${(isLoading || !!existing) ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-700'}`}
-                        disabled={isLoading || !!existing}
+                        className={`px-8 py-3 rounded-2xl bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-blue-500/25 active:scale-95 flex items-center gap-2 ${(isLoading || !!existing || (isEditing && !isDirty)) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
+                        disabled={isLoading || !!existing || (isEditing && !isDirty)}
+                        title={isEditing && !isDirty ? 'No hay cambios por guardar' : undefined}
                     >
                         {isLoading ? (
                             <>
@@ -313,7 +336,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
                                 Procesando...
                             </>
                         ) : (
-                            isEditing ? 'Guardar Cambios' : 'Registrar Cliente'
+                            isEditing ? (isDirty ? 'Guardar Cambios' : 'Sin cambios') : 'Registrar Cliente'
                         )}
                     </button>
                 </div>
