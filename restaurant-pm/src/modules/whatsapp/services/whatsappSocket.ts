@@ -117,7 +117,8 @@ class WhatsAppSocketService {
             'customer_message',         // Alerta: un cliente está escribiendo por WhatsApp
             'chat_message',             // Mensaje del chat integrado (saliente de staff/bot)
             'human_support_requested',  // Notificación cuando cliente pide hablar con humano
-            'conversation_released'     // Notificación cuando se libera una conversación
+            'conversation_released',    // Notificación cuando se libera una conversación
+            'alerts_updated'            // Alguien marcó alertas como atendidas (sincronizar dispositivos)
         ];
         whatsappEvents.forEach(event => {
             this.socket?.on(event, (data: any) => {

@@ -91,6 +91,13 @@ const WhatsAppAlertCenter: React.FC = () => {
             fetchAlerts();
         });
 
+        // Sincronización entre dispositivos: cuando ALGUIEN (otro celular, la web)
+        // marca alertas como atendidas, el backend lo transmite y todos refrescan
+        // al instante — antes solo el polling de 30s las ponía al día.
+        const unsubAttended = whatsappSocket.on('alerts_updated', () => {
+            fetchAlerts();
+        });
+
         // Al (re)conectar el socket, ponerse al día: los eventos emitidos mientras
         // el móvil congeló la página (pantalla apagada / app en background) se perdieron,
         // pero las alertas están persistidas en el backend.
@@ -112,6 +119,7 @@ const WhatsAppAlertCenter: React.FC = () => {
 
         return () => {
             unsubMessage();
+            unsubAttended();
             unsubConnected();
             document.removeEventListener('visibilitychange', handleVisibility);
             clearInterval(interval);

@@ -114,6 +114,8 @@ router.get('/alerts', async (req: Request, res: Response) => {
 router.put('/alerts/attend-all', async (req: Request, res: Response) => {
     try {
         const count = await getWhatsAppAlertRepository().markAllAttended();
+        // Sincronizar los demás dispositivos abiertos al instante
+        whatsAppSocketManager.broadcast('alerts_updated', { scope: 'all' });
         res.json({ success: true, data: { attended: count } });
     } catch (error: any) {
         logger.error('[WhatsApp] Error attending all alerts', { error });
@@ -125,6 +127,8 @@ router.put('/alerts/attend-all', async (req: Request, res: Response) => {
 router.put('/alerts/:id/attend', async (req: Request, res: Response) => {
     try {
         const ok = await getWhatsAppAlertRepository().markAttended(req.params.id);
+        // Sincronizar los demás dispositivos abiertos al instante
+        whatsAppSocketManager.broadcast('alerts_updated', { id: req.params.id });
         res.json({ success: true, data: { attended: ok } });
     } catch (error: any) {
         logger.error('[WhatsApp] Error attending alert', { error, id: req.params.id });
