@@ -108,7 +108,14 @@ const MenuManagement: React.FC<MenuManagementProps> = ({ menuItems, setMenuItems
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <MenuFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveItem} item={editingItem} />
+            <MenuFormModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSave={handleSaveItem}
+                item={editingItem}
+                menuItems={menuItems}
+                onEditExisting={(existing) => handleOpenModal(existing)}
+            />
             
             <ConfirmModal
                 isOpen={confirmDelete.isOpen}
