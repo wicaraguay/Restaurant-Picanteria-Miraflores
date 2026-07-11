@@ -20,10 +20,11 @@ export class CategoryService {
         return CategoryService.instance;
     }
 
-    public async getAll(params?: { productType?: string; visibleOnWebsite?: boolean }): Promise<Category[]> {
+    public async getAll(params?: { productType?: string; visibleOnWebsite?: boolean; includeProductCount?: boolean }): Promise<Category[]> {
         const queryParams = new URLSearchParams();
         if (params?.productType) queryParams.append('productType', params.productType);
         if (params?.visibleOnWebsite !== undefined) queryParams.append('visibleOnWebsite', String(params.visibleOnWebsite));
+        if (params?.includeProductCount) queryParams.append('includeProductCount', 'true');
 
         const url = queryParams.toString()
             ? `${API_ENDPOINTS.CATEGORIES.BASE}?${queryParams.toString()}`

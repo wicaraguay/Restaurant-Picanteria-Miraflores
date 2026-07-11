@@ -58,7 +58,11 @@ const CategoryManagement: React.FC = () => {
     const loadCategories = async () => {
         try {
             setIsLoading(true);
-            const params = filterType !== 'all' ? { productType: filterType } : {};
+            // includeProductCount: el badge "N productos" avisa qué categorías
+            // tienen platos (el backend bloquea eliminar las que tienen)
+            const params = filterType !== 'all'
+                ? { productType: filterType, includeProductCount: true }
+                : { includeProductCount: true };
             const data = await categoryService.getAll(params);
             setCategories(data.sort((a, b) => a.sortOrder - b.sortOrder));
             logger.info('Categories loaded successfully', { count: data.length, filter: filterType });
@@ -206,6 +210,8 @@ const CategoryManagement: React.FC = () => {
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSaveCategory}
                 category={editingCategory}
+                categories={categories}
+                onEditExisting={(existing) => handleOpenModal(existing)}
             />
 
             <ConfirmModal
@@ -318,7 +324,7 @@ const CategoryManagement: React.FC = () => {
                                 <div className="flex items-center gap-2 flex-wrap">
                                     {getProductTypeBadge(category.productType)}
                                     <span className="px-3 py-1 bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 rounded-full text-[10px] font-black uppercase tracking-widest">
-                                        Orden: {category.sortOrder}
+                                        Posición #{index + 1}
                                     </span>
                                     {category.productCount !== undefined && (
                                         <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-full text-[10px] font-black uppercase tracking-widest">
