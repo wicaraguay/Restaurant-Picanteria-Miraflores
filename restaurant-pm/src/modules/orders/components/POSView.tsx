@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MenuItem } from '../../menu/types/menu.types';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
 import { SearchIcon, PlusIcon, MinusIcon, TrashIcon, ClipboardListIcon, ChevronLeftIcon, EditIcon } from '../../../components/ui/Icons';
 import { toast } from '../../../components/ui/AlertProvider';
 import { optimizeImage } from '../../../utils/cloudinary';
 import { categoryKey, uniqueCategoryNames } from '../../../utils/categoryName';
+import { StorageUtil } from '../../../utils/storage';
 import '../styles/posStyles.css';
+
+const COMPACT_VIEW_KEY = 'restaurant_pm_pos_compact_view';
 
 interface POSViewProps {
     menuItems: MenuItem[];
@@ -25,6 +28,26 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
     const [showTicketMobile, setShowTicketMobile] = useState(false);
     const [lastAddedFeedback, setLastAddedFeedback] = useState<string | null>(null);
     const [editingPriceIdx, setEditingPriceIdx] = useState<number | null>(null);
+    // Vista compacta (lista sin fotos): más productos por pantalla = menos scroll.
+    // La preferencia se recuerda por dispositivo.
+    const [compactView, setCompactView] = useState<boolean>(() => StorageUtil.getItem<boolean>(COMPACT_VIEW_KEY) || false);
+    const nameInputRef = useRef<HTMLInputElement>(null);
+
+    const toggleCompactView = () => {
+        setCompactView(prev => {
+            StorageUtil.setItem(COMPACT_VIEW_KEY, !prev);
+            return !prev;
+        });
+    };
+
+    // En el celular el panel del ticket vive oculto (no desmontado), así que el
+    // autoFocus del input no dispara: enfocamos al abrir el ticket si falta el nombre.
+    useEffect(() => {
+        if (showTicketMobile && !customerName.trim()) {
+            const t = setTimeout(() => nameInputRef.current?.focus(), 150);
+            return () => clearTimeout(t);
+        }
+    }, [showTicketMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Categories
     const categories = useMemo(() => {
@@ -223,15 +246,26 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                 <div className={`flex-[3] flex flex-col min-w-0 ${showTicketMobile ? 'hidden md:flex' : 'flex'}`}>
                     {/* Search & Categories */}
                     <div className="glass-panel p-2.5 md:p-4 mb-2 md:mb-4 space-y-2 md:space-y-4">
-                        <div className="relative">
-                            <SearchIcon className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 md:w-5 h-4 md:h-5" />
-                            <input 
-                                type="text" 
-                                placeholder="Buscar producto..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 md:pl-12 pr-4 py-2.5 md:py-3 bg-white dark:bg-dark-900 border-none rounded-xl md:rounded-2xl text-sm md:text-lg font-medium focus:ring-4 focus:ring-blue-500/10 placeholder-gray-300 dark:placeholder-gray-600 transition-all shadow-inner"
-                            />
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <SearchIcon className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 md:w-5 h-4 md:h-5" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar producto..."
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    className="w-full pl-10 md:pl-12 pr-4 py-2.5 md:py-3 bg-white dark:bg-dark-900 border-none rounded-xl md:rounded-2xl text-sm md:text-lg font-medium focus:ring-4 focus:ring-blue-500/10 placeholder-gray-300 dark:placeholder-gray-600 transition-all shadow-inner"
+                                />
+                            </div>
+                            <button
+                                onClick={toggleCompactView}
+                                title={compactView ? 'Ver con fotos' : 'Ver lista rápida'}
+                                className={`shrink-0 px-3 md:px-4 rounded-xl md:rounded-2xl border-2 font-black text-sm md:text-base transition-all active:scale-95 ${compactView
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg'
+                                    : 'bg-white dark:bg-dark-900 border-gray-200 dark:border-dark-700 text-gray-400'}`}
+                            >
+                                {compactView ? '▦' : '☰'}
+                            </button>
                         </div>
                         <div className="flex gap-2 md:gap-3 overflow-x-auto pb-1 md:pb-2 no-scrollbar category-scroll">
                             {categories.map(cat => (
@@ -248,6 +282,33 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
 
                     {/* Grid with improved mobile padding to clear floating button */}
                     <div className="flex-1 overflow-y-auto pr-1 md:pr-2 custom-scroll pb-28 md:pb-4">
+                        {compactView ? (
+                            /* Vista lista rápida: sin fotos, más productos por pantalla */
+                            <div className="space-y-1.5 md:space-y-2">
+                                {filteredItems.map(item => {
+                                    const qty = cartQtyByName[item.name] || 0;
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => addToCart(item)}
+                                            className={`w-full flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 md:py-3.5 border-2 transition-all active:scale-[0.98] ${qty > 0
+                                                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-800'
+                                                : 'bg-white dark:bg-dark-800 border-transparent shadow-sm'}`}
+                                        >
+                                            <span className="flex items-center gap-2.5 min-w-0">
+                                                {qty > 0 && (
+                                                    <span className="shrink-0 bg-blue-600 text-white text-[10px] font-black min-w-[22px] h-[22px] px-1.5 rounded-full flex items-center justify-center">
+                                                        ×{qty}
+                                                    </span>
+                                                )}
+                                                <span className="font-bold text-gray-800 dark:text-gray-100 text-sm md:text-base truncate">{item.name}</span>
+                                            </span>
+                                            <span className="shrink-0 text-blue-600 dark:text-blue-400 font-black text-sm md:text-base">${item.price.toFixed(2)}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : (
                         <div className="pos-grid">
                             {filteredItems.map(item => (
                                 <button
@@ -277,6 +338,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                                 </button>
                             ))}
                         </div>
+                        )}
                     </div>
                 </div>
 
@@ -322,6 +384,7 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                         <div className="px-4 md:px-6 py-3 border-b dark:border-dark-700">
                             <input
                                 type="text"
+                                ref={nameInputRef}
                                 autoFocus
                                 placeholder="NOMBRE DEL CLIENTE / MESA *"
                                 value={customerName}
