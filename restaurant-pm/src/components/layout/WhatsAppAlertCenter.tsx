@@ -145,7 +145,12 @@ const WhatsAppAlertCenter: React.FC = () => {
             }
         } catch (error) {
             console.error('Push subscribe error:', error);
-            toast.error('No se pudieron activar las notificaciones.', 'Error');
+            // Mostrar la causa real: sin esto, diagnosticar fallos de push en un
+            // celular (donde no hay consola) es adivinar a ciegas
+            const detail = (error as Error)?.name && (error as Error)?.message
+                ? `${(error as Error).name}: ${(error as Error).message}`
+                : String(error);
+            toast.error(`No se pudieron activar las notificaciones. ${detail}`, 'Error');
         } finally {
             setSubscribing(false);
         }
