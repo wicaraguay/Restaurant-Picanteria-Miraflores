@@ -8,7 +8,6 @@ import { MenuItem } from '../../menu/types/menu.types';
 import { Order, OrderItem, OrderStatus } from '../types/order.types';
 import Modal from '../../../components/ui/Modal';
 import { PlusIcon, EditIcon, TrashIcon, SearchIcon, MinusIcon, ClipboardListIcon, PrinterIcon, ChevronLeftIcon, LayoutIcon, MonitorIcon, ClockIcon, HistoryIcon } from '../../../components/ui/Icons';
-import { OrderNumberGenerator } from '../utils/orderNumberGenerator';
 import { useRestaurantConfig } from '../../../contexts/RestaurantConfigContext';
 import { generateAccessKey } from '../../billing/utils/sri';
 import { ClientData } from '../../billing/utils/invoiceGenerator';
@@ -28,7 +27,6 @@ interface OrderManagementProps {
 const inputClass = "w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-gray-900 text-sm focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700/50 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:bg-gray-700 dark:focus:ring-blue-500/20";
 
 import { OrderCard } from './OrderCard';
-import { OrderFormModal } from './OrderFormModal';
 import POSView from './POSView';
 import { BillingModal } from './BillingModal';
 
@@ -36,7 +34,6 @@ import { BillingModal } from './BillingModal';
 const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, menuItems }) => {
     const { currentUser } = useAuth();
     const { config, refreshConfig } = useRestaurantConfig();
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
     // Vista y pestaña derivadas de la URL (/admin/orders/:tab).
@@ -66,11 +63,6 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
         setViewMode('pos');
     };
 
-    const handleCloseModal = () => {
-        setEditingOrder(null);
-        setIsModalOpen(false);
-    };
-
     const handleSaveOrder = async (orderToSave: Order) => {
         try {
             const exists = orders.some(o => o.id === orderToSave.id);
@@ -87,14 +79,11 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                 setOrders(prevOrders => prevOrders.map(o => o.id === orderToSave.id ? updated : o));
                 toast.success('Pedido actualizado y enviado a cocina', 'Éxito');
             } else {
-                const orderWithNumber = {
-                    ...orderToSave,
-                    orderNumber: orderToSave.orderNumber || OrderNumberGenerator.getNextOrderNumber()
-                };
-                const created = await orderService.create(orderWithNumber);
-                if (!created.orderNumber) created.orderNumber = orderWithNumber.orderNumber;
+                // El número de pedido lo asigna el SERVIDOR (contador atómico):
+                // generarlo aquí (localStorage) duplicaba números entre dispositivos.
+                const created = await orderService.create(orderToSave);
                 setOrders(prevOrders => [...prevOrders, created]);
-                toast.success(`Pedido #${created.orderNumber} creado`, 'Éxito');
+                toast.success(`Pedido #${created.orderNumber || created.id.slice(-6)} creado`, 'Éxito');
             }
         } catch (error) {
             console.error('Failed to save order:', error);
@@ -597,7 +586,6 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ orders, setOrders, me
                             manualCompleteLabel="Registrar sin Factura"
                         />
                     )}
-                    <OrderFormModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSaveOrder} order={editingOrder} menuItems={menuItems} />
 
                     <ConfirmModal
                         isOpen={confirmDelete.isOpen}

@@ -8,11 +8,53 @@
 import { IOrderRepository, DashboardStatsDTO } from '../../domain/repositories/IOrderRepository';
 import { Order } from '../../domain/entities/Order';
 import { OrderModel } from '../database/schemas/OrderSchema';
+import { CounterModel } from '../database/schemas/CounterSchema';
 import { BaseRepository } from './BaseRepository';
+
+const ORDER_COUNTER_ID = 'orderNumber';
 
 export class MongoOrderRepository extends BaseRepository<Order> implements IOrderRepository {
     constructor() {
         super(OrderModel, 'Order');
+    }
+
+    /**
+     * Siguiente número de pedido vía contador atómico ($inc en findOneAndUpdate).
+     * Dos cajeros creando pedidos a la vez reciben números DISTINTOS garantizado.
+     * La primera vez siembra el contador desde el número más alto ya existente
+     * (los pedidos históricos traían números generados en el navegador).
+     */
+    async getNextOrderNumber(): Promise<string> {
+        let counter = await CounterModel.findOneAndUpdate(
+            { _id: ORDER_COUNTER_ID },
+            { $inc: { seq: 1 } },
+            { new: true }
+        );
+
+        if (!counter) {
+            const maxExisting = await this.getMaxExistingOrderNumber();
+            try {
+                await CounterModel.create({ _id: ORDER_COUNTER_ID, seq: maxExisting });
+            } catch {
+                // Carrera benigna: otro proceso sembró el contador primero
+            }
+            counter = await CounterModel.findOneAndUpdate(
+                { _id: ORDER_COUNTER_ID },
+                { $inc: { seq: 1 } },
+                { new: true, upsert: true }
+            );
+        }
+
+        return String(counter!.seq).padStart(3, '0');
+    }
+
+    private async getMaxExistingOrderNumber(): Promise<number> {
+        const result = await this.model.aggregate([
+            { $match: { orderNumber: { $type: 'string', $ne: '' } } },
+            { $project: { n: { $convert: { input: '$orderNumber', to: 'int', onError: 0, onNull: 0 } } } },
+            { $group: { _id: null, max: { $max: '$n' } } }
+        ]);
+        return result[0]?.max || 0;
     }
 
     protected mapToEntity(doc: any): Order {

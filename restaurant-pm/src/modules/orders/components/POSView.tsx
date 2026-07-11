@@ -57,17 +57,18 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
     };
 
     const updateQuantity = (index: number, delta: number) => {
+        const item = cartItems[index];
+        if (!item || item.prepared) return; // Cannot change quantity of prepared items
+
+        // Bajar de 1 elimina la línea — gesto natural, sin buscar el basurero
+        if (item.quantity + delta <= 0) {
+            removeItem(index);
+            return;
+        }
         setCartItems(prev => {
             const newItems = [...prev];
-            const item = newItems[index];
-            if (item.prepared) return prev; // Cannot change quantity of prepared items
-
-            const newQty = item.quantity + delta;
-            if (newQty > 0) {
-                newItems[index] = { ...item, quantity: newQty };
-                return newItems;
-            }
-            return prev;
+            newItems[index] = { ...newItems[index], quantity: newItems[index].quantity + delta };
+            return newItems;
         });
     };
 
@@ -107,6 +108,13 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
     };
 
     const total = cartItems.reduce((acc, item) => acc + (item.price || 0) * item.quantity, 0);
+
+    // Cantidad ya pedida por producto — para el badge "×N" en la tarjeta
+    const cartQtyByName = useMemo(() => {
+        const map: Record<string, number> = {};
+        cartItems.forEach(i => { map[i.name] = (map[i.name] || 0) + i.quantity; });
+        return map;
+    }, [cartItems]);
 
     // Desglose de IVA respetando el taxRate de CADA producto (0%, 5%, 12%, 15%).
     // Los precios YA incluyen IVA: la base se extrae dividiendo por (1 + tasa).
@@ -149,20 +157,27 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
         }
     };
 
-    const getCategoryClass = (cat: string) => {
-        const base = "category-pill px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border-2 text-[10px] md:text-sm font-bold flex items-center justify-center min-w-[70px] md:min-w-[100px] whitespace-nowrap ";
-        const isActive = selectedCategory === cat;
-        
-        const catMap: Record<string, string> = {
-            'Carnes': 'cat-carnes',
-            'Mariscos': 'cat-mariscos',
-            'Bebidas': 'cat-bebidas',
-            'Postres': 'cat-postres',
-            'Entradas': 'cat-entradas'
-        };
+    // Paleta rotativa: TODA categoría recibe color (las clases cat-* anteriores
+    // no existían en ningún CSS, así que las pastillas salían siempre grises)
+    const PILL_COLORS = [
+        'border-red-300 text-red-600 dark:border-red-800 dark:text-red-400',
+        'border-cyan-300 text-cyan-600 dark:border-cyan-800 dark:text-cyan-400',
+        'border-amber-300 text-amber-600 dark:border-amber-800 dark:text-amber-400',
+        'border-purple-300 text-purple-600 dark:border-purple-800 dark:text-purple-400',
+        'border-green-300 text-green-600 dark:border-green-800 dark:text-green-400',
+        'border-pink-300 text-pink-600 dark:border-pink-800 dark:text-pink-400'
+    ];
 
-        const colorClass = catMap[cat] || 'border-gray-200 text-gray-500';
-        return `${base} ${colorClass} ${isActive ? 'active shadow-lg transform scale-105' : 'bg-white dark:bg-dark-800'}`;
+    const getCategoryClass = (cat: string) => {
+        const base = "px-2.5 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border-2 text-[10px] md:text-sm font-bold flex items-center justify-center min-w-[70px] md:min-w-[100px] whitespace-nowrap transition-all ";
+        if (selectedCategory === cat) {
+            return base + 'bg-blue-600 border-blue-600 text-white shadow-lg scale-105';
+        }
+        if (cat === 'Todos') {
+            return base + 'bg-white dark:bg-dark-800 border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300';
+        }
+        const colorIdx = categories.indexOf(cat) % PILL_COLORS.length;
+        return `${base} bg-white dark:bg-dark-800 ${PILL_COLORS[colorIdx]}`;
     };
 
     return (
@@ -240,6 +255,12 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                                     onClick={() => addToCart(item)}
                                     className="product-card bg-white dark:bg-dark-800 rounded-xl p-2 md:rounded-3xl md:p-3 flex flex-col items-center group relative active:scale-[0.97] transition-transform"
                                 >
+                                    {/* Badge: cuánto de este producto ya está en el ticket */}
+                                    {(cartQtyByName[item.name] || 0) > 0 && (
+                                        <span className="absolute top-1.5 right-1.5 md:top-2 md:right-2 z-10 bg-blue-600 text-white text-[10px] md:text-xs font-black min-w-[22px] h-[22px] px-1.5 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30 animate-in zoom-in duration-200">
+                                            ×{cartQtyByName[item.name]}
+                                        </span>
+                                    )}
                                     <div className="w-full aspect-[4/3] md:aspect-square rounded-lg md:rounded-2xl overflow-hidden mb-1.5 md:mb-2 bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
                                         {item.imageUrl ? (
                                             <img src={optimizeImage(item.imageUrl, 300)} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
@@ -298,23 +319,15 @@ const POSView: React.FC<POSViewProps> = ({ menuItems, onSave, onCancel, initialO
                         </div>
 
                         {/* Customer info — always visible */}
-                        <div className="px-4 md:px-6 py-3 border-b dark:border-dark-700 space-y-2">
-                            <input 
-                                type="text" 
+                        <div className="px-4 md:px-6 py-3 border-b dark:border-dark-700">
+                            <input
+                                type="text"
+                                autoFocus
                                 placeholder="NOMBRE DEL CLIENTE / MESA *"
                                 value={customerName}
                                 onChange={e => setCustomerName(e.target.value.toUpperCase())}
                                 className="w-full bg-white dark:bg-dark-900 border-2 border-gray-100 dark:border-dark-700 rounded-xl px-4 py-2.5 text-sm font-bold focus:border-blue-500 focus:ring-0 transition-colors"
                             />
-                            <select
-                                value={orderType}
-                                onChange={e => setOrderType(e.target.value as any)}
-                                className="w-full bg-white dark:bg-dark-900 border-2 border-gray-100 dark:border-dark-700 rounded-xl px-3 py-2 text-xs font-bold"
-                            >
-                                <option>En Local</option>
-                                <option>Delivery</option>
-                                <option>Para Llevar</option>
-                            </select>
                         </div>
 
                         {/* Items Area */}

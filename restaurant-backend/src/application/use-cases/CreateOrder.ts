@@ -32,7 +32,12 @@ export class CreateOrder {
         // Validar que cada item tenga taxRate (obligatorio para cálculos correctos de IVA)
         this.validateItems(orderData.items);
 
-        const order = await this.orderRepository.create(orderData as any);
+        // El número lo asigna SIEMPRE el servidor (contador atómico) y se ignora
+        // cualquier valor enviado por el cliente: los números generados en el
+        // navegador (localStorage) se duplicaban entre dispositivos.
+        const orderNumber = await this.orderRepository.getNextOrderNumber();
+
+        const order = await this.orderRepository.create({ ...orderData, orderNumber } as any);
         return order;
     }
 

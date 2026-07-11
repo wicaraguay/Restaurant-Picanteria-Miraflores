@@ -31,6 +31,8 @@ export interface DashboardStatsDTO {
 
 export interface IOrderRepository {
     create(order: Order): Promise<Order>;
+    /** Siguiente número de pedido, asignado atómicamente por el servidor. */
+    getNextOrderNumber(): Promise<string>;
     findById(id: string): Promise<Order | null>;
     findAll(): Promise<Order[]>;
     findPaginated(page: number, limit: number, filter?: any, sort?: any): Promise<PaginatedResult<Order>>;
