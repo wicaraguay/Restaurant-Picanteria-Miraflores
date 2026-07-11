@@ -30,6 +30,7 @@ interface ChatbotConfig {
 
 export class WhatsAppChatbot extends EventEmitter {
     private menuRepository: any = null;
+    private categoryRepository: any = null;
     private config: ChatbotConfig | null = null;
     private menuCache: string | null = null;
     private menuCacheExpiry: number = 0;
@@ -53,6 +54,11 @@ export class WhatsAppChatbot extends EventEmitter {
     public setMenuRepository(repo: any): void {
         this.menuRepository = repo;
         logger.info('[Chatbot] Menu repository set');
+    }
+
+    public setCategoryRepository(repo: any): void {
+        this.categoryRepository = repo;
+        logger.info('[Chatbot] Category repository set');
     }
 
     private async loadConfig(): Promise<void> {
@@ -252,7 +258,34 @@ export class WhatsAppChatbot extends EventEmitter {
                 return 'Menu no disponible. Contactanos por telefono.';
             }
 
-            const items = await this.menuRepository.findAvailable();
+            let items = await this.menuRepository.findAvailable();
+
+            // Las categorías INACTIVAS no se publican a clientes: sus productos
+            // salen del menú de WhatsApp (la web pública ya filtra igual).
+            // El POS interno NO se afecta — los empleados pueden seguir vendiéndolos.
+            let sortOrderByName: Record<string, number> = {};
+            if (this.categoryRepository) {
+                try {
+                    const categories = await this.categoryRepository.findAll();
+                    const inactiveIds = new Set(
+                        categories.filter((c: any) => c.available === false).map((c: any) => c.id)
+                    );
+                    const inactiveNames = new Set(
+                        categories.filter((c: any) => c.available === false).map((c: any) => (c.name || '').toLowerCase().trim())
+                    );
+                    items = items.filter((item: any) => {
+                        if (item.categoryId && inactiveIds.has(item.categoryId)) return false;
+                        // Fallback legacy: productos sin categoryId se comparan por nombre
+                        return !inactiveNames.has((item.category || '').toLowerCase().trim());
+                    });
+                    // El menú respeta el mismo orden de categorías que la web
+                    categories.forEach((c: any) => {
+                        sortOrderByName[(c.name || '').toLowerCase().trim()] = c.sortOrder ?? 999;
+                    });
+                } catch (e) {
+                    logger.warn('[Chatbot] Could not filter by category availability', { error: e });
+                }
+            }
 
             if (!items || items.length === 0) {
                 return 'No hay productos disponibles en este momento.';
@@ -271,7 +304,11 @@ export class WhatsAppChatbot extends EventEmitter {
                 cats[cat].push(item);
             }
 
-            for (const [cat, catItems] of Object.entries(cats)) {
+            const orderedCats = Object.entries(cats).sort(([a], [b]) =>
+                (sortOrderByName[a.toLowerCase().trim()] ?? 999) - (sortOrderByName[b.toLowerCase().trim()] ?? 999)
+            );
+
+            for (const [cat, catItems] of orderedCats) {
                 menu += `*${cat}*\n`;
                 for (const item of catItems) {
                     const price = item.price?.toFixed(2) || '0.00';

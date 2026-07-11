@@ -217,6 +217,8 @@ const startServer = async () => {
 
             if (whatsappClient) {
                 chatbot.setMenuRepository(container.getMenuRepository());
+                // Categorías INACTIVAS no se publican en el menú de WhatsApp
+                chatbot.setCategoryRepository(container.getCategoryRepository());
 
                 // Escuchar mensajes entrantes
                 whatsappClient.on('message', async (message: any) => {
