@@ -6,6 +6,15 @@
     --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 }
 
+/* PWA a pantalla completa: el contenido usa TODO el display pero respeta las
+   zonas del sistema (notch, barra de gestos). En navegador normal env() = 0. */
+body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+}
+
 .dark :root {
     --glass-background: rgba(17, 24, 39, 0.7);
     --glass-border: rgba(255, 255, 255, 0.05);

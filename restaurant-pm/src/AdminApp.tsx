@@ -16,7 +16,7 @@
  * - Reducido de 321 líneas a ~150 líneas (-53%)
  */
 
-import React, { lazy, Suspense, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ViewType } from './types';
 import { Customer, Reservation } from './modules/customers/types/customer.types';
@@ -324,6 +324,43 @@ const AdminAppContent: React.FC = () => {
         document.head.appendChild(link);
     }, []);
 
+    // PWA: botón de instalación visible. Sin instalar, la app NUNCA se ve a
+    // pantalla completa — el navegador solo oculta su UI en la app instalada.
+    const [installPrompt, setInstallPrompt] = useState<any>(null);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.matchMedia('(display-mode: fullscreen)').matches
+        || (window.navigator as any).standalone === true; // iOS Safari
+
+    useEffect(() => {
+        const onBeforeInstall = (e: Event) => {
+            e.preventDefault();
+            setInstallPrompt(e);
+        };
+        const onInstalled = () => setInstallPrompt(null);
+        window.addEventListener('beforeinstallprompt', onBeforeInstall);
+        window.addEventListener('appinstalled', onInstalled);
+        return () => {
+            window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+            window.removeEventListener('appinstalled', onInstalled);
+        };
+    }, []);
+
+    const handleInstall = async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        await installPrompt.userChoice;
+        setInstallPrompt(null);
+    };
+
+    const installBanner = (!isStandalone && installPrompt) ? (
+        <button
+            onClick={handleInstall}
+            className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9998] flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
+        >
+            📲 Instalar App
+        </button>
+    ) : null;
+
     if (isLoading) {
         return (
             <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
@@ -341,11 +378,17 @@ const AdminAppContent: React.FC = () => {
                 <Suspense fallback={<LoadingFallback />}>
                     <Login />
                 </Suspense>
+                {installBanner}
             </ErrorBoundary>
         );
     }
 
-    return <AdminContent />;
+    return (
+        <>
+            <AdminContent />
+            {installBanner}
+        </>
+    );
 };
 
 export default AdminApp;
