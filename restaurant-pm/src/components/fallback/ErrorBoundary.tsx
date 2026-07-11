@@ -28,6 +28,29 @@ interface State {
     error: Error | null;
 }
 
+const CHUNK_RELOAD_KEY = 'restaurant_pm_chunk_reload_at';
+
+/**
+ * Detecta el fallo clásico post-deploy: la pestaña corre una versión vieja y
+ * pide un chunk lazy cuyo archivo ya no existe en el servidor (Vite genera
+ * nombres con hash nuevos en cada build y el service worker limpia los viejos).
+ */
+const isStaleChunkError = (error: Error | null): boolean =>
+    /failed to fetch dynamically imported module|importing a module script failed|error loading dynamically imported module|chunkloaderror|loading chunk .* failed|'text\/html' is not a valid javascript mime type/i
+        .test(error?.message || '');
+
+/** Permite UNA recarga automática por minuto — evita bucles si el error persiste. */
+const tryScheduleAutoReload = (): boolean => {
+    try {
+        const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+        if (Date.now() - last < 60_000) return false;
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+        return true;
+    } catch {
+        return false;
+    }
+};
+
 /**
  * ErrorBoundary - Captura errores en componentes hijos
  */
@@ -36,6 +59,8 @@ export class ErrorBoundary extends Component<Props, State> {
         hasError: false,
         error: null
     };
+
+    private autoReloading = false;
 
     static getDerivedStateFromError(error: Error): State {
         return {
@@ -52,6 +77,16 @@ export class ErrorBoundary extends Component<Props, State> {
             componentStack: errorInfo.componentStack
         });
 
+        // Auto-recuperación post-deploy: si falló la carga de un chunk viejo,
+        // recargar trae el index.html nuevo y la app se cura sola sin que el
+        // empleado vea la pantalla de error.
+        if (isStaleChunkError(error) && tryScheduleAutoReload()) {
+            this.autoReloading = true;
+            this.forceUpdate();
+            window.location.reload();
+            return;
+        }
+
         // Call custom error handler if provided
         if (this.props.onError) {
             this.props.onError(error, errorInfo);
@@ -67,6 +102,19 @@ export class ErrorBoundary extends Component<Props, State> {
 
     render(): ReactNode {
         if (this.state.hasError) {
+            // Recarga automática en curso: spinner breve en vez de la pantalla
+            // de error (la app vuelve sola con la versión nueva)
+            if (this.autoReloading) {
+                return (
+                    <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                            <p className="text-gray-600 dark:text-gray-400 font-medium">Actualizando aplicación…</p>
+                        </div>
+                    </div>
+                );
+            }
+
             // Custom fallback if provided
             if (this.props.fallback) {
                 return this.props.fallback;
