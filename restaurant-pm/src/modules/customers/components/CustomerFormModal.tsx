@@ -32,10 +32,9 @@ interface FormState {
     phone: string;
     email: string;
     address: string;
-    loyaltyPoints: string;
 }
 
-const emptyForm: FormState = { name: '', identification: '', phone: '', email: '', address: '', loyaltyPoints: '0' };
+const emptyForm: FormState = { name: '', identification: '', phone: '', email: '', address: '' };
 
 export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, onSave, customer, isLoading, onEditExisting }) => {
     const isEditing = customer !== null;
@@ -53,8 +52,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
                 identification: customer.identification || '',
                 phone: customer.phone || '',
                 email: customer.email || '',
-                address: customer.address || '',
-                loyaltyPoints: String(customer.loyaltyPoints ?? 0)
+                address: customer.address || ''
             } : emptyForm;
             setForm(loaded);
             setInitialForm(loaded);
@@ -167,7 +165,8 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
             phone: form.phone,
             identification: form.identification,
             address: form.address.trim(),
-            loyaltyPoints: isEditing ? (parseInt(form.loyaltyPoints) || 0) : 0,
+            // Los puntos no se editan a mano: los administra el sistema
+            loyaltyPoints: isEditing ? (customer!.loyaltyPoints ?? 0) : 0,
             // Editar el perfil NO cuenta como visita — se conserva la fecha real
             lastVisit: isEditing ? customer!.lastVisit : new Date().toISOString(),
         });
@@ -177,16 +176,11 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Perfil de Cliente' : 'Nuevo Registro de Cliente'}>
             <form onSubmit={handleSubmit} className="space-y-6 pt-2">
                 {isEditing && (
-                    <div className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-900">
-                        <div className="min-w-0">
-                            <p className="font-black text-gray-900 dark:text-white uppercase tracking-tighter truncate">{customer!.name}</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                Última visita: {customer!.lastVisit ? new Date(customer!.lastVisit).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Sin registro'}
-                            </p>
-                        </div>
-                        <span className="shrink-0 inline-flex items-center px-3 py-1.5 rounded-full text-[10px] font-black bg-blue-600 text-white shadow-lg shadow-blue-500/20">
-                            {customer!.loyaltyPoints ?? 0} PTS
-                        </span>
+                    <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-900">
+                        <p className="font-black text-gray-900 dark:text-white uppercase tracking-tighter truncate">{customer!.name}</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                            Última visita: {customer!.lastVisit ? new Date(customer!.lastVisit).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Sin registro'}
+                        </p>
                     </div>
                 )}
                 <div className="space-y-4">
@@ -298,21 +292,6 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, on
                         />
                     </div>
 
-                    {isEditing && (
-                        <div>
-                            <label className={labelClass}>Puntos acumulados</label>
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                name="loyaltyPoints"
-                                value={form.loyaltyPoints}
-                                onChange={e => setField('loyaltyPoints', e.target.value.replace(/\D/g, ''))}
-                                className={`w-32 ${inputClass}`}
-                                disabled={isLoading}
-                            />
-                            <p className="text-[10px] font-bold text-gray-300 dark:text-gray-500 mt-1 ml-1 uppercase tracking-widest">Ajuste manual — usar solo para correcciones</p>
-                        </div>
-                    )}
                 </div>
 
                 <div className="flex justify-end pt-6 gap-3">
