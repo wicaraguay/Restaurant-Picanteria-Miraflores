@@ -35,17 +35,6 @@ export default defineConfig(({ mode }) => {
               handler: 'NetworkOnly'
             },
             {
-              // Tailwind CDN: cachear para que el estilo cargue instantáneo
-              urlPattern: /^https:\/\/cdn\.tailwindcss\.com\/.*/i,
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'cdn-cache',
-                // CRÍTICO cross-origin: los <script> de otro dominio dan respuestas
-                // "opacas" (status 0) que Workbox NO cachea sin esta autorización
-                cacheableResponse: { statuses: [0, 200] }
-              }
-            },
-            {
               // Fuentes de Google: cambian casi nunca
               urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
               handler: 'CacheFirst',

@@ -24,48 +24,8 @@
   <meta property="og:image" content="https://picanteria-miraflores.vercel.app/image1.png" />
 
   <title>Picantería Miraflores - Sabor Tradicional</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            primary: {
-              DEFAULT: '#1E40AF',
-              hover: '#1D4ED8',
-              light: '#3B82F6',
-            },
-            secondary: '#9333EA',
-            dark: {
-              900: '#111827',
-              800: '#1F2937',
-              700: '#374151',
-              600: '#4B5563',
-            },
-            light: {
-              background: '#F9FAFB',
-              surface: '#FFFFFF',
-              text: '#111827',
-              subtext: '#6B7280',
-              border: '#E5E7EB',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.1"
-  }
-}
-</script>
+  <!-- Tailwind ahora se compila en el build (tailwind.config.js + PostCSS):
+       sin dependencia del CDN en runtime y CSS mínimo solo con lo usado -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Nunito:wght@400;600;700;800;900&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
