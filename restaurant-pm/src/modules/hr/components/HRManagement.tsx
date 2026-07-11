@@ -163,7 +163,15 @@ const HRManagement: React.FC<HRManagementProps> = ({ employees, setEmployees, ro
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <EmployeeFormModal isOpen={isEmployeeModalOpen} onClose={() => setIsEmployeeModalOpen(false)} onSave={handleSaveEmployee} employee={editingEmployee} roles={roles} />
+            <EmployeeFormModal
+                isOpen={isEmployeeModalOpen}
+                onClose={() => setIsEmployeeModalOpen(false)}
+                onSave={handleSaveEmployee}
+                employee={editingEmployee}
+                roles={roles}
+                employees={employees}
+                onEditExisting={(existing) => handleOpenEmployeeModal(existing)}
+            />
             <RoleFormModal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} onSave={handleSaveRole} role={editingRole} />
             
             <ConfirmModal 
