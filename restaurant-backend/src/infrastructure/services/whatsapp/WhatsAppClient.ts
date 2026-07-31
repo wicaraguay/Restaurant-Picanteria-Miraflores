@@ -195,6 +195,18 @@ class WhatsAppClient extends EventEmitter {
 
                     if (text) {
                         this.status.lastActivity = new Date();
+
+                        // Comportamiento humano anti-baneo: marcar el mensaje como LEÍDO
+                        // (los check azules) y suscribirse a la presencia del contacto.
+                        // Un bot que responde sin leer nunca es sospechoso #1 para WhatsApp.
+                        // Fire-and-forget: si falla, no debe frenar el flujo del mensaje.
+                        try {
+                            await this.socket?.readMessages([msg.key]);
+                            await this.socket?.presenceSubscribe(jid);
+                        } catch (e) {
+                            logger.debug('[WhatsApp] Could not mark read / subscribe presence', { error: (e as Error)?.message });
+                        }
+
                         logger.info('[WhatsApp] Message received', {
                             from: jid,
                             text: text.substring(0, 50)
@@ -222,7 +234,16 @@ class WhatsAppClient extends EventEmitter {
         try {
             const jid = this.formatJid(to);
 
+            // Comportamiento humano anti-baneo: mostrar "escribiendo…" y esperar un
+            // tiempo PROPORCIONAL a la longitud del texto + jitter aleatorio antes de
+            // enviar. Responder en milisegundos con intervalo fijo es la firma #1 que
+            // WhatsApp usa para detectar automatización. Aquí lo hacemos ver humano.
+            await this.simulateTyping(jid, text);
+
             const result = await this.socket.sendMessage(jid, { text });
+
+            // Dejar de "escribir" tras enviar
+            try { await this.socket.sendPresenceUpdate('paused', jid); } catch { /* noop */ }
 
             this.status.lastActivity = new Date();
             logger.info('[WhatsApp] Message sent', { to: jid });
@@ -235,6 +256,42 @@ class WhatsAppClient extends EventEmitter {
             logger.error('[WhatsApp] Send error', { to, error: error.message });
             return { success: false, error: error.message };
         }
+    }
+
+    /**
+     * Simula que una persona está escribiendo antes de enviar el mensaje.
+     * Envía el estado 'composing' (aparece "escribiendo…" en el chat del cliente)
+     * y espera un tiempo humano: base + tiempo de tecleo proporcional al largo del
+     * texto + jitter aleatorio, todo acotado para no ser eterno en mensajes largos.
+     */
+    private async simulateTyping(jid: string, text: string): Promise<void> {
+        try {
+            await this.socket?.sendPresenceUpdate('composing', jid);
+        } catch {
+            // Si la presencia falla, igual aplicamos el delay: lo importante es NO
+            // responder en milisegundos.
+        }
+
+        const delay = this.humanTypingDelay(text);
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    /**
+     * Calcula un retardo "humano" en milisegundos según el largo del texto.
+     * ~45 ms por carácter (velocidad de tecleo realista) + base 1.2s + jitter,
+     * acotado entre 1.5s y 8s para no penalizar en exceso los mensajes largos.
+     */
+    private humanTypingDelay(text: string): number {
+        const BASE = 1200;              // arranque de "pensar" antes de teclear
+        const PER_CHAR = 45;            // ms por carácter
+        const MIN = 1500;
+        const MAX = 8000;
+
+        const typing = Math.min(text.length * PER_CHAR, MAX - BASE);
+        const jitter = Math.floor(Math.random() * 1200); // 0-1.2s de variación
+        const total = BASE + typing + jitter;
+
+        return Math.max(MIN, Math.min(total, MAX));
     }
 
     /**

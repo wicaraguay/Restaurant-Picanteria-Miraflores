@@ -87,10 +87,13 @@ export class WhatsAppWorker {
                 async (job: Job) => this.processJob(job),
                 {
                     connection: getRedisConnection(),
-                    concurrency: 5, // Procesar hasta 5 jobs en paralelo
+                    // ANTI-BANEO: cuenta NO oficial (Baileys). Serializamos (concurrency 1)
+                    // y limitamos a ~1 mensaje cada 4s. Enviar en paralelo o a alta
+                    // velocidad es lo que gatilla la detección de spam de WhatsApp.
+                    concurrency: 1,
                     limiter: {
-                        max: 10,
-                        duration: 1000 // Máximo 10 mensajes por segundo
+                        max: 1,
+                        duration: 4000 // Máximo 1 mensaje cada 4 segundos
                     }
                 }
             );
@@ -163,8 +166,11 @@ export class WhatsAppWorker {
 
         for (const msg of data.messages) {
             try {
-                // Delay entre mensajes para evitar rate limiting de WhatsApp
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // ANTI-BANEO: delay ALEATORIO entre mensajes (3-7s). Los intervalos
+                // fijos son una firma de automatización tan clara como la velocidad.
+                // Nota: sendText ya añade su propio delay de "escribiendo…" encima.
+                const gap = 3000 + Math.floor(Math.random() * 4000);
+                await new Promise(resolve => setTimeout(resolve, gap));
 
                 const result = await client.sendText(msg.to, msg.message);
                 results.push({ to: msg.to, success: result.success, messageId: result.messageId });
