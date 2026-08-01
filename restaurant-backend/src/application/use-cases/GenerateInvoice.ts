@@ -91,13 +91,39 @@ export class GenerateInvoice {
         // Step 6: Create draft bill in database
         const draftBill = await this.createDraftBill(params.id, invoice, details, totalImpuestos, environment);
 
-        // Step 7: Generate, sign, and send XML to SRI
-        const { xml, signedXml, result, authResult, updatedInvoice } = await this.processWithSRI(
-            invoice, config, draftBill.id, environment
-        );
-
-        // Determine if consumidor final (needed for order status and email)
+        // Determine if consumidor final (needed for order status and email).
+        // Se calcula ANTES del envío al SRI para poder completar el pedido aunque el SRI falle.
         const isConsumidorFinal = String(client.identification) === CONSUMIDOR_FINAL_RUC;
+
+        // Step 7: Generate, sign, and send XML to SRI
+        let xml: string;
+        let signedXml: string;
+        let result: any;
+        let authResult: any;
+        let updatedInvoice: Invoice | null;
+        try {
+            ({ xml, signedXml, result, authResult, updatedInvoice } = await this.processWithSRI(
+                invoice, config, draftBill.id, environment
+            ));
+        } catch (sriError: any) {
+            // EL SRI ESTÁ CAÍDO / INALCANZABLE (timeout, red, SOAP fault).
+            // El pedido es una venta REAL ya servida: su estado operativo NO debe quedar
+            // rehén de la disponibilidad del SRI. Completamos el pedido y dejamos la factura
+            // como PENDIENTE DE REINTENTO — RetryInvoices/CheckInvoiceStatus la autoriza luego.
+            logger.error('[GenerateInvoice] SRI inalcanzable: se COMPLETA el pedido y la factura queda PENDING_RETRY', {
+                orderId: invoice.orderId, billId: draftBill.id, error: sriError?.message
+            });
+
+            // Dejar la factura retriable y visible (no bloqueante)
+            await this.markBillPendingRetry(draftBill.id, sriError?.message);
+
+            // Completar el pedido igualmente (concern OPERATIVO, separado del fiscal)
+            await this.updateOrderStatus(invoice.orderId, isConsumidorFinal);
+
+            // Re-lanzar el error del SRI: el usuario sigue viendo "SRI no disponible",
+            // pero el pedido YA quedó COMPLETADO en la base de datos.
+            throw sriError;
+        }
 
         // Step 8 & 9: Persist final result and update order status atomically
         // CRITICAL: These operations must succeed together or fail together (data consistency)
@@ -466,6 +492,28 @@ export class GenerateInvoice {
                 sriStatus: finalStatus || 'DESCONOCIDO',
                 message: finalMessage,
                 attempt: 1
+            });
+        }
+    }
+
+    /**
+     * Deja la factura en estado retriable y visible cuando el SRI estuvo caído.
+     * RetryInvoices/CheckInvoiceStatus recogen los PENDING_RETRY y los autorizan luego.
+     * Best-effort: no debe romper el cierre del pedido si el propio guardado falla.
+     */
+    private async markBillPendingRetry(billId: string, errorMessage?: string): Promise<void> {
+        const message = `SRI no disponible al emitir: ${errorMessage || 'error de conexión'}`;
+        try {
+            await this.billRepository.upsert({ id: billId, sriStatus: 'PENDING_RETRY', sriMessage: message });
+            await (this.billRepository as any).pushErrorLog(billId, {
+                timestamp: new Date().toISOString(),
+                sriStatus: 'PENDING_RETRY',
+                message,
+                attempt: 1
+            });
+        } catch (e) {
+            logger.warn('[GenerateInvoice] No se pudo marcar la factura como PENDING_RETRY', {
+                billId, error: (e as Error)?.message
             });
         }
     }

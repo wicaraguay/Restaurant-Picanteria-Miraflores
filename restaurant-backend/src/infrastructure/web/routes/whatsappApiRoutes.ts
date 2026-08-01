@@ -82,6 +82,10 @@ router.post('/chats/:phone/send', jwtAuthMiddleware, requireEnabled, async (req:
             senderName
         });
 
+        // Responder al cliente marca su conversación como ATENDIDA: la alerta deja de
+        // estar "pendiente" para que el personal no la vea como sin atender tras responderla.
+        await getWhatsAppAlertRepository().markAttendedByPhone(phone);
+
         // Avisar a los demás admins abiertos (y refrescar sus chats/contadores)
         whatsAppSocketManager.broadcast('chat_message', {
             phone,
@@ -89,6 +93,8 @@ router.post('/chats/:phone/send', jwtAuthMiddleware, requireEnabled, async (req:
             text,
             senderName
         });
+        // Sincronizar la lista de alertas de todos los dispositivos (la tarjeta desaparece)
+        whatsAppSocketManager.broadcast('alerts_updated', { phone });
 
         res.json({ success: true, data: saved });
     } catch (error: any) {
@@ -100,7 +106,7 @@ router.post('/chats/:phone/send', jwtAuthMiddleware, requireEnabled, async (req:
 // ==================== ALERTAS "CLIENTE ESCRIBIENDO" ====================
 
 // Alertas pendientes (se conservan hasta marcarlas como atendidas)
-router.get('/alerts', async (req: Request, res: Response) => {
+router.get('/alerts', jwtAuthMiddleware, async (req: Request, res: Response) => {
     try {
         const alerts = await getWhatsAppAlertRepository().findPending();
         res.json({ success: true, data: alerts });
@@ -111,7 +117,7 @@ router.get('/alerts', async (req: Request, res: Response) => {
 });
 
 // Marcar todas las alertas como atendidas
-router.put('/alerts/attend-all', async (req: Request, res: Response) => {
+router.put('/alerts/attend-all', jwtAuthMiddleware, async (req: Request, res: Response) => {
     try {
         const count = await getWhatsAppAlertRepository().markAllAttended();
         // Sincronizar los demás dispositivos abiertos al instante
@@ -124,7 +130,7 @@ router.put('/alerts/attend-all', async (req: Request, res: Response) => {
 });
 
 // Marcar una alerta como atendida
-router.put('/alerts/:id/attend', async (req: Request, res: Response) => {
+router.put('/alerts/:id/attend', jwtAuthMiddleware, async (req: Request, res: Response) => {
     try {
         const ok = await getWhatsAppAlertRepository().markAttended(req.params.id);
         // Sincronizar los demás dispositivos abiertos al instante
@@ -148,7 +154,7 @@ router.get('/enabled', (req: Request, res: Response) => {
 });
 
 // Estado de conexión
-router.get('/status', requireEnabled, (req: Request, res: Response) => {
+router.get('/status', jwtAuthMiddleware, requireEnabled, (req: Request, res: Response) => {
     try {
         const client = getWhatsAppClient();
 
@@ -183,7 +189,7 @@ router.get('/status', requireEnabled, (req: Request, res: Response) => {
 });
 
 // Obtener QR
-router.get('/qr', requireEnabled, (req: Request, res: Response) => {
+router.get('/qr', jwtAuthMiddleware, requireEnabled, (req: Request, res: Response) => {
     try {
         const client = getWhatsAppClient();
 
@@ -228,7 +234,7 @@ router.get('/qr', requireEnabled, (req: Request, res: Response) => {
 });
 
 // Conectar
-router.post('/connect', requireEnabled, async (req: Request, res: Response) => {
+router.post('/connect', jwtAuthMiddleware, requireEnabled, async (req: Request, res: Response) => {
     try {
         const client = getWhatsAppClient();
 
@@ -260,7 +266,7 @@ router.post('/connect', requireEnabled, async (req: Request, res: Response) => {
 });
 
 // Desconectar
-router.post('/disconnect', requireEnabled, async (req: Request, res: Response) => {
+router.post('/disconnect', jwtAuthMiddleware, requireEnabled, async (req: Request, res: Response) => {
     try {
         const client = getWhatsAppClient();
         if (client) {
@@ -274,7 +280,7 @@ router.post('/disconnect', requireEnabled, async (req: Request, res: Response) =
 });
 
 // Reiniciar sesión
-router.post('/reset-session', requireEnabled, async (req: Request, res: Response) => {
+router.post('/reset-session', jwtAuthMiddleware, requireEnabled, async (req: Request, res: Response) => {
     try {
         const client = getWhatsAppClient();
         if (client) {
@@ -288,7 +294,7 @@ router.post('/reset-session', requireEnabled, async (req: Request, res: Response
 });
 
 // Enviar mensaje
-router.post('/send', requireEnabled, async (req: Request, res: Response) => {
+router.post('/send', jwtAuthMiddleware, requireEnabled, async (req: Request, res: Response) => {
     try {
         const { phone, message } = req.body;
 
@@ -322,7 +328,7 @@ router.post('/send', requireEnabled, async (req: Request, res: Response) => {
 });
 
 // Config del chatbot
-router.get('/chatbot-config', async (req: Request, res: Response) => {
+router.get('/chatbot-config', jwtAuthMiddleware, async (req: Request, res: Response) => {
     try {
         const repo = getChatbotConfigRepository();
         const config = await repo.get();
@@ -332,7 +338,7 @@ router.get('/chatbot-config', async (req: Request, res: Response) => {
     }
 });
 
-router.put('/chatbot-config', async (req: Request, res: Response) => {
+router.put('/chatbot-config', jwtAuthMiddleware, async (req: Request, res: Response) => {
     try {
         const repo = getChatbotConfigRepository();
         const config = await repo.update(req.body);
@@ -343,7 +349,7 @@ router.put('/chatbot-config', async (req: Request, res: Response) => {
 });
 
 // Test enviar menú
-router.post('/test-menu', requireEnabled, async (req: Request, res: Response) => {
+router.post('/test-menu', jwtAuthMiddleware, requireEnabled, async (req: Request, res: Response) => {
     try {
         const { phone } = req.body;
 

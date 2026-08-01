@@ -7,6 +7,7 @@ import { IBillRepository } from '../../domain/repositories/IBillRepository';
 import { IOrderRepository } from '../../domain/repositories/IOrderRepository';
 
 import { BillingService } from '../services/BillingService';
+import { OrderStatus } from '../../domain/entities/Order';
 import { logger, maskAccessKey } from '../../infrastructure/utils/Logger';
 
 export class CheckInvoiceStatus {
@@ -267,6 +268,26 @@ export class CheckInvoiceStatus {
             environment: isProd ? '2' : '1',
             sriMessage: ''
         });
+
+        // 2.b Completar el PEDIDO asociado si aún no lo está.
+        // Cubre el caso en que la factura se emitió con el SRI caído: el pedido pudo quedar
+        // sin completar y, ahora que la factura SÍ se autorizó, cerramos el pedido.
+        // Idempotente (volver a poner Completed es inofensivo) y no bloqueante.
+        if (bill.orderId) {
+            try {
+                const isCF = bill.customerIdentification === '9999999999999';
+                await this.orderRepository.update(bill.orderId, {
+                    billed: true,
+                    status: OrderStatus.Completed,
+                    billingType: isCF ? 'Consumidor Final' : 'Factura'
+                });
+                logger.info(`[CheckInvoiceStatus] Pedido ${bill.orderId} completado tras autorización de factura`);
+            } catch (e) {
+                logger.warn('[CheckInvoiceStatus] No se pudo completar el pedido tras autorización', {
+                    orderId: bill.orderId, error: (e as Error)?.message
+                });
+            }
+        }
 
         // 3. Send Email
         // Validate Email conditions before doing heavy lifting

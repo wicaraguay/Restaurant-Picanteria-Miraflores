@@ -62,6 +62,10 @@ class WhatsAppSocketService {
         try {
             this.socket = io(wsUrl, {
                 path: '/ws/whatsapp',
+                // El backend exige token JWT en el handshake (evita que cualquiera
+                // reciba el QR y secuestre la sesion). Se lee en forma de funcion para
+                // que cada reconexion use el token vigente en localStorage.
+                auth: (cb) => cb({ token: localStorage.getItem('restaurant_pm_token') }),
                 transports: ['websocket', 'polling'],
                 reconnection: true,
                 reconnectionAttempts: this.maxReconnectAttempts,

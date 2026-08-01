@@ -41,8 +41,13 @@ class ChatbotDailySendRepository {
             if (error?.code === 11000) {
                 return false; // índice único: ya se le envió hoy
             }
-            logger.error('[ChatbotDailySend] Error marking send', { error: error?.message });
-            // Ante un error inesperado de BD, preferimos NO duplicar envíos
+            // Error inesperado de BD (NO es el 11000 de "ya enviado hoy"). Fallamos CERRADO:
+            // no enviar, para no arriesgar un envío DUPLICADO (que agrava el riesgo de baneo).
+            // Pero NO en silencio: se registra con contexto y consecuencia explícita para que
+            // sea visible en monitoreo — el cliente NO recibió su mensaje automático esta vez.
+            logger.error('[ChatbotDailySend] Fallo al registrar envío en BD; se OMITE el envío automático (el cliente NO lo recibirá)', {
+                jid, type, date, error: error?.message
+            });
             return false;
         }
     }

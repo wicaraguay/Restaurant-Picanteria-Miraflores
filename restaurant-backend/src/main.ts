@@ -108,8 +108,12 @@ const limiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => {
-        // Skip rate limit for WhatsApp endpoints (polling for QR)
-        return req.path.startsWith('/api/whatsapp/');
+        // Solo saltar el rate limit para el POLLING de lectura del panel (estado/QR),
+        // que se consulta muy seguido mientras aparece el QR. Los endpoints de ESCRITURA
+        // (enviar, conectar, desconectar, etc.) SI se limitan: dejarlos sin limite es una
+        // puerta abierta a abuso/spam que puede gatillar el baneo de WhatsApp.
+        return req.method === 'GET' &&
+            (req.path === '/api/whatsapp/status' || req.path === '/api/whatsapp/qr');
     },
     handler: (req, res) => {
         logger.warn('Rate limit exceeded', { ip: req.ip, path: req.path });
