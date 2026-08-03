@@ -18,6 +18,7 @@ import { useAuth } from '../../modules/auth/contexts/AuthContext';
 import { api } from '../../api';
 import { toast } from '../../components/ui/AlertProvider';
 import { getMobilePrefs, setMobilePrefs, OrderType } from '../preferences';
+import { APP_VERSION } from '../version';
 import {
     SunIcon,
     MoonIcon,
@@ -227,6 +228,12 @@ const MobileConfig: React.FC = () => {
                     <span className="flex-1 text-left font-semibold text-sm text-red-500">Cerrar sesión</span>
                 </button>
             </Section>
+
+            {/* Marcador de versión — sirve para confirmar qué versión corre y para
+                probar que la actualización desde Vercel funciona (ver version.ts). */}
+            <p className="text-center text-[11px] text-light-subtext dark:text-gray-500 pt-2">
+                Picantería Miraflores · v{APP_VERSION}
+            </p>
         </div>
     );
 };
