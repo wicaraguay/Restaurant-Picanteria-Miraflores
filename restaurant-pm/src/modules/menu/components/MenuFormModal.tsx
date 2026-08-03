@@ -31,15 +31,21 @@ const normalizeName = (name: string): string => name.trim().toLowerCase().replac
 export interface MenuFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (item: MenuItem) => void;
+    onSave: (item: MenuItem) => void | Promise<void>;
     item: MenuItem | null;
     /** Menú actual — permite detectar platos duplicados al instante, sin red. */
     menuItems?: MenuItem[];
     /** Cuando el nombre digitado ya pertenece a otro plato, permite saltar a editarlo. */
     onEditExisting?: (item: MenuItem) => void;
+    /**
+     * Oculta la subida de imagen (usado por la app móvil: la gestión de fotos
+     * se hace desde la web). Al editar, la imagen existente se CONSERVA — solo
+     * no se puede cambiar desde aquí.
+     */
+    hideImage?: boolean;
 }
 
-export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, onSave, item, menuItems, onEditExisting }) => {
+export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, onSave, item, menuItems, onEditExisting, hideImage }) => {
     const [formData, setFormData] = useState<Partial<MenuItem>>({});
     const [initialSnapshot, setInitialSnapshot] = useState('');
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -336,22 +342,24 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                     <textarea name="description" value={formData.description || ''} onChange={handleChange} rows={3} placeholder="Describe los ingredientes y el sabor..." className={inputClass}></textarea>
                 </div>
 
-                <div>
-                    <label className={labelClass}>Imagen del Plato {optionalTag}</label>
-                    <div className="relative group overflow-hidden border-2 border-dashed border-gray-200 dark:border-dark-700 rounded-3xl p-6 transition-all hover:border-blue-500/50 hover:bg-blue-50/30 dark:hover:bg-blue-900/10">
-                        <input type="file" accept="image/*" onChange={handleImageChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                        <div className="flex flex-col items-center justify-center text-center">
-                            {formData.imageUrl ? (
-                                <img src={formData.imageUrl} alt="preview" className="w-full h-40 object-cover rounded-2xl shadow-md mb-2" />
-                            ) : (
-                                <div className="space-y-2">
-                                    <div className="text-3xl">📸</div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Haz clic o arrastra una imagen</p>
-                                </div>
-                            )}
+                {!hideImage && (
+                    <div>
+                        <label className={labelClass}>Imagen del Plato {optionalTag}</label>
+                        <div className="relative group overflow-hidden border-2 border-dashed border-gray-200 dark:border-dark-700 rounded-3xl p-6 transition-all hover:border-blue-500/50 hover:bg-blue-50/30 dark:hover:bg-blue-900/10">
+                            <input type="file" accept="image/*" onChange={handleImageChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                            <div className="flex flex-col items-center justify-center text-center">
+                                {formData.imageUrl ? (
+                                    <img src={formData.imageUrl} alt="preview" className="w-full h-40 object-cover rounded-2xl shadow-md mb-2" />
+                                ) : (
+                                    <div className="space-y-2">
+                                        <div className="text-3xl">📸</div>
+                                        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Haz clic o arrastra una imagen</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 <div className="flex justify-end pt-6 gap-3">
                     <button type="button" onClick={onClose} className="px-6 py-3 rounded-2xl bg-gray-100 dark:bg-dark-800 text-gray-500 dark:text-gray-400 font-black text-[10px] uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-dark-700 transition-all active:scale-95" disabled={isUploading}>Cancelar</button>

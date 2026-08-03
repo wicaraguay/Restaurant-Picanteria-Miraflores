@@ -5,11 +5,23 @@
  * Define URLs base, timeouts, y otras configuraciones.
  */
 
+import { Capacitor } from '@capacitor/core';
+
 /**
- * URL base de la API del backend
- * Usa variable de entorno o fallback a localhost:3000
+ * URL base de la API del backend.
+ *
+ * - App NATIVA (Capacitor / Android): SIEMPRE apunta al backend de producción.
+ *   Motivo: el emulador o el teléfono NO alcanzan 'localhost' (ese 'localhost'
+ *   es el propio dispositivo, no la PC). Un build nativo debe hablar con el VPS
+ *   por HTTPS. Se puede sobrescribir con VITE_API_URL_NATIVE si algún día se
+ *   necesita apuntar a otro backend nativo.
+ * - WEB (dev / producción): usa VITE_API_URL (Vercel la define en producción) o
+ *   localhost en desarrollo.
  */
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const NATIVE_API_URL = import.meta.env.VITE_API_URL_NATIVE || 'https://api.picanteriamiraflores.com/api';
+const WEB_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+export const API_BASE_URL = Capacitor.isNativePlatform() ? NATIVE_API_URL : WEB_API_URL;
 
 /**
  * Timeout para requests HTTP (en milisegundos)
