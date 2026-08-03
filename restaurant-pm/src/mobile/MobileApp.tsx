@@ -120,6 +120,38 @@ const MobileApp: React.FC = () => {
         })();
     }, []);
 
+    // Auto-actualización: al volver del segundo plano (o al arrancar), busca si hay
+    // una versión nueva desplegada en Vercel y, si la hay, el service worker
+    // (modo autoUpdate) recarga la app SOLO. Evita tener que forzar el cierre a mano.
+    useEffect(() => {
+        if (!Capacitor.isNativePlatform()) return;
+        if (!('serviceWorker' in navigator)) return;
+
+        const checkForUpdate = async () => {
+            try {
+                const reg = await navigator.serviceWorker.getRegistration();
+                await reg?.update();
+            } catch {
+                /* sin conexión o SW aún no listo: se reintenta en el próximo resume */
+            }
+        };
+
+        let remove: (() => void) | undefined;
+        (async () => {
+            try {
+                const { App } = await import('@capacitor/app');
+                const sub = await App.addListener('resume', checkForUpdate);
+                remove = () => sub.remove();
+            } catch {
+                /* plugin no disponible: no es crítico */
+            }
+        })();
+
+        checkForUpdate(); // chequeo inicial al arrancar
+
+        return () => remove?.();
+    }, []);
+
     return (
         <AuthProvider>
             <AlertProvider>
