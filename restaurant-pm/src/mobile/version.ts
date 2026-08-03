@@ -6,4 +6,4 @@
  * haz push (Vercel despliega) y reabre la app. Si el número cambia SIN reinstalar
  * el APK → la app se está actualizando desde Vercel. ✅
  */
-export const APP_VERSION = '1.0.1';
+export const APP_VERSION = '1.0.2';
