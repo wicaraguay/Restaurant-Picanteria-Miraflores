@@ -175,6 +175,14 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
         }
     };
 
+    // Quita la foto sin necesidad de subir otra: al guardar, imageUrl queda vacío
+    // y el plato se queda sin imagen. Marca el formulario como "modificado" (isDirty)
+    // porque cambia el snapshot, así el botón de guardar se habilita.
+    const handleRemoveImage = () => {
+        setImageFile(null);
+        setFormData(prev => ({ ...prev, imageUrl: '' }));
+    };
+
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
         (['name', 'category', 'price'] as const).forEach(field => {
@@ -358,6 +366,15 @@ export const MenuFormModal: React.FC<MenuFormModalProps> = ({ isOpen, onClose, o
                                 )}
                             </div>
                         </div>
+                        {formData.imageUrl && (
+                            <button
+                                type="button"
+                                onClick={handleRemoveImage}
+                                className="mt-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-600 transition-colors"
+                            >
+                                Quitar foto
+                            </button>
+                        )}
                     </div>
                 )}
 
