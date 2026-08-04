@@ -208,7 +208,6 @@ const MobileMenu: React.FC = () => {
                 item={editing}
                 menuItems={state.menuItems}
                 onEditExisting={(existing) => setEditing(existing)}
-                hideImage
             />
         </div>
     );
